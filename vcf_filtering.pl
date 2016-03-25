@@ -97,51 +97,51 @@ if ($qual)
 }
 if ($AtoC)
 {
-	$out_filter.=" ( REF!=A || ( REF==A & ALT!=C ) ) &";
+	$out_filter.=" ( REF!=\'A\' || ( REF==\'A\' & ALT!=\'C\' ) ) &";
 }
 if ($AtoG)
 {
-	$out_filter.=" ( REF!=A || ( REF==A & ALT!=G ) ) &";
+	$out_filter.=" ( REF!=\'A\' || ( REF==\'A\' & ALT!=\'G\' ) ) &";
 }
 if ($AtoT)
 {
-	$out_filter.=" ( REF!=A || ( REF==A & ALT!=T ) ) &";
+	$out_filter.=" ( REF!=\'A\' || ( REF==\'A\' & ALT!=\'T\' ) ) &";
 }
 if ($CtoA)
 {
-	$out_filter.=" ( REF!=C || ( REF==C & ALT!=A ) ) &";
+	$out_filter.=" ( REF!=\'C\' || ( REF==\'C\' & ALT!=\'A\' ) ) &";
 }
 if ($CtoG)
 {
-	$out_filter.=" ( REF!=C || ( REF==C & ALT!=G ) ) &";
+	$out_filter.=" ( REF!=\'C\' || ( REF==\'C\' & ALT!=\'G\' ) ) &";
 }
 if ($CtoT)
 {
-	$out_filter.=" ( REF!=C || ( REF==C & ALT!=T ) ) &";
+	$out_filter.=" ( REF!=\'C\' || ( REF==\'C\' & ALT!=\'T\' ) ) &";
 }
 if ($GtoA)
 {
-	$out_filter.=" ( REF!=G || ( REF==G & ALT!=A ) ) &";
+	$out_filter.=" ( REF!=\'G\' || ( REF==\'G\' & ALT!=\'A\' ) ) &";
 }
 if ($GtoC)
 {
-	$out_filter.=" ( REF!=G || ( REF==G & ALT!=C ) ) &";
+	$out_filter.=" ( REF!=\'G\' || ( REF==\'G\' & ALT!=\'C\' ) ) &";
 }
 if ($GtoT)
 {
-	$out_filter.=" ( REF!=G || ( REF==G & ALT!=T ) ) &";
+	$out_filter.=" ( REF!=\'G\' || ( REF==\'G\' & ALT!=\'T\' ) ) &";
 }
 if ($TtoA)
 {
-	$out_filter.=" ( REF!=T || ( REF==T & ALT!=A ) ) &";
+	$out_filter.=" ( REF!=\'T\' || ( REF==\'T\' & ALT!=\'A\' ) ) &";
 }
 if ($TtoC)
 {
-	$out_filter.=" ( REF!=T || ( REF==T & ALT!=C ) ) &";
+	$out_filter.=" ( REF!=\'T\' || ( REF==\'T\' & ALT!=\'C\' ) ) &";
 }
 if ($TtoG)
 {
-	$out_filter.=" ( REF!=T || ( REF==T & ALT!=G ) ) &";
+	$out_filter.=" ( REF!=\'T\' || ( REF==\'T\' & ALT!=\'G\' ) ) &";
 }
 if ($min_cover)
 {
