@@ -41,19 +41,19 @@ else
 	'input|i=s' => \$input_file,
 	'output|o=s' => \$output_file,
 	'qual|q=i' => \$qual,
-	'atoc' => \$AtoC,
-	'atog' => \$AtoG,
-	'atot' => \$AtoT,
-	'ctoa' => \$CtoA,
-	'ctog' => \$CtoG,
-	'ctot' => \$CtoT,
-	'gtoa' => \$GtoA,
-	'gtoc' => \$GtoC,
-	'gtot' => \$GtoT,
-	'ttoa' => \$TtoA,
-	'ttoc' => \$TtoC,
-	'ttog' => \$TtoG,
-	'min_cover|m=i' => \$min_cover, 
+	'atoc=i' => \$AtoC,
+	'atog=i' => \$AtoG,
+	'atot=i' => \$AtoT,
+	'ctoa=i' => \$CtoA,
+	'ctog=i' => \$CtoG,
+	'ctot=i' => \$CtoT,
+	'gtoa=i' => \$GtoA,
+	'gtoc=i' => \$GtoC,
+	'gtot=i' => \$GtoT,
+	'ttoa=i' => \$TtoA,
+	'ttoc=i' => \$TtoC,
+	'ttog=i' => \$TtoG,
+	'min_coverage|m=i' => \$min_cover, 
 	'help|h' => \$help,
 		)) or ((! -f $input_file) || ($output_file eq "") || $help)) and die $usage;
 
@@ -151,7 +151,7 @@ if ($min_cover)
 	}
 	elsif ($multisnv)
 	{
-		$variable="DP"
+		$variable="GEN[ALL].DP"
 	}
 	$out_filter.=" ( $variable >= $min_cover) &";
 }
