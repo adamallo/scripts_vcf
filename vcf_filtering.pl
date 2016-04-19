@@ -211,7 +211,7 @@ $out_filter eq "" and die "ERROR: No filtering options have been specified\n\n$u
 
 chop($out_filter); ##Removing extra " &"
 chop($out_filter);
-print("DEBUG: $out_filter\n");
+#print("DEBUG: $out_filter\n");
 #########################################################
 
 ################      SNPsift execution      ############
