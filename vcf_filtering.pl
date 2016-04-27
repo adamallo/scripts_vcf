@@ -6,11 +6,12 @@ use Getopt::Long qw(GetOptions);
 Getopt::Long::Configure qw(gnu_getopt);
 
 my $SNPSIFT_DIR=$ENV{'SNPSIFT_DIR'};
-my ($qual,$AtoC,$AtoG,$AtoT,$CtoA,$CtoG,$CtoT,$GtoA,$GtoC,$GtoT,$TtoA,$TtoC,$TtoG,$min_cover,$min_reads_strand,$min_reads_alternate); #Only some options to start with
+my ($qual,$AtoC,$AtoG,$AtoT,$CtoA,$CtoG,$CtoT,$GtoA,$GtoC,$GtoT,$TtoA,$TtoC,$TtoG,$min_cover,$min_reads_strand,$min_reads_alternate,$isvar); #Only some options to start with
+$isvar="";
 my $input_file="";
 my $output_file="";
 my $help;
-my $usage="Usage: $0 -i input_file -o output_file [options]\n\n\nOptions:\n--------\n\t-q/--qual : quality filter\n\t--atoc : filter out mutations from A to C\n\t--atog :  filter out mutations from A to G\n\t--atot : filter out mutations from A to T\n\t--ctoa :  filter out mutations from C to A\n\t--ctog : filter out mutations from C to G\n\t--ctot :  filter out mutations from C to T\n\t--gtoa : filter out mutations from G to A\n\t--gtoc :  filter out mutations from G to C\n\t--gtot : filter out mutations from G to T\n\t--ttoa :  filter out mutations from T to A\n\t--ttoc : filter out mutations from T to C\n\t--ttog : filter out mutations from T to G\n\t-m/--min_coverage :minimum coverage per locus\n\t-s/--min_reads_strand : minimum number of reads per strand\n\t-a/--min_reads_alternate : minimum number of reads for the alternative allele\n\t\n\n";
+my $usage="Usage: $0 -i input_file -o output_file [options]\n\n\nOptions:\n--------\n\t-q/--qual : quality filter\n\t--atoc : filter out mutations from A to C\n\t--atog :  filter out mutations from A to G\n\t--atot : filter out mutations from A to T\n\t--ctoa :  filter out mutations from C to A\n\t--ctog : filter out mutations from C to G\n\t--ctot :  filter out mutations from C to T\n\t--gtoa : filter out mutations from G to A\n\t--gtoc :  filter out mutations from G to C\n\t--gtot : filter out mutations from G to T\n\t--ttoa :  filter out mutations from T to A\n\t--ttoc : filter out mutations from T to C\n\t--ttog : filter out mutations from T to G\n\t-m/--min_coverage :minimum coverage per locus\n\t-s/--min_reads_strand : minimum number of reads per strand\n\t-a/--min_reads_alternate : minimum number of reads for the alternative allele\n\t--isvar : filter out variants with genotype ref/ref in the given sample (starting in 1)\n\t\n\n";
 my $exe;
 
 ########### SNPSIFT Util detection #########################
@@ -56,6 +57,7 @@ else
 	'min_coverage|m=i' => \$min_cover, 
 	'min_reads_strand|s=i' => \$min_reads_strand,
 	'min_reads_alternate|a=i' => \$min_reads_alternate,
+    'isvar=s' => \$isvar,
 	'help|h' => \$help,
 		)) or ((! -f $input_file) || ($output_file eq "") || $help)) and die $usage;
 
@@ -205,6 +207,10 @@ if ($min_reads_alternate)
 	{
 		die "This variant caller is not supported by this script\n";
 	}
+}
+if ($isvar ne "")
+{
+    $out_filter.= " ( isVariant( GEN[$isvar] ) ) &";
 }
 
 $out_filter eq "" and die "ERROR: No filtering options have been specified\n\n$usage"; 

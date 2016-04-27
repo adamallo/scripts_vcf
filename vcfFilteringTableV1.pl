@@ -5,6 +5,7 @@ use Getopt::Long qw(GetOptions);
 Getopt::Long::Configure qw(gnu_getopt);
 use Cwd;
 use File::Basename;
+#use Parallel::Loops;
 
 ##Configuration variables
 ######################################################
@@ -15,7 +16,8 @@ our $OFS=",";
 our $FS=",";
 our $variant_caller="platypus";
 our $variant_calling_sh;
-our $output_vcfs="0";
+our $output_vcfs=1;
+our $n_cores=0;
 
 ######################################################
 
@@ -32,7 +34,7 @@ my $sample2_bam="";
 
 #Flags
 my $help;
-my $usage="Usage: $0 [options] -o output_file --normal_bamfile bamfile_normal_sample --sample_A_bamfile bamfile_A_sample --sample_B_bamfile bamfile_B_sample\n\n\nOptions:\n--------\n\t-e/--exec_cond_inputfile : input file for execution parameters and options\n\t-f/--filt_cond_inputfile : input file for execution parameters and options\n\t--cluster :  the script will be run in a cluster with a qsub-based queuing system\n\t--output_dir : output directory for vcf files\n\t\n\n";
+my $usage="Usage: $0 [options] -o output_file --normal_bamfile bamfile_normal_sample --sample_A_bamfile bamfile_A_sample --sample_B_bamfile bamfile_B_sample\n\n\nOptions:\n--------\n\t-e/--exec_cond_inputfile : input file for execution parameters and options\n\t-f/--filt_cond_inputfile : input file for execution parameters and options\n\t--cluster :  the script will be run in a cluster with a qsub-based queuing system\n\t--output_dir : output directory for vcf files\n\t--n_cores : number of cores to execute some steps in parallel (requires the perl package Parallel::Loops)\n\t\n\n";
 ######################################################
 
 ######################################################
@@ -50,8 +52,26 @@ my $usage="Usage: $0 [options] -o output_file --normal_bamfile bamfile_normal_sa
 	    'normal_bamfile=s' => \$normal_bam,
 	    'sample_A_bamfile=s' => \$sample1_bam,
 	    'sample_B_bamfile=s' => \$sample2_bam,
+        'n_cores=i' => \$n_cores,
         'help|h' => \$help,
                 )) or (($output_file eq "") || ($normal_bam eq "")  || ($sample1_bam eq "") || ($sample2_bam eq "")  || $help) and die $usage;
+
+##Load Parallel::Loops if it is available and it's needed
+#########################################################
+
+if($n_cores!=0)
+{
+    eval "use Parallel::Loops";
+    if($@)
+    {
+        $n_cores=0;
+        print "\n\nWARNING: You are asking to execute this script using $n_cores cores, but the required module \"Parallel::Loops\" has not been found in \@INC\n\n";
+    }
+    else
+    {
+        print "\nUsing Parallel::Loops with $n_cores cores\n\n";
+    }
+}
 
 ##Input file parsing and directory creation
 ######################################################
@@ -153,9 +173,8 @@ my $name_condition;
 my @filtering_conditions;
 my @exe_conditions;
 my %results;
-my $condition;
-my $filtering_command;
 my $bamfiles;
+my $parallel;
 
 ##Generate all combinations of proposed values for execution and filtering parameters
 combs(0,"",\@exe_parameters,\@exe_param_values,\@exe_conditions);
@@ -270,7 +289,7 @@ if ($cluster)
             if ($exe_condition eq "Default${sep_value}1")
             {
                 $actual_exe_conditions="";
-                #print("DEBUG: B: Default exe conditions\n");
+                ##print("DEBUG: B: Default exe conditions\n");
             }
             else
             {
@@ -289,8 +308,8 @@ if ($cluster)
 
 		}
 
-	}
-
+	} 
+   
 	while (scalar keys %job_ids != 0)##Check 
 	{
         sleep(60); 
@@ -312,13 +331,38 @@ else
     die "the current version of this code should never reach this point\n";
 }
 
+##NAB with filter to eliminate variants with N=reference
+## In the future we may require here another loop for filtering options of the NAB
+##################################################################################
+
+my $filtering_command="$vcf_filt_exe ";
+$filtering_command.="--isvar 1";
+if (!-f "NAB${sep_param}germline.vcf")
+{
+	print("Filtering NAB.vcf to generate NAB${sep_param}germline.vcf\n");
+	## Filter the right vcf file generated ini the outside loop	
+	system("$filtering_command -i NAB.vcf -o NAB${sep_param}germline.vcf");
+	#print("DEBUG: $filtering_command -i A$sep_param$exe_condition.vcf -o A$sep_param$condition.vcf \n");
+}
+else
+{
+	print("NAB${sep_param}germline.vcf had been previously generated and it will be recycled\n");
+}
+
 ## Parsing static variants
 ############################################################################################
 my %A=%{parse_vcf("A.vcf")};
 my %B=%{parse_vcf("B.vcf")};
 my %N=%{parse_vcf("N.vcf")};
-my %NAB=%{parse_vcf("NAB.vcf")};
+my @temp=parse_vcf_name("NAB${sep_param}germline.vcf");
+my %NAB=%{$temp[0]};
+my $nameN=$temp[1];
 
+if ($n_cores!=0)
+{
+    $parallel = Parallel::Loops->new($n_cores);
+    $parallel->share(\%results);
+}
 
 foreach my $exe_condition (@exe_conditions) ##Options that require to call variants again 
 {
@@ -331,12 +375,50 @@ foreach my $exe_condition (@exe_conditions) ##Options that require to call varia
 		######system("$variant_calling_sh -i ????? -o $exe_condition.vcf");
 		die "So far this script does not support to carry out the variant calling in an environment without a queue manager\n";
 	}
+    my @current_conditions=@filtering_conditions;
+    for (my $i=0; $i<scalar @filtering_conditions;++$i)
+    {
+        $current_conditions[$i]=[$exe_condition,$filtering_conditions[$i]];
+    }
+    if($n_cores!=0)
+    {
+        $parallel->foreach(\@current_conditions,\&filter);
+    }
+    else
+    {
+        foreach my $filtering_condition (@current_conditions)
+        {
+            filter($filtering_condition);
+        }
+    }	
+}
 
+## Output
+#############################################################
+open(my $OFILE,">$output_file");
+print($OFILE "Condition,Afilt_prop,Afilt_N,Bfilt_prop,Bfilt_N,filt_prop,filt_N,filt_prop_mean,filt_N_mean,AfiltN_prop,AfiltN_N,BfiltN_prop,B_filtN_prop,filtN_prop,filtN_N,filtN_prop_mean,filtN_N_mean,AfiltNAB_prop,AfiltNAB_N,BfiltNAB_prop,BfiltNAB_N,filtNAB_prop,filtNAB_N,filtNAB_prop_mean,filtNAB_N_mean\n");
+foreach my $condition (keys %results)
+{
+	print($OFILE "$condition$OFS",array_to_string(@{$results{$condition}}),"\n");
+}
+close($OFILE);
 
-	foreach my $filtering_condition (@filtering_conditions) ##Filtering options
-	{	
-		$condition="$exe_condition$sep_param$filtering_condition";
-		$filtering_command="$vcf_filt_exe ";
+## MAIN BODY AS FUNCTION FOR PARALLELISM
+########################################
+sub filter
+{
+        my $exe_condition;
+        my $filtering_condition;
+        if (defined $_)
+        {
+            ($exe_condition,$filtering_condition)=@{$_};
+        }
+        else
+        {
+            ($exe_condition,$filtering_condition)=@{$_[0]};
+        }
+		my $condition="$exe_condition$sep_param$filtering_condition";
+		my $filtering_command="$vcf_filt_exe ";
 		$filtering_command.=join(" ",split("$sep_value",join(" ",split("$sep_param",$filtering_condition))));
 
 		if (!-f "A$sep_param$condition.vcf")
@@ -382,9 +464,7 @@ foreach my $exe_condition (@exe_conditions) ##Options that require to call varia
 		my @statsfilt;
         my ($ref_common_variantsfilt,$ref_different_variantsfilt)=vcf_unite_parsed($ref_common_variantsAfilt,$ref_different_variantsAfilt,$ref_common_variantsBfilt,$ref_different_variantsBfilt,\@statsfilt);
         
-        #my @statsfilt=(($statsAfilt[0]+$statsBfilt[0])/2.0,($statsAfilt[1]+$statsBfilt[1])/2.0); ###TODO: I'm calculating the of the % and the number of variants. We may want to get the union or intersection of variants!!!!
-
-		
+        my @statsfiltmean=(($statsAfilt[0]+$statsBfilt[0])/2.0,($statsAfilt[1]+$statsBfilt[1])/2.0);
 		#Substract N from Afilt. Compare the result to B without filter --> Common variants + %
 		my @statsAfiltN;
 		my ($ref_common_variantsAfiltN,$ref_different_variantsAfiltN)=vcf_prune($ref_common_variantsAfilt,$ref_different_variantsAfilt,\%N,\@statsAfiltN);
@@ -397,7 +477,7 @@ foreach my $exe_condition (@exe_conditions) ##Options that require to call varia
 		my @statsfiltN;
         my ($ref_common_variantsfiltN,$ref_different_variantsfiltN)=vcf_prune($ref_common_variantsfilt,$ref_different_variantsfilt,\%N,\@statsfiltN);
 
-        #my @statsfiltN=(($statsAfiltN[0]+$statsBfiltN[0])/2.0,($statsAfiltN[1]+$statsBfiltN[1])/2.0); ###TODO: I'm calculating the of the % and the number of variants. We may want to get the union or intersection of variants!!!!
+        my @statsfiltNmean=(($statsAfiltN[0]+$statsBfiltN[0])/2.0,($statsAfiltN[1]+$statsBfiltN[1])/2.0);
 
 		#Substract NAB from Afilt. Compare the results to B wihout filter --> Common variants + % ###We want to apply filter to NAB and remove only variants that are Alternative for N
 		my @statsAfiltNAB;
@@ -410,53 +490,38 @@ foreach my $exe_condition (@exe_conditions) ##Options that require to call varia
 		#Mean stats filter NAB		
 		my @statsfiltNAB;
         my ($ref_common_variantsfiltNAB,$ref_different_variantsfiltNAB)=vcf_prune($ref_common_variantsfiltN,$ref_different_variantsfiltN,\%NAB,\@statsfiltNAB);
-        #my @statsfiltNAB=(($statsAfiltNAB[0]+$statsBfiltNAB[0])/2.0,($statsAfiltNAB[1]+$statsBfiltNAB[1])/2.0); ###TODO: I'm calculating the of the % and the number of variants. We may want to get the union or intersection of variants!!!!
+        my @statsfiltNABmean=(($statsAfiltNAB[0]+$statsBfiltNAB[0])/2.0,($statsAfiltNAB[1]+$statsBfiltNAB[1])/2.0);
         
         #Output of list of variants and/or intermediate vcf files
         
-        if(!$output_vcfs)
-        {
-            write_variant_list($ref_common_variantsAfilt,"Afilt$sep_param${condition}.list");
-            write_variant_list($ref_common_variantsBfilt,"Bfilt$sep_param${condition}.list");
-            write_variant_list($ref_common_variantsfilt,"filt$sep_param${condition}.list");
-            write_variant_list($ref_common_variantsAfiltN,"AfiltN$sep_param${condition}.list");
-            write_variant_list($ref_common_variantsBfiltN,"BfiltN$sep_param${condition}.list");
-            write_variant_list($ref_common_variantsfiltN,"filtN$sep_param${condition}.list");
-            write_variant_list($ref_common_variantsAfiltNAB,"AfiltNAB$sep_param${condition}.list");
-            write_variant_list($ref_common_variantsBfiltNAB,"BfiltNAB$sep_param${condition}.list");
-            write_variant_list($ref_common_variantsfiltNAB,"filtNAB$sep_param${condition}.list");
+        write_variant_list($ref_common_variantsAfilt,"Afilt$sep_param${condition}.list");
+        write_variant_list($ref_common_variantsBfilt,"Bfilt$sep_param${condition}.list");
+        write_variant_list($ref_common_variantsfilt,"filt$sep_param${condition}.list");
+        write_variant_list($ref_common_variantsAfiltN,"AfiltN$sep_param${condition}.list");
+        write_variant_list($ref_common_variantsBfiltN,"BfiltN$sep_param${condition}.list");
+        write_variant_list($ref_common_variantsfiltN,"filtN$sep_param${condition}.list");
+        write_variant_list($ref_common_variantsAfiltNAB,"AfiltNAB$sep_param${condition}.list");
+        write_variant_list($ref_common_variantsBfiltNAB,"BfiltNAB$sep_param${condition}.list");
+        write_variant_list($ref_common_variantsfiltNAB,"filtNAB$sep_param${condition}.list");
  
-        }
-        else
+        if($output_vcfs)
         {
-            die "This has not been implemented yet!!!\n";
-#            write_variant_vcf($ref_common_variantsAfilt,"Afilt$sep_param${condition}.vcf","A.vcf","##Comment for the header");
-#            write_variant_vcf($ref_common_variantsBfilt,"Bfilt$sep_param${condition}.vcf","B.vcf","##Comment for the header");
-#            write_variant_vcf($ref_common_variantsAfiltN,"AfiltN$sep_param${condition}.vcf","A.vcf","##Comment for the header");
-#            write_variant_vcf($ref_common_variantsBfiltN,"BfiltN$sep_param${condition}.vcf","B.vcf","##Comment for the header");
-#            write_variant_vcf($ref_common_variantsAfiltNAB,"AfiltNAB$sep_param${condition}.vcf","A.vcf","##Comment for the header");
-#            write_variant_vcf($ref_common_variantsBfiltNAB,"BfiltNAB$sep_param${condition}.vcf","B.vcf","##Comment for the header");
+            write_variant_vcf($ref_common_variantsAfilt,"Afilt$sep_param${condition}_common.vcf","A.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
+            write_variant_vcf($ref_common_variantsBfilt,"Bfilt$sep_param${condition}_common.vcf","B.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
+            write_variant_vcf($ref_common_variantsAfiltN,"AfiltN$sep_param${condition}_common.vcf","A.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
+            write_variant_vcf($ref_common_variantsBfiltN,"BfiltN$sep_param${condition}_common.vcf","B.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
+            write_variant_vcf($ref_common_variantsAfiltNAB,"AfiltNAB$sep_param${condition}_common.vcf","A.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
+            write_variant_vcf($ref_common_variantsBfiltNAB,"BfiltNAB$sep_param${condition}_common.vcf","B.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
 
         }
          
 	    
 		#Store and/or print
-		my @statistics=(@statsAfilt,@statsBfilt,@statsfilt,@statsAfiltN,@statsBfiltN,@statsfiltN,@statsAfiltNAB,@statsBfiltNAB,@statsfiltNAB);
+		my @statistics=(@statsAfilt,@statsBfilt,@statsfilt,@statsfiltmean,@statsAfiltN,@statsBfiltN,@statsfiltN,@statsfiltNmean,@statsAfiltNAB,@statsBfiltNAB,@statsfiltNAB,@statsfiltNABmean);
 		$results{$condition}=\@statistics;
 		#print("DEBUG:$condition$OFS",array_to_string(@statistics),"\n");
-	}
-
 }
 
-## Output
-#############################################################
-open(my $OFILE,">$output_file");
-print($OFILE "Condition,Afilt_prop,Afilt_N,Bfilt_prop,Bfilt_N,filt_prop,filt_N,AfiltN_prop,AfiltN_N,BfiltN_prop,B_filtN_prop,filtN_prop,filtN_N,AfiltNAB_prop,AfiltNAB_N,BfiltNAB_prop,BfiltNAB_N,filtNAB_prop,filtNAB_N\n");
-foreach my $condition (keys %results)
-{
-	print($OFILE "$condition$OFS",array_to_string(@{$results{$condition}}),"\n");
-}
-close($OFILE);
 
 ###################################################################################
 ###FUNCTIONS
@@ -468,23 +533,27 @@ close($OFILE);
 sub combs 
 {
 	my ($id,$string,$ref_array1,$ref_array2,$ref_array_output)=@_;
+    my $priv_sep_value=$sep_value;
 	#print("DEBUG: $id,$string,$ref_array1,$ref_array2,$ref_array_output\n");
+	my @values=@{@{$ref_array2}[$id]};
+	my $parameter=@{$ref_array1}[$id];
+    if ($parameter=~/=$/ )
+    {
+        $priv_sep_value="";
+    }   
+
 	if($id<scalar(@{$ref_array1})-1) #If there are more params recurse
 	{
-		my @values=@{@{$ref_array2}[$id]};
-		my $parameter=@{$ref_array1}[$id];
 		foreach my $value (@values)
 		{
-			combs($id+1,"$string$parameter$sep_value${value}$sep_param",$ref_array1,$ref_array2,$ref_array_output);
+			combs($id+1,"$string$parameter$priv_sep_value${value}$sep_param",$ref_array1,$ref_array2,$ref_array_output);
 		}
 	}
 	else #Store the string in the output array
 	{
-		my @values=@{@{$ref_array2}[$id]};
-                my $parameter=@{$ref_array1}[$id];
-                foreach my $value (@values)
-                {
-                        my $new_string="$string$parameter$sep_value$value";
+        foreach my $value (@values)
+        {
+            my $new_string="$string$parameter$priv_sep_value$value";
 			push(@{$ref_array_output},$new_string);
 		}
 	}
@@ -555,6 +624,40 @@ sub parse_vcf
 
 }
 
+#Parse vcf and get name of the sample (for only one sample)
+###########################################################
+sub parse_vcf_name
+{
+	my ($vcf1_file)=@_;
+	open(my $VCF1,$vcf1_file) or die "The file $vcf1_file is not located in the output folder. Please, check if the variant caller has successfully finished";
+	my @vcf1=<$VCF1>;
+	close($VCF1);
+	my $flag=0;
+	my $i;
+	my %hash;
+	my $key;
+    my $name;
+
+	for ($i=0;$i<scalar @vcf1;$i++)
+	{
+		unless($flag==0 and $vcf1[$i]=~/^#/)
+		{
+			if ($flag==0)
+			{
+                $name=(split("\t",$vcf1[$i-1]))[9];
+                #print("DEBUG: Name $name\n");
+				$flag=1;
+			}
+			$key=$vcf1[$i];
+			$key=~s/^(.*?)\t(.*?)\t.*/$1$OFS$2/; ####TODO: This may be quicker with a split+join strategy. To check it!
+            chomp($key);
+			$hash{$key}=1;
+			#print("DEBUG: New variant being hashed $key\n");
+		}
+	}
+	return (\%hash,$name);
+
+}
 #Compare two vcf files and generate statistics
 ##############################################
 sub vcf_compare2
@@ -634,7 +737,15 @@ sub vcf_compare_parsed
 	}
 	
     my $n_common=scalar(keys %commonvariants);
-	@{ $ref_statistics }=($n_common/$n2,$n_common); ##Stats= proportion of selected reads in the reference, number of selected variants
+    if($n2==0)
+    {
+        @{ $ref_statistics }=(0,$n_common); ##Stats= proportion of selected reads in the reference, number of selected variants
+
+    }
+    else
+    {
+	    @{ $ref_statistics }=($n_common/$n2,$n_common); ##Stats= proportion of selected reads in the reference, number of selected variants
+    }
 	return (\%commonvariants,\%variants2); ##Common, not_in_ref
 
 }
@@ -682,9 +793,16 @@ sub vcf_prune
 		
 	}
 	my $n_selvariants=scalar keys %variants1;
-	my $n_filtvariants=scalar keys %variants2;	
-	@{ $ref_statistics }=($n_selvariants/($n_selvariants+$n_filtvariants),$n_selvariants); ##Stats= proportion of selected reads in the reference, number of selected variants
-	return (\%variants1,\%variants2);
+	my $n_filtvariants=scalar keys %variants2;
+    if($n_selvariants+$n_filtvariants==0)
+    {
+         @{ $ref_statistics }=(0,$n_selvariants); 
+    }
+    else
+    {   	
+	    @{ $ref_statistics }=($n_selvariants/($n_selvariants+$n_filtvariants),$n_selvariants); ##Stats= proportion of selected reads in the reference, number of selected variants
+	}
+    return (\%variants1,\%variants2);
 }
 
 #Combine the variants of two samples. Calculate the union of the two samples
@@ -739,7 +857,7 @@ sub variants_to_hash
 	for (my $i=1; $i<scalar @{$array};$i++) ###The first line is the header
 	{
 		$key=${$array}[$i];
-		$key=~s/^(.*?)\t(.*?)\t.*/$1$OFS$2/; ####TODO: This may be quicker with a split+join strategy. To check it!
+		$key=~s/^(.*?)\t(.*?)\t.*/$1$OFS$2/;
 		$hash{$key}=1;
 		#print("DEBUG: New variant being hashed $key\n");
 	}
@@ -762,28 +880,50 @@ sub write_variant_list
 
 # Writes a vcf with the variables contained in a hash selected from another VCF file
 # ##################################################################################
+#($ref_common_variantsAfilt,"Afilt$sep_param${condition}.vcf","A.vcf","##Comment for the header");
 sub write_variant_vcf
 {
     my ($ref_hash,$filename,$vcf,$comment)=@_;
-    open(my $FILE, ">$filename");
+    open(my $OFILE, ">$filename");
+    open(my $IFILE, "$vcf");
+    my @icontent= <$IFILE>;
+    close($IFILE);
+    my $flag=0;
+    my %hash=%{$ref_hash};
+    my $key;
+     
+    #Copying the header and adding a new line with filtering info
+    #Then adding the variants that are present in the hash.
+    for(my$i=0;$i< scalar @icontent; ++$i)
+    {
+        if ($flag==0 and $icontent[$i]=~/^##/)
+        {
+            print($OFILE $icontent[$i]);
+        }
+        elsif($flag==0)
+        {
+            print($OFILE "$comment\n$icontent[$i]");
+            $flag=1;
+        }
+        else
+        {
+            $key=$icontent[$i];
+            $key=~s/^(.*?)\t(.*?)\t.*/$1$OFS$2/;
+            chomp($key);
+            #print("DEBUG: Key $key\n");
+            if(exists $hash{$key})
+            {
+                print($OFILE $icontent[$i]);
+                delete($hash{$key});
+            }
+            if(scalar keys %hash == 0)
+            {
+                last;
+            }
+            
+        }
 
+    }
 
-    ##Pseudocode:
-    #open the vcf
-    #print the same header ???(We could add here a line with the information of the filter done by this script!!!!)
-    #print the name of the columns
-    #foreach line of the vcf
-    #   get the variant id
-    #   look for it in the ref_hash
-    #   if it is there, print this line and remove this variant from the hash of filtered variants
-    #   otherwise, don't do anything 
-    #   last if there is no more filtered variants
-
-
-#    print($FILE "#CHROM,POS\n");
-#    foreach my $variant (keys %{$ref_hash})
-#    {
-#        print($FILE join($OFS,split(",",$variant)),"\n");
-#    }
-    close $FILE;
+    close $OFILE;
 }
