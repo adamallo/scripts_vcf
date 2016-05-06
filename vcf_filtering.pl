@@ -235,7 +235,7 @@ if ($min_reads_alternate)
 		die "This variant caller is not supported by this script\n";
 	}
 }
-if ($isvar)
+if ($isvar && $isvar!=-1)
 {
 	$out_filter.= " ( isVariant( GEN[$isvar] ) ) &";
 }
