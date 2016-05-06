@@ -185,7 +185,7 @@ else
 
 my $name_condition;
 my @filtering_conditions;
-our @NAB_filtering_conditions; ##In order to be easily accesed from the filtering functions
+our @NABfiltering_conditions; ##In order to be easily accesed from the filtering functions
 my @exe_conditions;
 my %results;
 my $bamfiles;
@@ -256,9 +256,9 @@ if ($cluster)
 	{
 		$bamfiles="$normal_bam,$sample1_bam,$sample2_bam";
 		$exe_condition="";
-		my $job_id=`$qsub -F "$bamfiles $exe_condition NAB.vcf NAB_platypus.log" | sed "s/.master.cm.cluster//"`;
-        	chomp($job_id);
-        	$job_ids{$job_id}=1;
+		my $job_id=`$qsub $variant_calling_sh -F "$bamfiles $exe_condition NAB.vcf NAB_platypus.log" | sed "s/.master.cm.cluster//"`;
+        chomp($job_id);
+        $job_ids{$job_id}=1;
 		print("\tSample NAB variant calling submited with job_id $job_id\n");
 
 	}
@@ -346,26 +346,32 @@ else
 {
     die "the current version of this code should never reach this point\n";
 }
-i
+
+if ($n_cores>1)
+{
+    $parallel = Parallel::Loops->new($n_cores);
+    $parallel->share(\%results);
+}
+
 
 ## NAB filtering and parsing
 ##########################################################################################
 
 my @NAB_hash_pointers;
+if($n_cores>1)
+{
+    $parallel->foreach(\@NABfiltering_conditions,\&filterNAB);
+}
+else
+{
+    foreach my $filtering_condition (@NABfiltering_conditions)
+    {
+        filterNAB($filtering_condition);        
+    }
+}
 for (my $i=0; $i<scalar @NABfiltering_conditions; ++$i)
 {
-	if($n_cores>1)
-        {
-                $parallel->foreach(\@NABfiltering_conditions,\&filterNAB);
-        }
-        else
-        {
-                foreach my $filtering_condition (@NABfiltering_conditions)
-                {
-                        filterNAB($filtering_condition);
-                }
-        }
-	$NAB_hash_pointer[$i]=parse_vcf("NAB$sep_param$NABfiltering_conditions[$i].vcf");
+	$NAB_hash_pointers[$i]=parse_vcf("NAB$sep_param$NABfiltering_conditions[$i].vcf");
 }
 
 ## Old germline filtering
@@ -393,12 +399,6 @@ my %N=%{parse_vcf("N.vcf")};
 ##my @temp=parse_vcf_name("NAB${sep_param}germline.vcf");
 ##my %NAB=%{$temp[0]};
 ##my $nameN=$temp[1];
-
-if ($n_cores>1)
-{
-    $parallel = Parallel::Loops->new($n_cores);
-    $parallel->share(\%results);
-}
 
 foreach my $exe_condition (@exe_conditions) ##Options that require to call variants again 
 {
@@ -531,10 +531,10 @@ sub filter
             write_variant_vcf($ref_common_variantsBfiltN,"BfiltN$sep_param${condition}_common.vcf","B.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
 	} 
 
-	for (my $i=0; $i< scalar @NAB_conditions; ++$i)
+	for (my $i=0; $i< scalar @NABfiltering_conditions; ++$i)
 	{
 		
-		my $NAB_condition=$NAB_conditions[$i];
+		my $NAB_condition=$NABfiltering_conditions[$i];
 		my $NAB=$NAB_hash_pointers[$i];
 	
 		#Substract NAB from Afilt. Compare the results to B wihout filter --> Common variants + % ###We want to apply filter to NAB and remove only variants that are Alternative for N
@@ -985,12 +985,12 @@ sub filterNAB
         if (defined $_)
         {
             #($exe_condition,$filtering_condition)=@{$_};
-		($filtering_condition)=@{};
+		    $filtering_condition=$_;
         }
         else
         {
             ##($exe_condition,$filtering_condition)=@{$_[0]};
-		($filtering_condition)=@{$_[0]};
+		    $filtering_condition=$_[0];
         }
 	#my $condition="$exe_condition$sep_param$filtering_condition";
 	my $condition="$filtering_condition";

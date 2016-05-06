@@ -15,7 +15,7 @@ our $sep_value=":";
 our $OFS=",";
 our $FS=",";
 our $output_vcfs=1;
-our $n_cores=0;
+our $n_cores=1;
 
 ######################################################
 
@@ -51,12 +51,12 @@ my $usage="Usage: $0 [options] -o output_file \n\nWARNING: This is a secondary s
 ##Load Parallel::Loops if it is available and it's needed
 #########################################################
 
-if($n_cores!=0)
+if($n_cores>1)
 {
     eval "use Parallel::Loops";
     if($@)
     {
-        $n_cores=0;
+        $n_cores=1;
         print "\n\nWARNING: You are asking to execute this script using $n_cores cores, but the required module \"Parallel::Loops\" has not been found in \@INC\n\n";
     }
     else
@@ -115,7 +115,7 @@ if(`which vcf_filtering.pl 2>/dev/null` eq "")
 
 my $name_condition;
 my @filtering_conditions;
-our @NAB_filtering_conditions; ##In order to be easily accesed from the filtering functions
+our @NABfiltering_conditions; ##In order to be easily accesed from the filtering functions
 my @exe_conditions;
 my %results;
 my $bamfiles;
@@ -127,6 +127,13 @@ combs(0,"",\@filtering_parameters,\@filtering_param_values,\@filtering_condition
 combs(0,"",\@NABfiltering_parameters,\@NABfiltering_param_values,\@NABfiltering_conditions);
 
 
+if ($n_cores>1)
+{
+    $parallel = Parallel::Loops->new($n_cores);
+    $parallel->share(\%results);
+}
+
+
 ## NAB filtering and parsing
 ##########################################################################################
 
@@ -136,20 +143,21 @@ if ( ! -f "NAB.vcf")
 }
 
 my @NAB_hash_pointers;
+
+if($n_cores>1)
+{
+    $parallel->foreach(\@NABfiltering_conditions,\&filterNAB);
+}
+else
+{
+    foreach my $filtering_condition (@NABfiltering_conditions)
+    {
+        filterNAB($filtering_condition);
+    }
+}
 for (my $i=0; $i<scalar @NABfiltering_conditions; ++$i)
 {
-	if($n_cores!=0)
-        {
-                $parallel->foreach(\@NABfiltering_conditions,\&filterNAB);
-        }
-        else
-        {
-                foreach my $filtering_condition (@NABfiltering_conditions)
-                {
-                        filterNAB($filtering_condition);
-                }
-        }
-	$NAB_hash_pointer[$i]=parse_vcf("NAB$sep_param$NABfiltering_conditions[$i].vcf");
+    $NAB_hash_pointers[$i]=parse_vcf("NAB$sep_param$NABfiltering_conditions[$i].vcf");
 }
 
 ## Old germline filtering
@@ -172,11 +180,13 @@ for (my $i=0; $i<scalar @NABfiltering_conditions; ++$i)
 ## Parsing static variants
 ############################################################################################
 
+my (%A,%B,%N);
+
 if ( -f "A.vcf" && -f "B.vcf" && -f "N.vcf")
 {
-	my %A=%{parse_vcf("A.vcf")};
-	my %B=%{parse_vcf("B.vcf")};
-	my %N=%{parse_vcf("N.vcf")};
+	%A=%{parse_vcf("A.vcf")};
+	%B=%{parse_vcf("B.vcf")};
+	%N=%{parse_vcf("N.vcf")};
 }
 else
 {
@@ -186,12 +196,6 @@ else
 ##my @temp=parse_vcf_name("NAB${sep_param}germline.vcf");
 ##my %NAB=%{$temp[0]};
 ##my $nameN=$temp[1];
-
-if ($n_cores!=0)
-{
-    $parallel = Parallel::Loops->new($n_cores);
-    $parallel->share(\%results);
-}
 
 foreach my $exe_condition (@exe_conditions) ##Options that require to call variants again 
 {
@@ -205,7 +209,7 @@ foreach my $exe_condition (@exe_conditions) ##Options that require to call varia
 	{
 		$current_conditions[$i]=[$exe_condition,$filtering_conditions[$i]];
 	}
-	if($n_cores!=0)
+	if($n_cores>1)
 	{
 		$parallel->foreach(\@current_conditions,\&filter);
 	}
@@ -321,10 +325,10 @@ sub filter
             write_variant_vcf($ref_common_variantsBfiltN,"BfiltN$sep_param${condition}_common.vcf","B.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
 	} 
 
-	for (my $i=0; $i< scalar @NAB_conditions; ++$i)
+	for (my $i=0; $i< scalar @NABfiltering_conditions; ++$i)
 	{
 		
-		my $NAB_condition=$NAB_conditions[$i];
+		my $NAB_condition=$NABfiltering_conditions[$i];
 		my $NAB=$NAB_hash_pointers[$i];
 	
 		#Substract NAB from Afilt. Compare the results to B wihout filter --> Common variants + % ###We want to apply filter to NAB and remove only variants that are Alternative for N
@@ -775,12 +779,12 @@ sub filterNAB
         if (defined $_)
         {
             #($exe_condition,$filtering_condition)=@{$_};
-		($filtering_condition)=@{};
+		    $filtering_condition=$_;
         }
         else
         {
             ##($exe_condition,$filtering_condition)=@{$_[0]};
-		($filtering_condition)=@{$_[0]};
+		    $filtering_condition=$_[0];
         }
 	#my $condition="$exe_condition$sep_param$filtering_condition";
 	my $condition="$filtering_condition";

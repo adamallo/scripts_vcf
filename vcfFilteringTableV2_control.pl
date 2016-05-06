@@ -51,7 +51,6 @@ my $usage="Usage: $0 [options] -o output_file --normal_bamfile bamfile_normal_sa
 	'NABfilt_cond_inputfile=s' => \$NABfiltercond_inputfile,
         'output_dir=s' => \$output_dir,
 	'output_file|o=s' => \$output_file,
-	'cluster' => \$cluster,
 	'normal_bamfile=s' => \$normal_bam,
 	'sample_A_bamfile=s' => \$sample1_bam,
 	'sample_B_bamfile=s' => \$sample2_bam,
@@ -105,6 +104,9 @@ else
 
 mkdir $output_dir;
 my $original_dir=dirname(Cwd::abs_path($0));
+my $oefile=Cwd::abs_path($execond_inputfile);
+my $offile=Cwd::abs_path($filtercond_inputfile);
+my $onfile=Cwd::abs_path($NABfiltercond_inputfile);
 chdir $output_dir or die "The output directory $output_dir is not accesible";
 
 #my $vcf_filt_exe="vcf_filtering.pl";
@@ -132,6 +134,8 @@ else
 
 if (-f "$original_dir/$helper_sh" && -f "$original_dir/$helper_pl")
 {
+    $helper_sh="$original_dir/$helper_sh";
+    $helper_pl="$original_dir/$helper_pl";
 }
 else
 {
@@ -148,159 +152,151 @@ my $bamfiles;
 ##Generate all combinations of proposed values for execution
 combs(0,"",\@exe_parameters,\@exe_param_values,\@exe_conditions);
 
-if ($cluster)
+my %job_ids;
+my $exe_condition;
+
+mkdir("e_logs");
+mkdir("o_logs");
+
+### Default calling parameters. This may be changed in the future
+#########################################################
+
+print("Unfiltered variant calling detection/execution:\n");	
+if(! -f "N.vcf")
 {
-	my %job_ids;
-    	my $exe_condition;
-
-	mkdir("e_logs");
-	mkdir("o_logs");
-
-	### Default calling parameters. This may be changed in the future
-	#########################################################
-
-	print("Unfiltered variant calling detection/execution:\n");	
-	if(! -f "N.vcf")
-	{
-		$bamfiles=$normal_bam;
-		$exe_condition="";
-		my $job_id=`$qsub $variant_calling_sh -F "$bamfiles $exe_condition N.vcf N_platypus.log" | sed "s/.master.cm.cluster//"`;
-       		chomp($job_id);
-        	$job_ids{$job_id}=1;
-		print("\tNormal tissue variant calling submited with job_id $job_id\n");
-	}
-	else
-	{
-		print("\tNormal tissue variant calling already present, skipping it\n");
-	}
-
-	if(! -f "A.vcf")
-	{
-		$bamfiles=$sample1_bam;
-		$exe_condition="";
-		my $job_id=`$qsub $variant_calling_sh -F "$bamfiles $exe_condition A.vcf A_platypus.log" | sed "s/.master.cm.cluster//"`;
-        	chomp($job_id);
-        	$job_ids{$job_id}=1;
-		print("\tSample A variant calling submited with job_id $job_id\n");
-	
-	}
-	else
-	{
-		print("\tSample A variant calling already present, skipping it\n");
-	}
-
-	if(! -f "B.vcf")
-	{
-		$bamfiles=$sample2_bam;
-		$exe_condition="";
-		my $job_id=`$qsub $variant_calling_sh -F "$bamfiles $exe_condition B.vcf B_platypus.log" | sed "s/.master.cm.cluster//"`;
-        	chomp($job_id);
-        	$job_ids{$job_id}=1;
-		print("\tSample B variant calling submited with job_id $job_id\n");
-
-	}
-	else
-	{
-		print("\tSample B variant calling already present, skipping it\n");
-	}
-	
-	if(! -f "NAB.vcf")
-	{
-		$bamfiles="$normal_bam,$sample1_bam,$sample2_bam";
-		$exe_condition="";
-		my $job_id=`$qsub $variant_calling_sh -F "$bamfiles $exe_condition NAB.vcf NAB_platypus.log" | sed "s/.master.cm.cluster//"`;
-        	chomp($job_id);
-        	$job_ids{$job_id}=1;
-		print("\tSample NAB variant calling submited with job_id $job_id\n");
-
-	}
-	else
-	{
-		print("\tNAB variant calling already present, skipping it\n");
-	}
-	
-	### Calling with filters (Only cancer samples so far)
-	##############################################################
-	my $job_id;
-    	my $actual_exe_conditions;
-	print("Filtered variant calling detection/execution:\n");	
-	foreach my $exe_condition (@exe_conditions)
-	{
-		if (! -f "A$sep_param$exe_condition.vcf")
-		{
-			$bamfiles=$sample1_bam;
-            		if ($exe_condition eq "Default${sep_value}1")
-            		{
-                		$actual_exe_conditions="";
-                		#print("DEBUG: A: Default exe conditions\n");
-           	 	}
-            		else
-            		{
-                		$actual_exe_conditions=$exe_condition;
-                		#print("DEBUG: A: Real exe_conditions\n");
-            		}
-            		#print("DEBUG: qsub -e e_logs/ -o o_logs/ -q shortq $variant_calling_sh -F \"$bamfiles $actual_exe_conditions A$sep_param$exe_condition.vcf A$sep_param${exe_conditions}_platypus.log\" | sed \"s/.master.cm.cluster//\"");
-			$job_id=`$qsub $variant_calling_sh -F "$bamfiles $actual_exe_conditions A$sep_param$exe_condition.vcf A$sep_param${exe_condition}_platypus.log" | sed "s/.master.cm.cluster//"`;
-			chomp($job_id);
-            		$job_ids{$job_id}=1;
-			print("\tSample A variant calling for conditions $exe_condition submited with job_id $job_id\n");
-	
-		}
-		else
-		{
-			print("\tSample A variant calling for conditions $exe_condition already present, skipping it\n");
-		}
-
-		if (! -f "B$sep_param$exe_condition.vcf")
-		{
-			$bamfiles=$sample2_bam;
-            		if ($exe_condition eq "Default${sep_value}1")
-            		{
-                		$actual_exe_conditions="";
-                		##print("DEBUG: B: Default exe conditions\n");
-            		}
-            		else
-            		{
-               	 		$actual_exe_conditions=$exe_condition;
-                		#print("DEBUG: B: Real exe_conditions\n");
-            		}
-			$job_id=`$qsub $variant_calling_sh -F "$bamfiles $actual_exe_conditions B$sep_param$exe_condition.vcf B$sep_param${exe_condition}_platypus.log" | sed "s/.master.cm.cluster//"`;
-	    		chomp($job_id);	
-            		$job_ids{$job_id}=1;
-			print("\tSample B variant calling for conditions $exe_condition submited with job_id $job_id\n");
-
-		}
-		else
-		{
-			print("\tSample B variant calling for conditions $exe_condition already present, skipping it\n");
-
-		}
-
-	} 
-   
-	while (scalar keys %job_ids != 0)##Check 
-	{
-        	sleep(60); 
-        	print("\tPending jobs ",join(",",keys %job_ids),"\n");
-		foreach my $id (keys %job_ids)
-		{
-			my $status=system "qstat $id >/dev/null 2>&1";
-            		#print("DEBUG: Status job id $id : $status\n");
-            		if($status!=0)
-            		{
-                		delete($job_ids{$id});
-            		}
-		}
-		
-	}
+	$bamfiles=$normal_bam;
+	$exe_condition="";
+	my $job_id=`$qsub $variant_calling_sh -F "$bamfiles $exe_condition N.vcf N_platypus.log" | sed "s/.master.cm.cluster//"`;
+   		chomp($job_id);
+    	$job_ids{$job_id}=1;
+	print("\tNormal tissue variant calling submited with job_id $job_id\n");
 }
 else
 {
-    die "the current version of this code should never reach this point\n";
+	print("\tNormal tissue variant calling already present, skipping it\n");
 }
 
+if(! -f "A.vcf")
+{
+	$bamfiles=$sample1_bam;
+	$exe_condition="";
+	my $job_id=`$qsub $variant_calling_sh -F "$bamfiles $exe_condition A.vcf A_platypus.log" | sed "s/.master.cm.cluster//"`;
+    	chomp($job_id);
+    	$job_ids{$job_id}=1;
+	print("\tSample A variant calling submited with job_id $job_id\n");
 
-$job_id=`$qsub $analyser_sh -F "$helper_pl -e $execond_inputfile -f $filtercond_inputfile --NABfilt_cond_inputfile $NABfiltercond_inputfile -o $output_file --original_directory $original_dir"`;
+}
+else
+{
+	print("\tSample A variant calling already present, skipping it\n");
+}
+
+if(! -f "B.vcf")
+{
+	$bamfiles=$sample2_bam;
+	$exe_condition="";
+	my $job_id=`$qsub $variant_calling_sh -F "$bamfiles $exe_condition B.vcf B_platypus.log" | sed "s/.master.cm.cluster//"`;
+    	chomp($job_id);
+    	$job_ids{$job_id}=1;
+	print("\tSample B variant calling submited with job_id $job_id\n");
+
+}
+else
+{
+	print("\tSample B variant calling already present, skipping it\n");
+}
+
+if(! -f "NAB.vcf")
+{
+	$bamfiles="$normal_bam,$sample1_bam,$sample2_bam";
+	$exe_condition="";
+	my $job_id=`$qsub $variant_calling_sh -F "$bamfiles $exe_condition NAB.vcf NAB_platypus.log" | sed "s/.master.cm.cluster//"`;
+    	chomp($job_id);
+    	$job_ids{$job_id}=1;
+	print("\tSample NAB variant calling submited with job_id $job_id\n");
+
+}
+else
+{
+	print("\tNAB variant calling already present, skipping it\n");
+}
+
+### Calling with filters (Only cancer samples so far)
+##############################################################
+my $job_id;
+	my $actual_exe_conditions;
+print("Filtered variant calling detection/execution:\n");	
+foreach my $exe_condition (@exe_conditions)
+{
+	if (! -f "A$sep_param$exe_condition.vcf")
+	{
+		$bamfiles=$sample1_bam;
+        		if ($exe_condition eq "Default${sep_value}1")
+        		{
+            		$actual_exe_conditions="";
+            		#print("DEBUG: A: Default exe conditions\n");
+       	 	}
+        		else
+        		{
+            		$actual_exe_conditions=$exe_condition;
+            		#print("DEBUG: A: Real exe_conditions\n");
+        		}
+        		#print("DEBUG: qsub -e e_logs/ -o o_logs/ -q shortq $variant_calling_sh -F \"$bamfiles $actual_exe_conditions A$sep_param$exe_condition.vcf A$sep_param${exe_conditions}_platypus.log\" | sed \"s/.master.cm.cluster//\"");
+		$job_id=`$qsub $variant_calling_sh -F "$bamfiles $actual_exe_conditions A$sep_param$exe_condition.vcf A$sep_param${exe_condition}_platypus.log" | sed "s/.master.cm.cluster//"`;
+		chomp($job_id);
+        		$job_ids{$job_id}=1;
+		print("\tSample A variant calling for conditions $exe_condition submited with job_id $job_id\n");
+
+	}
+	else
+	{
+		print("\tSample A variant calling for conditions $exe_condition already present, skipping it\n");
+	}
+
+	if (! -f "B$sep_param$exe_condition.vcf")
+	{
+		$bamfiles=$sample2_bam;
+        		if ($exe_condition eq "Default${sep_value}1")
+        		{
+            		$actual_exe_conditions="";
+            		##print("DEBUG: B: Default exe conditions\n");
+        		}
+        		else
+        		{
+           	 		$actual_exe_conditions=$exe_condition;
+            		#print("DEBUG: B: Real exe_conditions\n");
+        		}
+		$job_id=`$qsub $variant_calling_sh -F "$bamfiles $actual_exe_conditions B$sep_param$exe_condition.vcf B$sep_param${exe_condition}_platypus.log" | sed "s/.master.cm.cluster//"`;
+    		chomp($job_id);	
+        		$job_ids{$job_id}=1;
+		print("\tSample B variant calling for conditions $exe_condition submited with job_id $job_id\n");
+
+	}
+	else
+	{
+		print("\tSample B variant calling for conditions $exe_condition already present, skipping it\n");
+
+	}
+
+} 
+
+while (scalar keys %job_ids != 0)##Check 
+{
+    	sleep(60); 
+    	print("\tPending jobs ",join(",",keys %job_ids),"\n");
+	foreach my $id (keys %job_ids)
+	{
+		my $status=system "qstat $id >/dev/null 2>&1";
+        		#print("DEBUG: Status job id $id : $status\n");
+        		if($status!=0)
+        		{
+            		delete($job_ids{$id});
+        		}
+	}
+	
+}
+
+$job_id=`$qsub $helper_sh -F "$helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile -o $output_file --original_directory $original_dir" | sed "s/.master.cm.cluster//"`;
 chomp($job_id);
 
 print "The filtering and analysis of the vcf files is being conducted with the job_id $job_id. Now this script will exit\n";
@@ -711,38 +707,3 @@ sub write_variant_vcf
     close $OFILE;
 }
 
-## Generates the vcf files for NAB
-########################################
-sub filterNAB
-{
-        #my $exe_condition;
-        my $filtering_condition;
-        if (defined $_)
-        {
-            #($exe_condition,$filtering_condition)=@{$_};
-		($filtering_condition)=@{};
-        }
-        else
-        {
-            ##($exe_condition,$filtering_condition)=@{$_[0]};
-		($filtering_condition)=@{$_[0]};
-        }
-	#my $condition="$exe_condition$sep_param$filtering_condition";
-	my $condition="$filtering_condition";
-	my $filtering_command="$vcf_filt_exe ";
-	$filtering_command.=join(" ",split("$sep_value",join(" ",split("$sep_param",$filtering_condition))));
-
-	if (!-f "NAB$sep_param$condition.vcf")
-	{
-		#print("Filtering NAB$sep_param$exe_condition.vcf to generate NAB$sep_param$condition.vcf\n");
-		print("Filtering NAB.vcf to generate NAB$sep_param$condition.vcf\n");
-		## Filter the right vcf file generated in the outside loop	
-		#system("$filtering_command -i NAB$sep_param$exe_condition.vcf -o NAB$sep_param$condition.vcf");
-		system("$filtering_command -i NAB.vcf -o NAB$sep_param$condition.vcf");
-		#print("DEBUG: $filtering_command -i A$sep_param$exe_condition.vcf -o A$sep_param$condition.vcf \n");
-	}
-	else
-	{
-		print("NAB$sep_param$condition.vcf has been previously generated and it will be recycled\n");
-	}
-}
