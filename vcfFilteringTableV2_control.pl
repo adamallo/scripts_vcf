@@ -16,7 +16,8 @@ our $OFS=",";
 our $FS=",";
 our $variant_caller="platypus";
 our $variant_calling_sh;
-our $output_vcfs=1;
+our $helper_sh="vcfFilteringTableV2_analyser_helper.sh";
+our $helper_pl="vcfFilteringTableV2_analyser.pl";
 our $n_cores=1;
 our $qsub="qsub -e e_logs/ -o o_logs/ -q shortq -l nodes=1:ppn=";
 
@@ -29,14 +30,13 @@ my $filtercond_inputfile="";
 my $NABfiltercond_inputfile="",
 my $output_dir="vcf_outputdir";
 my $output_file="";
-my $cluster=0;
 my $normal_bam="";
 my $sample1_bam="";
 my $sample2_bam="";
 
 #Flags
 my $help;
-my $usage="Usage: $0 [options] -o output_file --normal_bamfile bamfile_normal_sample --sample_A_bamfile bamfile_A_sample --sample_B_bamfile bamfile_B_sample\n\n\nOptions:\n--------\n\t-e/--exec_cond_inputfile : input file for execution parameters and options\n\t-f/--filt_cond_inputfile : input file for execution parameters and options\n\t--NABfilt_cond_inputfile : input file for the filtering options of the NAB sample\n\t--cluster :  the script will be run in a cluster with a qsub-based queuing system\n\t--output_dir : output directory for vcf files\n\t--n_cores : number of cores to execute some steps in parallel (requires the perl package Parallel::Loops)\n\t\n\n";
+my $usage="Usage: $0 [options] -o output_file --normal_bamfile bamfile_normal_sample --sample_A_bamfile bamfile_A_sample --sample_B_bamfile bamfile_B_sample\n\n\nOptions:\n--------\n\t-e/--exec_cond_inputfile : input file for execution parameters and options\n\t-f/--filt_cond_inputfile : input file for execution parameters and options\n\t--NABfilt_cond_inputfile : input file for the filtering options of the NAB sample\n\t--output_dir : output directory for vcf files\n\t--n_cores : number of cores to execute some steps in parallel\n\t\n\n";
 ######################################################
 
 ######################################################
@@ -59,34 +59,13 @@ my $usage="Usage: $0 [options] -o output_file --normal_bamfile bamfile_normal_sa
         'help|h' => \$help,
                 )) or (($output_file eq "") || ($normal_bam eq "")  || ($sample1_bam eq "") || ($sample2_bam eq "")  || $help) and die $usage;
 
-##Load Parallel::Loops if it is available and it's needed
-#########################################################
-
-if($n_cores>1)
-{
-    eval "use Parallel::Loops";
-    if($@)
-    {
-        $n_cores=1;
-        print "\n\nWARNING: You are asking to execute this script using $n_cores cores, but the required module \"Parallel::Loops\" has not been found in \@INC\n\n";
-    }
-    else
-    {
-        print "\nUsing Parallel::Loops with $n_cores cores\n\n";
-    }
-}
-
 $qsub.=$n_cores;
 
 ##Input file parsing and directory creation
 ######################################################
 
 my @exe_parameters=("input");
-my @filtering_parameters=("");
-my @NABfiltering_parameters=("");
 my @exe_param_values=([("")]);
-my @filtering_param_values=([("")]);
-my @NABfiltering_param_values=([("")]);
 
 ##Input files
 
@@ -95,19 +74,6 @@ if ($execond_inputfile ne "")
 	@exe_parameters=();
 	parse_parameters_values($execond_inputfile,\@exe_parameters,\@exe_param_values);
 }
-
-if ($filtercond_inputfile ne "")
-{
-	@filtering_parameters=();
-	parse_parameters_values($filtercond_inputfile,\@filtering_parameters,\@filtering_param_values);
-}
-
-if ($NABfiltercond_inputfile ne "")
-{
-	@NABfiltering_parameters=();
-	parse_parameters_values($NABfiltercond_inputfile,\@NABfiltering_parameters,\@NABfiltering_param_values);
-}
-
 
 ##BAMs
 if ( ! -f $normal_bam)
@@ -137,64 +103,50 @@ else
 	$sample2_bam=Cwd::abs_path($sample2_bam);
 }
 
-#my $i=0;
-#foreach my $exepar (@exe_parameters)
-#{
-#	print("Parameter: $exepar\n");
-#	for (my $j=0;$j<scalar(@{$exe_param_values[$i]});++$j)
-#	{
-#		print("\tValue $exe_param_values[$i][$j]\n");
-#	} 
-#	++$i;
-#}
-
 mkdir $output_dir;
 my $original_dir=dirname(Cwd::abs_path($0));
 chdir $output_dir or die "The output directory $output_dir is not accesible";
-my $vcf_filt_exe="vcf_filtering.pl";
 
-if(`which vcf_filtering.pl 2>/dev/null` eq "")
-{
-	if (-f "$original_dir/$vcf_filt_exe")
-	{
-		$vcf_filt_exe="$original_dir/$vcf_filt_exe";
-	}
-	else 
-	{
-		die "The executable vcf_filtering.pl is neither in your PATH nor in the directory $original_dir. This script needs to locate it to continue\n";
-	}
-}
+#my $vcf_filt_exe="vcf_filtering.pl";
+#
+#if(`which vcf_filtering.pl 2>/dev/null` eq "")
+#{
+#	if (-f "$original_dir/$vcf_filt_exe")
+#	{
+#		$vcf_filt_exe="$original_dir/$vcf_filt_exe";
+#	}
+#	else 
+#	{
+#		die "The executable vcf_filtering.pl is neither in your PATH nor in the directory $original_dir. This script needs to locate it to continue\n";
+#	}
+#}
 
-if ($cluster and -f "$original_dir/$variant_caller.sh")
+if (-f "$original_dir/$variant_caller.sh")
 {
 	$variant_calling_sh="$original_dir/$variant_caller.sh";
 }
-elsif ($cluster)
+else
 {
 	die "Error, the sh file for the variant caller $variant_caller is not located in $original_dir, named $original_dir/$variant_caller.sh. Please, fix this in order to use this script\n"
 }
+
+if (-f "$original_dir/$helper_sh" && -f "$original_dir/$helper_pl")
+{
+}
 else
 {
-	die "This version of the script can't work without a queue manager\n";
+	die "Error, the sh file for the secondary analysis of the data, $helper_sh is not located in $original_dir, named $original_dir/$helper_pl. Please, fid this in order to use this script\n"
 }
-
-
 
 ## Main conditions loop
 #######################
 
 my $name_condition;
-my @filtering_conditions;
-our @NAB_filtering_conditions; ##In order to be easily accesed from the filtering functions
 my @exe_conditions;
-my %results;
 my $bamfiles;
-my $parallel;
 
-##Generate all combinations of proposed values for execution and filtering parameters
+##Generate all combinations of proposed values for execution
 combs(0,"",\@exe_parameters,\@exe_param_values,\@exe_conditions);
-combs(0,"",\@filtering_parameters,\@filtering_param_values,\@filtering_conditions);
-combs(0,"",\@NABfiltering_parameters,\@NABfiltering_param_values,\@NABfiltering_conditions);
 
 if ($cluster)
 {
@@ -256,7 +208,7 @@ if ($cluster)
 	{
 		$bamfiles="$normal_bam,$sample1_bam,$sample2_bam";
 		$exe_condition="";
-		my $job_id=`$qsub -F "$bamfiles $exe_condition NAB.vcf NAB_platypus.log" | sed "s/.master.cm.cluster//"`;
+		my $job_id=`$qsub $variant_calling_sh -F "$bamfiles $exe_condition NAB.vcf NAB_platypus.log" | sed "s/.master.cm.cluster//"`;
         	chomp($job_id);
         	$job_ids{$job_id}=1;
 		print("\tSample NAB variant calling submited with job_id $job_id\n");
@@ -346,230 +298,13 @@ else
 {
     die "the current version of this code should never reach this point\n";
 }
-i
 
-## NAB filtering and parsing
-##########################################################################################
 
-my @NAB_hash_pointers;
-for (my $i=0; $i<scalar @NABfiltering_conditions; ++$i)
-{
-	if($n_cores>1)
-        {
-                $parallel->foreach(\@NABfiltering_conditions,\&filterNAB);
-        }
-        else
-        {
-                foreach my $filtering_condition (@NABfiltering_conditions)
-                {
-                        filterNAB($filtering_condition);
-                }
-        }
-	$NAB_hash_pointer[$i]=parse_vcf("NAB$sep_param$NABfiltering_conditions[$i].vcf");
-}
+$job_id=`$qsub $analyser_sh -F "$helper_pl -e $execond_inputfile -f $filtercond_inputfile --NABfilt_cond_inputfile $NABfiltercond_inputfile -o $output_file --original_directory $original_dir"`;
+chomp($job_id);
 
-## Old germline filtering
-#########################################################################################
-
-#my $filtering_command="$vcf_filt_exe ";
-#$filtering_command.="--isvar 1";
-#if (!-f "NAB${sep_param}germline.vcf")
-#{
-#	print("Filtering NAB.vcf to generate NAB${sep_param}germline.vcf\n");
-#	## Filter the right vcf file generated ini the outside loop	
-#	system("$filtering_command -i NAB.vcf -o NAB${sep_param}germline.vcf");
-#	#print("DEBUG: $filtering_command -i A$sep_param$exe_condition.vcf -o A$sep_param$condition.vcf \n");
-#}
-#else
-#{
-#	print("NAB${sep_param}germline.vcf had been previously generated and it will be recycled\n");
-#}
-
-## Parsing static variants
-############################################################################################
-my %A=%{parse_vcf("A.vcf")};
-my %B=%{parse_vcf("B.vcf")};
-my %N=%{parse_vcf("N.vcf")};
-##my @temp=parse_vcf_name("NAB${sep_param}germline.vcf");
-##my %NAB=%{$temp[0]};
-##my $nameN=$temp[1];
-
-if ($n_cores>1)
-{
-    $parallel = Parallel::Loops->new($n_cores);
-    $parallel->share(\%results);
-}
-
-foreach my $exe_condition (@exe_conditions) ##Options that require to call variants again 
-{
-	#print("DEBUG: Exe condition loop $exe_condition\n");
-	if ((!-f "A$sep_param$exe_condition.vcf") || (!-f "B$sep_param$exe_condition.vcf")) ##VCF file we will use for filtering, if it does not exist we have to perform the variant calling
-	{	
-		###PENDING!!!!			
-		##Perform the variant calling
-		######system("$variant_calling_sh -i ????? -o $exe_condition.vcf");
-		die "So far this script does not support to carry out the variant calling in an environment without a queue manager\n";
-	}
-	my @current_conditions=@filtering_conditions;
-	for (my $i=0; $i<scalar @filtering_conditions;++$i)
-	{
-		$current_conditions[$i]=[$exe_condition,$filtering_conditions[$i]];
-	}
-	if($n_cores>1)
-	{
-		$parallel->foreach(\@current_conditions,\&filter);
-	}
-	else
-	{
-		foreach my $filtering_condition (@current_conditions)
-		{
-    			filter($filtering_condition);
-		}
-	}
-}
-
-## Output
-#############################################################
-open(my $OFILE,">$output_file");
-print($OFILE "Condition,Afilt_prop,Afilt_N,Bfilt_prop,Bfilt_N,filt_prop,filt_N,filt_prop_mean,filt_N_mean,AfiltN_prop,AfiltN_N,BfiltN_prop,B_filtN_prop,filtN_prop,filtN_N,filtN_prop_mean,filtN_N_mean,AfiltNAB_prop,AfiltNAB_N,BfiltNAB_prop,BfiltNAB_N,filtNAB_prop,filtNAB_N,filtNAB_prop_mean,filtNAB_N_mean\n");
-foreach my $condition (keys %results)
-{
-	print($OFILE "$condition$OFS",array_to_string(@{$results{$condition}}),"\n");
-}
-close($OFILE);
-
-## MAIN BODY AS FUNCTION FOR PARALLELISM
-########################################
-sub filter
-{
-        my $exe_condition;
-        my $filtering_condition;
-        if (defined $_)
-        {
-            ($exe_condition,$filtering_condition)=@{$_};
-        }
-        else
-        {
-            ($exe_condition,$filtering_condition)=@{$_[0]};
-        }
-	my $condition="$exe_condition$sep_param$filtering_condition";
-	my $filtering_command="$vcf_filt_exe ";
-	$filtering_command.=join(" ",split("$sep_value",join(" ",split("$sep_param",$filtering_condition))));
-
-	if (!-f "A$sep_param$condition.vcf")
-	{
-		print("Filtering A$sep_param$exe_condition.vcf to generate A$sep_param$condition.vcf\n");
-		## Filter the right vcf file generated in the outside loop	
-		system("$filtering_command -i A$sep_param$exe_condition.vcf -o A$sep_param$condition.vcf"); ## I don't think speed would be an issue, thus I'll call the filtering script every time (instead of writting a package and/or functions here)
-		#print("DEBUG: $filtering_command -i A$sep_param$exe_condition.vcf -o A$sep_param$condition.vcf \n");
-
-	}
-	else
-	{
-		print("A$sep_param$condition.vcf has been previously generated and it will be recycled\n");
-	}
-
-	if (!-f "B$sep_param$condition.vcf")
-	{
-		print("Filtering B$sep_param$exe_condition.vcf to generate B$sep_param$condition.vcf\n");
-		## Filter the right vcf file generated in the outside loop		
-		system("$filtering_command -i B$sep_param$exe_condition.vcf -o B$sep_param$condition.vcf"); ## I don't think speed would be an issue, thus I'll call the filtering script every time (instead of writting a package and/or functions here)
-		#print("DEBUG: $filtering_command -i B$sep_param$exe_condition.vcf -o B$sep_param$condition.vcf \n");
-	}
-	else
-	{
-		print("B$sep_param$condition.vcf has been previously generated and it will be recycled\n");
-	}
-
-	my %Afilt=%{parse_vcf("A$sep_param$condition.vcf")};
-	my %Bfilt=%{parse_vcf("B$sep_param$condition.vcf")};
-
-# Right know I'm keeping a lot of hashes in memory instead of reusing variables. I do it just in case I need them in posterior statistics/calculations etc.
-# We could be interested on changing this if the performance is really bad.
-
-	#Compare Afilt with B without filter --> Common variants + %
-	my @statsAfilt;
-	my ($ref_common_variantsAfilt,$ref_different_variantsAfilt)=vcf_compare_parsed(\%B,\%Afilt,\@statsAfilt); ##I have to generate two hashes. One with common variants, the other with non common. Thus, the consecutive filter I can do it towards these new (smallest) hashes.
-	
-	#Compare Bfiltered with A without filter --> Common variants + %
-	my @statsBfilt;
-	my ($ref_common_variantsBfilt,$ref_different_variantsBfilt)=vcf_compare_parsed(\%A,\%Bfilt,\@statsBfilt);
-
-	#Stats filter
-	my @statsfilt;
-        my ($ref_common_variantsfilt,$ref_different_variantsfilt)=vcf_unite_parsed($ref_common_variantsAfilt,$ref_different_variantsAfilt,$ref_common_variantsBfilt,$ref_different_variantsBfilt,\@statsfilt);
-        
-        my @statsfiltmean=(($statsAfilt[0]+$statsBfilt[0])/2.0,($statsAfilt[1]+$statsBfilt[1])/2.0);
-	#Substract N from Afilt. Compare the result to B without filter --> Common variants + %
-	my @statsAfiltN;
-	my ($ref_common_variantsAfiltN,$ref_different_variantsAfiltN)=vcf_prune($ref_common_variantsAfilt,$ref_different_variantsAfilt,\%N,\@statsAfiltN);
-	
-	#Substract N from Bfilt. Compare the result to A without filter --> Common variants + %
-	my @statsBfiltN;
-	my ($ref_common_variantsBfiltN,$ref_different_variantsBfiltN)=vcf_prune($ref_common_variantsBfilt,$ref_different_variantsBfilt,\%N,\@statsBfiltN);
-			
-	#Mean stats filterN
-	my @statsfiltN;
-        my ($ref_common_variantsfiltN,$ref_different_variantsfiltN)=vcf_prune($ref_common_variantsfilt,$ref_different_variantsfilt,\%N,\@statsfiltN);
-
-        my @statsfiltNmean=(($statsAfiltN[0]+$statsBfiltN[0])/2.0,($statsAfiltN[1]+$statsBfiltN[1])/2.0);
-
-        #Output of list of variants and/or intermediate vcf files
-        
-        write_variant_list($ref_common_variantsAfilt,"Afilt$sep_param${condition}.list");
-        write_variant_list($ref_common_variantsBfilt,"Bfilt$sep_param${condition}.list");
-        write_variant_list($ref_common_variantsfilt,"filt$sep_param${condition}.list");
-        write_variant_list($ref_common_variantsAfiltN,"AfiltN$sep_param${condition}.list");
-        write_variant_list($ref_common_variantsBfiltN,"BfiltN$sep_param${condition}.list");
-        write_variant_list($ref_common_variantsfiltN,"filtN$sep_param${condition}.list");
-
-        if($output_vcfs)
-        {
-            write_variant_vcf($ref_common_variantsAfilt,"Afilt$sep_param${condition}_common.vcf","A.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
-            write_variant_vcf($ref_common_variantsBfilt,"Bfilt$sep_param${condition}_common.vcf","B.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
-            write_variant_vcf($ref_common_variantsAfiltN,"AfiltN$sep_param${condition}_common.vcf","A.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
-            write_variant_vcf($ref_common_variantsBfiltN,"BfiltN$sep_param${condition}_common.vcf","B.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
-	} 
-
-	for (my $i=0; $i< scalar @NAB_conditions; ++$i)
-	{
-		
-		my $NAB_condition=$NAB_conditions[$i];
-		my $NAB=$NAB_hash_pointers[$i];
-	
-		#Substract NAB from Afilt. Compare the results to B wihout filter --> Common variants + % ###We want to apply filter to NAB and remove only variants that are Alternative for N
-		my @statsAfiltNAB;
-		my ($ref_common_variantsAfiltNAB,$ref_different_variantsAfiltNAB)=vcf_prune($ref_common_variantsAfiltN,$ref_different_variantsAfiltN,$NAB,\@statsAfiltNAB);
-	
-		#Substract NAB from Bfilt. Compare the results to A wihout filter --> Common variants + % ###We want to apply filter to NAB and remove only variants that are Alternative for N
-		my @statsBfiltNAB;
-		my ($ref_common_variantsBfiltNAB,$ref_different_variantsBfiltNAB)=vcf_prune($ref_common_variantsBfiltN,$ref_different_variantsBfiltN,$NAB,\@statsBfiltNAB);
-	
-		#Mean stats filter NAB		
-		my @statsfiltNAB;
-	        my ($ref_common_variantsfiltNAB,$ref_different_variantsfiltNAB)=vcf_prune($ref_common_variantsfiltN,$ref_different_variantsfiltN,$NAB,\@statsfiltNAB);
-	        my @statsfiltNABmean=(($statsAfiltNAB[0]+$statsBfiltNAB[0])/2.0,($statsAfiltNAB[1]+$statsBfiltNAB[1])/2.0);
-	        
-	        #Output of list of variants and/or intermediate vcf files
-	        
-	        write_variant_list($ref_common_variantsAfiltNAB,"AfiltNAB$sep_param${condition}${sep_param}NAB$sep_param$NAB_condition.list");
-	        write_variant_list($ref_common_variantsBfiltNAB,"BfiltNAB$sep_param${condition}${sep_param}NAB$sep_param$NAB_condition.list");
-	        write_variant_list($ref_common_variantsfiltNAB,"filtNAB$sep_param${condition}${sep_param}NAB$sep_param$NAB_condition.list");
-	 
-	        if($output_vcfs)
-	        {
-	            write_variant_vcf($ref_common_variantsAfiltNAB,"AfiltNAB$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_common.vcf","A.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
-	            write_variant_vcf($ref_common_variantsBfiltNAB,"BfiltNAB$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_common.vcf","B.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
-	        }
-	         
-		    
-		#Store and/or print
-		my @statistics=(@statsAfilt,@statsBfilt,@statsfilt,@statsfiltmean,@statsAfiltN,@statsBfiltN,@statsfiltN,@statsfiltNmean,@statsAfiltNAB,@statsBfiltNAB,@statsfiltNAB,@statsfiltNABmean);
-		$results{"$condition${sep_param}NAB$sep_param$NAB_condition"}=\@statistics;
-		#print("DEBUG:$condition$OFS",array_to_string(@statistics),"\n");
-	}
-}
-
+print "The filtering and analysis of the vcf files is being conducted with the job_id $job_id. Now this script will exit\n";
+exit;
 
 ###################################################################################
 ###FUNCTIONS
@@ -1011,5 +746,3 @@ sub filterNAB
 		print("NAB$sep_param$condition.vcf has been previously generated and it will be recycled\n");
 	}
 }
-
-

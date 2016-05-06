@@ -14,11 +14,8 @@ our $sep_param="#";
 our $sep_value=":";
 our $OFS=",";
 our $FS=",";
-our $variant_caller="platypus";
-our $variant_calling_sh;
 our $output_vcfs=1;
-our $n_cores=1;
-our $qsub="qsub -e e_logs/ -o o_logs/ -q shortq -l nodes=1:ppn=";
+our $n_cores=0;
 
 ######################################################
 
@@ -27,16 +24,12 @@ our $qsub="qsub -e e_logs/ -o o_logs/ -q shortq -l nodes=1:ppn=";
 my $execond_inputfile="";
 my $filtercond_inputfile="";
 my $NABfiltercond_inputfile="",
-my $output_dir="vcf_outputdir";
 my $output_file="";
-my $cluster=0;
-my $normal_bam="";
-my $sample1_bam="";
-my $sample2_bam="";
+my $original_dir="";
 
 #Flags
 my $help;
-my $usage="Usage: $0 [options] -o output_file --normal_bamfile bamfile_normal_sample --sample_A_bamfile bamfile_A_sample --sample_B_bamfile bamfile_B_sample\n\n\nOptions:\n--------\n\t-e/--exec_cond_inputfile : input file for execution parameters and options\n\t-f/--filt_cond_inputfile : input file for execution parameters and options\n\t--NABfilt_cond_inputfile : input file for the filtering options of the NAB sample\n\t--cluster :  the script will be run in a cluster with a qsub-based queuing system\n\t--output_dir : output directory for vcf files\n\t--n_cores : number of cores to execute some steps in parallel (requires the perl package Parallel::Loops)\n\t\n\n";
+my $usage="Usage: $0 [options] -o output_file \n\nWARNING: This is a secondary script that is not inteded to be executed directly.\n\n\nOptions:\n--------\n\t-e/--exec_cond_inputfile : input file for execution parameters and options\n\t-f/--filt_cond_inputfile : input file for execution parameters and options\n\t--NABfilt_cond_inputfile : input file for the filtering options of the NAB sample\n\t--output_dir : output directory for vcf files\n\t--n_cores : number of cores to execute some steps in parallel (requires the perl package Parallel::Loops)\n\t--original_directory : directory where the main script is located\n\n";
 ######################################################
 
 ######################################################
@@ -49,25 +42,21 @@ my $usage="Usage: $0 [options] -o output_file --normal_bamfile bamfile_normal_sa
         'exec_cond_inputfile|e=s' => \$execond_inputfile,
 	'filt_cond_inputfile|f=s' => \$filtercond_inputfile,
 	'NABfilt_cond_inputfile=s' => \$NABfiltercond_inputfile,
-        'output_dir=s' => \$output_dir,
 	'output_file|o=s' => \$output_file,
-	'cluster' => \$cluster,
-	'normal_bamfile=s' => \$normal_bam,
-	'sample_A_bamfile=s' => \$sample1_bam,
-	'sample_B_bamfile=s' => \$sample2_bam,
+	'original_directory=s' => \$original_dir,
         'n_cores=i' => \$n_cores,
         'help|h' => \$help,
-                )) or (($output_file eq "") || ($normal_bam eq "")  || ($sample1_bam eq "") || ($sample2_bam eq "")  || $help) and die $usage;
+                )) or (($output_file eq "") || ($original_dir eq "") || $help) and die $usage;
 
 ##Load Parallel::Loops if it is available and it's needed
 #########################################################
 
-if($n_cores>1)
+if($n_cores!=0)
 {
     eval "use Parallel::Loops";
     if($@)
     {
-        $n_cores=1;
+        $n_cores=0;
         print "\n\nWARNING: You are asking to execute this script using $n_cores cores, but the required module \"Parallel::Loops\" has not been found in \@INC\n\n";
     }
     else
@@ -75,8 +64,6 @@ if($n_cores>1)
         print "\nUsing Parallel::Loops with $n_cores cores\n\n";
     }
 }
-
-$qsub.=$n_cores;
 
 ##Input file parsing and directory creation
 ######################################################
@@ -108,49 +95,6 @@ if ($NABfiltercond_inputfile ne "")
 	parse_parameters_values($NABfiltercond_inputfile,\@NABfiltering_parameters,\@NABfiltering_param_values);
 }
 
-
-##BAMs
-if ( ! -f $normal_bam)
-{
-	die "The BAM file $normal_bam is not accesible. Please, check your input options.\n";
-}
-else
-{
-	$normal_bam=Cwd::abs_path($normal_bam);
-}
-
-if ( ! -f $sample1_bam)
-{
-	die "The BAM file $sample1_bam is not accesible. Please, check your input options.\n";
-}
-else
-{
-	$sample1_bam=Cwd::abs_path($sample1_bam);
-}
-
-if ( ! -f $sample2_bam)
-{
-	die "The BAM file $sample2_bam is not accesible. Please, check your input options.\n";
-}
-else
-{
-	$sample2_bam=Cwd::abs_path($sample2_bam);
-}
-
-#my $i=0;
-#foreach my $exepar (@exe_parameters)
-#{
-#	print("Parameter: $exepar\n");
-#	for (my $j=0;$j<scalar(@{$exe_param_values[$i]});++$j)
-#	{
-#		print("\tValue $exe_param_values[$i][$j]\n");
-#	} 
-#	++$i;
-#}
-
-mkdir $output_dir;
-my $original_dir=dirname(Cwd::abs_path($0));
-chdir $output_dir or die "The output directory $output_dir is not accesible";
 my $vcf_filt_exe="vcf_filtering.pl";
 
 if(`which vcf_filtering.pl 2>/dev/null` eq "")
@@ -164,20 +108,6 @@ if(`which vcf_filtering.pl 2>/dev/null` eq "")
 		die "The executable vcf_filtering.pl is neither in your PATH nor in the directory $original_dir. This script needs to locate it to continue\n";
 	}
 }
-
-if ($cluster and -f "$original_dir/$variant_caller.sh")
-{
-	$variant_calling_sh="$original_dir/$variant_caller.sh";
-}
-elsif ($cluster)
-{
-	die "Error, the sh file for the variant caller $variant_caller is not located in $original_dir, named $original_dir/$variant_caller.sh. Please, fix this in order to use this script\n"
-}
-else
-{
-	die "This version of the script can't work without a queue manager\n";
-}
-
 
 
 ## Main conditions loop
@@ -196,165 +126,19 @@ combs(0,"",\@exe_parameters,\@exe_param_values,\@exe_conditions);
 combs(0,"",\@filtering_parameters,\@filtering_param_values,\@filtering_conditions);
 combs(0,"",\@NABfiltering_parameters,\@NABfiltering_param_values,\@NABfiltering_conditions);
 
-if ($cluster)
-{
-	my %job_ids;
-    	my $exe_condition;
-
-	mkdir("e_logs");
-	mkdir("o_logs");
-
-	### Default calling parameters. This may be changed in the future
-	#########################################################
-
-	print("Unfiltered variant calling detection/execution:\n");	
-	if(! -f "N.vcf")
-	{
-		$bamfiles=$normal_bam;
-		$exe_condition="";
-		my $job_id=`$qsub $variant_calling_sh -F "$bamfiles $exe_condition N.vcf N_platypus.log" | sed "s/.master.cm.cluster//"`;
-       		chomp($job_id);
-        	$job_ids{$job_id}=1;
-		print("\tNormal tissue variant calling submited with job_id $job_id\n");
-	}
-	else
-	{
-		print("\tNormal tissue variant calling already present, skipping it\n");
-	}
-
-	if(! -f "A.vcf")
-	{
-		$bamfiles=$sample1_bam;
-		$exe_condition="";
-		my $job_id=`$qsub $variant_calling_sh -F "$bamfiles $exe_condition A.vcf A_platypus.log" | sed "s/.master.cm.cluster//"`;
-        	chomp($job_id);
-        	$job_ids{$job_id}=1;
-		print("\tSample A variant calling submited with job_id $job_id\n");
-	
-	}
-	else
-	{
-		print("\tSample A variant calling already present, skipping it\n");
-	}
-
-	if(! -f "B.vcf")
-	{
-		$bamfiles=$sample2_bam;
-		$exe_condition="";
-		my $job_id=`$qsub $variant_calling_sh -F "$bamfiles $exe_condition B.vcf B_platypus.log" | sed "s/.master.cm.cluster//"`;
-        	chomp($job_id);
-        	$job_ids{$job_id}=1;
-		print("\tSample B variant calling submited with job_id $job_id\n");
-
-	}
-	else
-	{
-		print("\tSample B variant calling already present, skipping it\n");
-	}
-	
-	if(! -f "NAB.vcf")
-	{
-		$bamfiles="$normal_bam,$sample1_bam,$sample2_bam";
-		$exe_condition="";
-		my $job_id=`$qsub -F "$bamfiles $exe_condition NAB.vcf NAB_platypus.log" | sed "s/.master.cm.cluster//"`;
-        	chomp($job_id);
-        	$job_ids{$job_id}=1;
-		print("\tSample NAB variant calling submited with job_id $job_id\n");
-
-	}
-	else
-	{
-		print("\tNAB variant calling already present, skipping it\n");
-	}
-	
-	### Calling with filters (Only cancer samples so far)
-	##############################################################
-	my $job_id;
-    	my $actual_exe_conditions;
-	print("Filtered variant calling detection/execution:\n");	
-	foreach my $exe_condition (@exe_conditions)
-	{
-		if (! -f "A$sep_param$exe_condition.vcf")
-		{
-			$bamfiles=$sample1_bam;
-            		if ($exe_condition eq "Default${sep_value}1")
-            		{
-                		$actual_exe_conditions="";
-                		#print("DEBUG: A: Default exe conditions\n");
-           	 	}
-            		else
-            		{
-                		$actual_exe_conditions=$exe_condition;
-                		#print("DEBUG: A: Real exe_conditions\n");
-            		}
-            		#print("DEBUG: qsub -e e_logs/ -o o_logs/ -q shortq $variant_calling_sh -F \"$bamfiles $actual_exe_conditions A$sep_param$exe_condition.vcf A$sep_param${exe_conditions}_platypus.log\" | sed \"s/.master.cm.cluster//\"");
-			$job_id=`$qsub $variant_calling_sh -F "$bamfiles $actual_exe_conditions A$sep_param$exe_condition.vcf A$sep_param${exe_condition}_platypus.log" | sed "s/.master.cm.cluster//"`;
-			chomp($job_id);
-            		$job_ids{$job_id}=1;
-			print("\tSample A variant calling for conditions $exe_condition submited with job_id $job_id\n");
-	
-		}
-		else
-		{
-			print("\tSample A variant calling for conditions $exe_condition already present, skipping it\n");
-		}
-
-		if (! -f "B$sep_param$exe_condition.vcf")
-		{
-			$bamfiles=$sample2_bam;
-            		if ($exe_condition eq "Default${sep_value}1")
-            		{
-                		$actual_exe_conditions="";
-                		##print("DEBUG: B: Default exe conditions\n");
-            		}
-            		else
-            		{
-               	 		$actual_exe_conditions=$exe_condition;
-                		#print("DEBUG: B: Real exe_conditions\n");
-            		}
-			$job_id=`$qsub $variant_calling_sh -F "$bamfiles $actual_exe_conditions B$sep_param$exe_condition.vcf B$sep_param${exe_condition}_platypus.log" | sed "s/.master.cm.cluster//"`;
-	    		chomp($job_id);	
-            		$job_ids{$job_id}=1;
-			print("\tSample B variant calling for conditions $exe_condition submited with job_id $job_id\n");
-
-		}
-		else
-		{
-			print("\tSample B variant calling for conditions $exe_condition already present, skipping it\n");
-
-		}
-
-	} 
-   
-	while (scalar keys %job_ids != 0)##Check 
-	{
-        	sleep(60); 
-        	print("\tPending jobs ",join(",",keys %job_ids),"\n");
-		foreach my $id (keys %job_ids)
-		{
-			my $status=system "qstat $id >/dev/null 2>&1";
-            		#print("DEBUG: Status job id $id : $status\n");
-            		if($status!=0)
-            		{
-                		delete($job_ids{$id});
-            		}
-		}
-		
-	}
-}
-else
-{
-    die "the current version of this code should never reach this point\n";
-}
-i
 
 ## NAB filtering and parsing
 ##########################################################################################
 
+if ( ! -f "NAB.vcf")
+{
+	die "Missing vcf files. Something weird has happend between the execution of the previous script and this one. Check that the variant calling step has finished succesfully and try to execute this script again\n";
+}
+
 my @NAB_hash_pointers;
 for (my $i=0; $i<scalar @NABfiltering_conditions; ++$i)
 {
-	if($n_cores>1)
+	if($n_cores!=0)
         {
                 $parallel->foreach(\@NABfiltering_conditions,\&filterNAB);
         }
@@ -387,14 +171,23 @@ for (my $i=0; $i<scalar @NABfiltering_conditions; ++$i)
 
 ## Parsing static variants
 ############################################################################################
-my %A=%{parse_vcf("A.vcf")};
-my %B=%{parse_vcf("B.vcf")};
-my %N=%{parse_vcf("N.vcf")};
+
+if ( -f "A.vcf" && -f "B.vcf" && -f "N.vcf")
+{
+	my %A=%{parse_vcf("A.vcf")};
+	my %B=%{parse_vcf("B.vcf")};
+	my %N=%{parse_vcf("N.vcf")};
+}
+else
+{
+	die "Missing vcf files. Something weird has happend between the execution of the previous script and this one. Check that the variant calling step has finished succesfully and try to execute this script again\n";
+}
+
 ##my @temp=parse_vcf_name("NAB${sep_param}germline.vcf");
 ##my %NAB=%{$temp[0]};
 ##my $nameN=$temp[1];
 
-if ($n_cores>1)
+if ($n_cores!=0)
 {
     $parallel = Parallel::Loops->new($n_cores);
     $parallel->share(\%results);
@@ -404,18 +197,15 @@ foreach my $exe_condition (@exe_conditions) ##Options that require to call varia
 {
 	#print("DEBUG: Exe condition loop $exe_condition\n");
 	if ((!-f "A$sep_param$exe_condition.vcf") || (!-f "B$sep_param$exe_condition.vcf")) ##VCF file we will use for filtering, if it does not exist we have to perform the variant calling
-	{	
-		###PENDING!!!!			
-		##Perform the variant calling
-		######system("$variant_calling_sh -i ????? -o $exe_condition.vcf");
-		die "So far this script does not support to carry out the variant calling in an environment without a queue manager\n";
+	{
+		die "Missing vcf files. Something weird has happend between the execution of the previous script and this one. Check that the two scripts are using the same filtering options\n";
 	}
 	my @current_conditions=@filtering_conditions;
 	for (my $i=0; $i<scalar @filtering_conditions;++$i)
 	{
 		$current_conditions[$i]=[$exe_condition,$filtering_conditions[$i]];
 	}
-	if($n_cores>1)
+	if($n_cores!=0)
 	{
 		$parallel->foreach(\@current_conditions,\&filter);
 	}
