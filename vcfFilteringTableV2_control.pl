@@ -177,7 +177,7 @@ if(! -f "N.vcf")
 {
 	$bamfiles=$normal_bam;
 	$exe_condition="";
-	my $job_id=`$qsub $variant_calling_sh -F "$bamfiles $exe_condition N.vcf N_platypus.log" | sed "s/.master.cm.cluster//"`;
+	my $job_id=`$qsub $variant_calling_sh -F "$bamfiles N.vcf N_platypus.log $exe_condition" | sed "s/.master.cm.cluster//"`;
    		chomp($job_id);
     	$job_ids{$job_id}=1;
 	print("\tNormal tissue variant calling submited with job_id $job_id\n");
@@ -191,7 +191,7 @@ if(! -f "A.vcf")
 {
 	$bamfiles=$sample1_bam;
 	$exe_condition="";
-	my $job_id=`$qsub $variant_calling_sh -F "$bamfiles $exe_condition A.vcf A_platypus.log" | sed "s/.master.cm.cluster//"`;
+	my $job_id=`$qsub $variant_calling_sh -F "$bamfiles A.vcf A_platypus.log $exe_condition" | sed "s/.master.cm.cluster//"`;
     	chomp($job_id);
     	$job_ids{$job_id}=1;
 	print("\tSample A variant calling submited with job_id $job_id\n");
@@ -206,7 +206,7 @@ if(! -f "B.vcf")
 {
 	$bamfiles=$sample2_bam;
 	$exe_condition="";
-	my $job_id=`$qsub $variant_calling_sh -F "$bamfiles $exe_condition B.vcf B_platypus.log" | sed "s/.master.cm.cluster//"`;
+	my $job_id=`$qsub $variant_calling_sh -F "$bamfiles B.vcf B_platypus.log $exe_condition" | sed "s/.master.cm.cluster//"`;
     	chomp($job_id);
     	$job_ids{$job_id}=1;
 	print("\tSample B variant calling submited with job_id $job_id\n");
@@ -221,7 +221,7 @@ if(! -f "NAB.vcf")
 {
 	$bamfiles="$normal_bam,$sample1_bam,$sample2_bam";
 	$exe_condition="";
-	my $job_id=`$qsub $variant_calling_sh -F "$bamfiles $exe_condition NAB.vcf NAB_platypus.log" | sed "s/.master.cm.cluster//"`;
+	my $job_id=`$qsub $variant_calling_sh -F "$bamfiles NAB.vcf NAB_platypus.log $exe_condition" | sed "s/.master.cm.cluster//"`;
     	chomp($job_id);
     	$job_ids{$job_id}=1;
 	print("\tSample NAB variant calling submited with job_id $job_id\n");
@@ -249,11 +249,11 @@ foreach my $exe_condition (@exe_conditions)
        	 	}
         		else
         		{
-            		$actual_exe_conditions=$exe_condition;
+            		$actual_exe_conditions=join(" ",split("$sep_value",join(" ",split("$sep_param",$exe_condition))));
             		#print("DEBUG: A: Real exe_conditions\n");
         		}
         		#print("DEBUG: qsub -e e_logs/ -o o_logs/ -q shortq $variant_calling_sh -F \"$bamfiles $actual_exe_conditions A$sep_param$exe_condition.vcf A$sep_param${exe_conditions}_platypus.log\" | sed \"s/.master.cm.cluster//\"");
-		$job_id=`$qsub $variant_calling_sh -F "$bamfiles $actual_exe_conditions A$sep_param$exe_condition.vcf A$sep_param${exe_condition}_platypus.log" | sed "s/.master.cm.cluster//"`;
+		$job_id=`$qsub $variant_calling_sh -F "$bamfiles A$sep_param$exe_condition.vcf A$sep_param${exe_condition}_platypus.log $actual_exe_conditions"  | sed "s/.master.cm.cluster//"`;
 		chomp($job_id);
         		$job_ids{$job_id}=1;
 		print("\tSample A variant calling for conditions $exe_condition submited with job_id $job_id\n");
@@ -274,10 +274,10 @@ foreach my $exe_condition (@exe_conditions)
         		}
         		else
         		{
-           	 		$actual_exe_conditions=$exe_condition;
+           	 		$actual_exe_conditions=join(" ",split("$sep_value",join(" ",split("$sep_param",$exe_condition))));
             		#print("DEBUG: B: Real exe_conditions\n");
         		}
-		$job_id=`$qsub $variant_calling_sh -F "$bamfiles $actual_exe_conditions B$sep_param$exe_condition.vcf B$sep_param${exe_condition}_platypus.log" | sed "s/.master.cm.cluster//"`;
+		$job_id=`$qsub $variant_calling_sh -F "$bamfiles B$sep_param$exe_condition.vcf B$sep_param${exe_condition}_platypus.log $actual_exe_conditions" | sed "s/.master.cm.cluster//"`;
     		chomp($job_id);	
         		$job_ids{$job_id}=1;
 		print("\tSample B variant calling for conditions $exe_condition submited with job_id $job_id\n");
