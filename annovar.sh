@@ -1,7 +1,11 @@
 #!/bin/bash
 #
 
-cd $PBS_O_WORKDIR
+if [[ -d $PBS_O_WORKDIR ]]
+then
+	cd $PBS_O_WORKDIR
+fi
+
 module load annovar
 
 humandb_dir=~/humandb/

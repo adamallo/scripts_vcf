@@ -18,7 +18,7 @@ our $variant_caller="platypus";
 our $variant_calling_sh;
 our $helper_sh="vcfFilteringTableV2_analyser_helper.sh";
 our $helper_pl="vcfFilteringTableV2_analyser.pl";
-our $annotation_sh="annovar.sh";
+#our $annotation_sh="annovar.sh";
 our $n_cores=1;
 our $qsub="qsub -e e_logs/ -o o_logs/ -q shortq -l nodes=1:ppn=";
 our $qsub_noparallel="qsub -e e_logs/ -o o_logs/ -q shortq";
@@ -143,16 +143,16 @@ else
 {
 	die "Error, the sh file for the secondary analysis of the data, $helper_sh is not located in $original_dir, named $original_dir/$helper_pl. Please, fix this in order to use this script\n"
 }
-
-if (-f "$original_dir/$annotation_sh")
-{
-    $annotation_sh="$original_dir/$annotation_sh";
-}
-else
-{
-	die "Error, the sh file for the secondary analysis of the data, $annotation_sh is not located in $original_dir. Please, fix this in order to use this script\n"
-}
-
+#
+#if (-f "$original_dir/$annotation_sh")
+#{
+#    $annotation_sh="$original_dir/$annotation_sh";
+#}
+#else
+#{
+#	die "Error, the sh file for the secondary analysis of the data, $annotation_sh is not located in $original_dir. Please, fix this in order to use this script\n"
+#}
+#
 ## Main conditions loop
 #######################
 
@@ -328,40 +328,40 @@ while (scalar keys %job_ids != 0)
 	
 }
 
-print("Analysis finished.\n\nAnnotation:\n");
-opendir(my $DIR, ".");
-
-while (my $file = readdir($DIR))
-{
-    next unless (-f $file);
-    if ($file=~/^.filtN.*\.vcf$/)
-    {
-        $job_id=`$qsub_noparallel $annotation_sh -F "$file" | sed "s/.master.cm.cluster//"`;
-         chomp($job_id);
-        $job_ids{$job_id}=1;
-        print "Job to annotate the file $file $job_id\n";
-    }
-}
-
-closedir $DIR;
-
-while (scalar keys %job_ids != 0) 
-{
-    	sleep(60); 
-        print("\tPending jobs ",join(",",keys %job_ids),"\n");
-    	foreach my $id (keys %job_ids)
-	    {
-		        my $status=system "qstat $id >/dev/null 2>&1";
-                
-        		#print("DEBUG: Status job id $id : $status\n");
-        		if($status!=0)
-        		{
-            		delete($job_ids{$id});
-        		}
-	    }
-	
-}
-
+#print("Analysis finished.\n\nAnnotation:\n");
+#opendir(my $DIR, ".");
+#
+#while (my $file = readdir($DIR))
+#{
+#    next unless (-f $file);
+#    if ($file=~/^.filtN.*\.vcf$/)
+#    {
+#        $job_id=`$qsub_noparallel $annotation_sh -F "$file" | sed "s/.master.cm.cluster//"`;
+#         chomp($job_id);
+#        $job_ids{$job_id}=1;
+#        print "Job to annotate the file $file $job_id\n";
+#    }
+#}
+#
+#closedir $DIR;
+#
+#while (scalar keys %job_ids != 0) 
+#{
+#    	sleep(60); 
+#        print("\tPending jobs ",join(",",keys %job_ids),"\n");
+#    	foreach my $id (keys %job_ids)
+#	    {
+#		        my $status=system "qstat $id >/dev/null 2>&1";
+#                
+#        		#print("DEBUG: Status job id $id : $status\n");
+#        		if($status!=0)
+#        		{
+#            		delete($job_ids{$id});
+#        		}
+#	    }
+#	
+#}
+#
 print("Finished!!!\n");
 
 exit;

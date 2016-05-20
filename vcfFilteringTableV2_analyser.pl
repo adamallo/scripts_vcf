@@ -225,7 +225,7 @@ foreach my $exe_condition (@exe_conditions) ##Options that require to call varia
 ## Output
 #############################################################
 open(my $OFILE,">$output_file");
-print($OFILE "Condition,Afilt_prop,Afilt_N,Bfilt_prop,Bfilt_N,filt_prop,filt_N,filt_prop_mean,filt_N_mean,AfiltN_prop,AfiltN_N,BfiltN_prop,B_filtN_prop,filtN_prop,filtN_N,filtN_prop_mean,filtN_N_mean,AfiltNAB_prop,AfiltNAB_N,BfiltNAB_prop,BfiltNAB_N,filtNAB_prop,filtNAB_N,filtNAB_prop_mean,filtNAB_N_mean\n");
+print($OFILE "Condition,Afilt_prop,Afilt_N,Bfilt_prop,Bfilt_N,filt_prop,filt_N,filt_prop_mean,filt_N_mean,AfiltN_prop,AfiltN_N,BfiltN_prop,BfiltN_N,filtN_prop,filtN_N,filtN_prop_mean,filtN_N_mean,AfiltNAB_prop,AfiltNAB_N,BfiltNAB_prop,BfiltNAB_N,filtNAB_prop,filtNAB_N,filtNAB_prop_mean,filtNAB_N_mean\n");
 foreach my $condition (keys %results)
 {
 	print($OFILE "$condition$OFS",array_to_string(@{$results{$condition}}),"\n");
@@ -321,8 +321,10 @@ sub filter
         {
             write_variant_vcf($ref_common_variantsAfilt,"Afilt$sep_param${condition}_common.vcf","A.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
             write_variant_vcf($ref_common_variantsBfilt,"Bfilt$sep_param${condition}_common.vcf","B.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
-            write_variant_vcf($ref_common_variantsAfiltN,"AfiltN$sep_param${condition}_common.vcf","A.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
+            write_variant_2vcf($ref_common_variantsBfilt,"filt$sep_param${condition}_common.vcf","A.vcf","B.vcf","## A U B Filtered with vcfFilterTableV1. Condition ${condition}");
+	    write_variant_vcf($ref_common_variantsAfiltN,"AfiltN$sep_param${condition}_common.vcf","A.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
             write_variant_vcf($ref_common_variantsBfiltN,"BfiltN$sep_param${condition}_common.vcf","B.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
+	    write_variant_2vcf($ref_common_variantsBfiltN,"filtN$sep_param${condition}_common.vcf","A.vcf","B.vcf","## A U B Filtered with vcfFilterTableV1. Condition ${condition}");
 	} 
 
 	for (my $i=0; $i< scalar @NABfiltering_conditions; ++$i)
@@ -331,11 +333,11 @@ sub filter
 		my $NAB_condition=$NABfiltering_conditions[$i];
 		my $NAB=$NAB_hash_pointers[$i];
 	
-		#Substract NAB from Afilt. Compare the results to B wihout filter --> Common variants + % ###We want to apply filter to NAB and remove only variants that are Alternative for N
+		#Substract NAB from AfiltN. Compare the results to B without filter --> Common variants + % ###We want to apply filter to NAB and remove only variants that are Alternative for N
 		my @statsAfiltNAB;
 		my ($ref_common_variantsAfiltNAB,$ref_different_variantsAfiltNAB)=vcf_prune($ref_common_variantsAfiltN,$ref_different_variantsAfiltN,$NAB,\@statsAfiltNAB);
 	
-		#Substract NAB from Bfilt. Compare the results to A wihout filter --> Common variants + % ###We want to apply filter to NAB and remove only variants that are Alternative for N
+		#Substract NAB from BfiltN. Compare the results to A without filter --> Common variants + % ###We want to apply filter to NAB and remove only variants that are Alternative for N
 		my @statsBfiltNAB;
 		my ($ref_common_variantsBfiltNAB,$ref_different_variantsBfiltNAB)=vcf_prune($ref_common_variantsBfiltN,$ref_different_variantsBfiltN,$NAB,\@statsBfiltNAB);
 	
@@ -354,7 +356,9 @@ sub filter
 	        {
 	            write_variant_vcf($ref_common_variantsAfiltNAB,"AfiltNAB$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_common.vcf","A.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
 	            write_variant_vcf($ref_common_variantsBfiltNAB,"BfiltNAB$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_common.vcf","B.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
-	        }
+		    write_variant_2vcf($ref_common_variantsfiltNAB,"filtNAB$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_common.vcf","A.vcf","B.vcf","## A U B Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
+	            
+		}
 	         
 		    
 		#Store and/or print
@@ -706,6 +710,7 @@ sub variants_to_hash
 	return \%hash;
 }
 
+
 # Writes a list of variants in csv format contained in a hash
 # ############################################################
 sub write_variant_list
@@ -722,7 +727,7 @@ sub write_variant_list
 
 # Writes a vcf with the variables contained in a hash selected from another VCF file
 # ##################################################################################
-#($ref_common_variantsAfilt,"Afilt$sep_param${condition}.vcf","A.vcf","##Comment for the header");
+
 sub write_variant_vcf
 {
     my ($ref_hash,$filename,$vcf,$comment)=@_;
@@ -765,6 +770,83 @@ sub write_variant_vcf
             
         }
 
+    }
+
+    close $OFILE;
+}
+
+# Writes a vcf with the variables contained in a hash selected from two VCF files
+# ATTENTION: Variants in the first VCF file have higher priority when they are 
+# present in the two VCF files. The header comes also from the first VCF file.
+# ##################################################################################
+
+sub write_variant_2vcf
+{
+    my ($ref_hash,$filename,$vcf,$vcf2,$comment)=@_;
+    open(my $OFILE, ">$filename");
+    open(my $IFILE, $vcf);
+    open(my $IFILE2, $vcf2);
+    my @icontent= <$IFILE>;
+    my @icontent2= <$IFILE2>;
+    close($IFILE);
+    close($IFILE2);
+    my $flag=0;
+    my %hash=%{$ref_hash};
+    my $key;
+     
+    #Copying the header and adding a new line with filtering info
+    #Then adding the variants that are present in the hash.
+    for(my $i=0;$i< scalar @icontent; ++$i)
+    {
+        if ($flag==0 and $icontent[$i]=~/^##/)
+        {
+            print($OFILE $icontent[$i]);
+        }
+        elsif($flag==0)
+        {
+            print($OFILE "$comment\n$icontent[$i]");
+            $flag=1;
+        }
+        else
+        {
+            $key=$icontent[$i];
+            $key=~s/^(.*?)\t(.*?)\t.*/$1$OFS$2/;
+            chomp($key);
+            #print("DEBUG: Key $key\n");
+            if(exists $hash{$key})
+            {
+                print($OFILE $icontent[$i]);
+                delete($hash{$key});
+            }
+            if(scalar keys %hash == 0)
+            {
+                last;
+            }
+            
+        }
+
+    }
+    if (scalar keys %hash !=0)
+    {
+            for(my $i=0;$i< scalar @icontent2; ++$i)
+    	    {
+		unless ($icontent2[$i]=~/^#/)
+		{
+			$key=$icontent2[$i];
+            		$key=~s/^(.*?)\t(.*?)\t.*/$1$OFS$2/;
+            		chomp($key);
+            		#print("DEBUG: Key $key\n");
+            		if(exists $hash{$key})
+            		{
+                		print($OFILE $icontent2[$i]);
+                		delete($hash{$key});
+            		}
+            		if(scalar keys %hash == 0)
+            		{
+                		last;
+            		}
+		}
+	    }
     }
 
     close $OFILE;
