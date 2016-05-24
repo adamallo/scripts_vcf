@@ -1,9 +1,13 @@
 #!/bin/bash
 #
-cd $PBS_O_WORKDIR
-module load perl/5.22.1
+#SBATCH -p private
+#SBATCH -N 1
+#SBATCH -n 1
 
-perl $@ --n_cores $PBS_NUM_PPN
+##module load perl/5.22.1 Current module is broken in the cluster
+module load parallel/20140822
+
+perl $@ --n_cores $SLURM_JOB_CPUS_PER_NODE
 
 ordir=${@[10]}
 
@@ -12,7 +16,7 @@ then
 
 	for i in *filterN*.vcf
 	do
-		sem -j+0 $ordir/annovar.sh $i
+		sem -j+0 echo "Annotating $i" ";" $ordir/annovar.sh $i
 	done
 	sem --wait
 else

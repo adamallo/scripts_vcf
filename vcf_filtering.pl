@@ -214,7 +214,7 @@ if ($min_reads_alternate)
 	if ($platypus)
 	{
 		my @temp=split("_",$min_reads_alternate);
-		unless ($min_reads_alternate==-1)
+		unless ($min_reads_alternate eq "-1")
 		{
 		
 			if(scalar @temp == 1) #There is no genotype information. By default, if any fulfill the filtering, they are kept.
@@ -245,7 +245,7 @@ if ($max_reads_alternate)
 	if ($platypus)
 	{
 		my @temp=split("_",$max_reads_alternate);
-		unless ($max_reads_alternate==-1)
+		unless ($max_reads_alternate eq "-1")
 		{
 			if(scalar @temp == 1) #There is no genotype information. By default, if any fulfill the filtering, they are kept.
 			{
@@ -282,7 +282,8 @@ chop($out_filter);
 ################      SNPsift execution      ############
 
 substr($out_filter,0,1)=""; ##Removing extra space in the begining
-system("cat $input_file | java -jar $exe filter \"$out_filter\" > $output_file");
+#print("DEBUG: Executing SnipEff with the filter $out_filter\n");
+system("cat $input_file | java -Xmx2G -jar $exe filter \"$out_filter\" > $output_file");
 
 #########################################################
 
@@ -299,9 +300,9 @@ if ($min_freq_alt) ##So far only this option requires my own filtering step. Thi
 	{
 		
 		my @temp=split("_",$min_freq_alt);
-		$min_freq_alt=$temp[1];
 		unless($min_freq_alt==-1)
 		{
+            $min_freq_alt=$temp[1];
 			my $comment;
 			if(scalar @temp == 1) #There is no genotype information. By default, if any fulfill the filtering, they are kept.
 			{
