@@ -31,7 +31,8 @@ our $sed='sed "s/Submitted batch job \(.*\)/\1/"';
 ######################################################
 my $execond_inputfile="";
 my $filtercond_inputfile="";
-my $NABfiltercond_inputfile="",
+my $NABfiltercond_inputfile1="",
+my $NABfiltercond_inputfile2="",
 my $output_dir="vcf_outputdir";
 my $output_file="";
 my $normal_bam="";
@@ -40,7 +41,7 @@ my $sample2_bam="";
 
 #Flags
 my $help;
-my $usage="Usage: $0 [options] -o output_file --normal_bamfile bamfile_normal_sample --sample_A_bamfile bamfile_A_sample --sample_B_bamfile bamfile_B_sample\n\n\nOptions:\n--------\n\t-e/--exec_cond_inputfile : input file for execution parameters and options\n\t-f/--filt_cond_inputfile : input file for execution parameters and options\n\t--NABfilt_cond_inputfile : input file for the filtering options of the NAB sample\n\t--output_dir : output directory for vcf files\n\t--n_cores : number of cores to execute some steps in parallel\n\t\n\n";
+my $usage="Usage: $0 [options] -o output_file --normal_bamfile bamfile_normal_sample --sample_A_bamfile bamfile_A_sample --sample_B_bamfile bamfile_B_sample\n\n\nOptions:\n--------\n\t-e/--exec_cond_inputfile : input file for execution parameters and options\n\t-f/--filt_cond_inputfile : input file for execution parameters and options\n\t--NABfilt_cond_inputfile : input file for the filtering options of the NAB sample\n\t--NABfilt_cond_inputfile2 : input file for the secondary filtering options of the NAB sample (OR filter implemented in a dirty way)\n\t--output_dir : output directory for vcf files\n\t--n_cores : number of cores to execute some steps in parallel\n\t\n\n";
 ######################################################
 
 ######################################################
@@ -52,7 +53,8 @@ my $usage="Usage: $0 [options] -o output_file --normal_bamfile bamfile_normal_sa
 (! GetOptions(
         'exec_cond_inputfile|e=s' => \$execond_inputfile,
 	'filt_cond_inputfile|f=s' => \$filtercond_inputfile,
-	'NABfilt_cond_inputfile=s' => \$NABfiltercond_inputfile,
+	'NABfilt_cond_inputfile=s' => \$NABfiltercond_inputfile1,
+    'NABfilt_cond_inputfile2=s' => \$NABfiltercond_inputfile2,
         'output_dir=s' => \$output_dir,
 	'output_file|o=s' => \$output_file,
 	'normal_bamfile=s' => \$normal_bam,
@@ -110,7 +112,8 @@ mkdir $output_dir;
 my $original_dir=dirname(Cwd::abs_path($0));
 my $oefile=Cwd::abs_path($execond_inputfile);
 my $offile=Cwd::abs_path($filtercond_inputfile);
-my $onfile=Cwd::abs_path($NABfiltercond_inputfile);
+my $onfile=Cwd::abs_path($NABfiltercond_inputfile1);
+my $onfile2=Cwd::abs_path($NABfiltercond_inputfile2);
 chdir $output_dir or die "The output directory $output_dir is not accesible";
 
 #my $vcf_filt_exe="vcf_filtering.pl";
@@ -308,8 +311,14 @@ while (scalar keys %job_ids != 0)##Check
 	}
 	
 }
-
-$job_id=`$qsub $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile -o $output_file --original_directory $original_dir | $sed`;
+if(-f $onfile2)
+{
+    $job_id=`$qsub $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile2 $onfile2 -o $output_file --original_directory $original_dir | $sed`;
+}
+else
+{
+    $job_id=`$qsub $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile -o $output_file --original_directory $original_dir | $sed`;
+}
 chomp($job_id);
 $job_ids{$job_id}=1;
 

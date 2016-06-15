@@ -7,11 +7,11 @@ Getopt::Long::Configure qw(gnu_getopt);
 use File::Copy;
 
 my $SNPSIFT_DIR=$ENV{'SNPSIFT_DIR'};
-my ($qual,$AtoC,$AtoG,$AtoT,$CtoA,$CtoG,$CtoT,$GtoA,$GtoC,$GtoT,$TtoA,$TtoC,$TtoG,$min_cover,$min_reads_strand,$min_reads_alternate,$max_reads_alternate,$min_freq_alt);
+my ($qual,$AtoC,$AtoG,$AtoT,$CtoA,$CtoG,$CtoT,$GtoA,$GtoC,$GtoT,$TtoA,$TtoC,$TtoG,$min_cover,$min_reads_strand,$min_reads_alternate,$max_reads_alternate,$min_freq_alt,$max_cover);
 my $input_file="";
 my $output_file="";
 my $help;
-my $usage="Usage: $0 -i input_file -o output_file [options]\n\n\nOptions:\n--------\n\t-q/--qual : min quality filter\n\t--atoc : filter out mutations from A to C\n\t--atog :  filter out mutations from A to G\n\t--atot : filter out mutations from A to T\n\t--ctoa :  filter out mutations from C to A\n\t--ctog : filter out mutations from C to G\n\t--ctot :  filter out mutations from C to T\n\t--gtoa : filter out mutations from G to A\n\t--gtoc :  filter out mutations from G to C\n\t--gtot : filter out mutations from G to T\n\t--ttoa :  filter out mutations from T to A\n\t--ttoc : filter out mutations from T to C\n\t--ttog : filter out mutations from T to G\n\t-m/--min_coverage :minimum coverage per locus\n\t-s/--min_reads_strand : minimum number of reads per strand\n\t-a/--min_reads_alternate : minimum number of reads for the alternative allele\n\t--max_reads_alternate : maximum number of reads for the alternative allele\n\t--min_freq_alt : min frequency of reads supporting the alternative allele\n\t\n\n";
+my $usage="Usage: $0 -i input_file -o output_file [options]\n\n\nOptions:\n--------\n\t-q/--qual : min quality filter\n\t--atoc : filter out mutations from A to C\n\t--atog :  filter out mutations from A to G\n\t--atot : filter out mutations from A to T\n\t--ctoa :  filter out mutations from C to A\n\t--ctog : filter out mutations from C to G\n\t--ctot :  filter out mutations from C to T\n\t--gtoa : filter out mutations from G to A\n\t--gtoc :  filter out mutations from G to C\n\t--gtot : filter out mutations from G to T\n\t--ttoa :  filter out mutations from T to A\n\t--ttoc : filter out mutations from T to C\n\t--ttog : filter out mutations from T to G\n\t-m/--min_coverage :minimum coverage per locus\n\t--max_coverage: maximum coverage per locus\n\t-s/--min_reads_strand : minimum number of reads per strand\n\t-a/--min_reads_alternate : minimum number of reads for the alternative allele\n\t--max_reads_alternate : maximum number of reads for the alternative allele\n\t--min_freq_alt : min frequency of reads supporting the alternative allele\n\t\n\n";
 my $exe;
 
 ########### SNPSIFT Util detection #########################
@@ -54,7 +54,8 @@ else
 	'ttoa=i' => \$TtoA,
 	'ttoc=i' => \$TtoC,
 	'ttog=i' => \$TtoG,
-	'min_coverage|m=i' => \$min_cover, 
+	'min_coverage|m=s' => \$min_cover, 
+    'max_coverage=s' => \$max_cover,
 	'min_reads_strand|s=i' => \$min_reads_strand,
 	'min_reads_alternate|a=s' => \$min_reads_alternate,
 	'max_reads_alternate=s' => \$max_reads_alternate,
@@ -165,9 +166,10 @@ if ($TtoG)
 }
 if ($min_cover)
 {
+    my @temp=split("_",$min_cover);
+
 	if ($platypus)
 	{
-		my @temp=split("_",$min_cover);
 		if(scalar @temp ==1) #No genotype information. By default, total coverage.
 		{
 			$variable="TC";
@@ -185,7 +187,19 @@ if ($min_cover)
 	}
 	elsif ($multisnv)
 	{
-		$variable="GEN[ALL].DP[*]"
+        if(scalar @temp ==1) #No genotype information. By default, total coverage.
+        { 	
+		    $variable="GEN[ALL].DP[*]";
+        }
+        elsif (scalar @temp ==2) #Genotype information. Applyied by genotype
+        {
+            $variable="GEN[$temp[0]].DP[*]";
+            $min_cover=$temp[1];
+        }
+        else
+        {
+            die "--min_coverage does not have the proper format. It must by just the value, or a genotype indicator, _ , and the value. Example: 1_10\n";
+        }
 	}
 	else 
 	{
@@ -194,6 +208,51 @@ if ($min_cover)
 
 	$out_filter.=" ( $variable >= $min_cover ) &";
 }
+if ($max_cover)
+{
+    my @temp=split("_",$max_cover);
+
+	if ($platypus)
+	{
+		if(scalar @temp ==1) #No genotype information. By default, total coverage.
+		{
+			$variable="TC";
+
+		}
+		elsif (scalar @temp ==2) #Genotype information. Applyied by genotype
+		{
+			$variable="GEN[$temp[0]].NR[*]";
+			$max_cover=$temp[1];
+		}
+		else
+		{
+			die "--max_coverage does not have the proper format. It must by just the value, or a genotype indicator, _ , and the value. Example: 1_10\n";
+		}
+	}
+	elsif ($multisnv)
+	{
+        if(scalar @temp ==1) #No genotype information. By default, total coverage.
+        {
+		    $variable="GEN[ALL].DP[*]"
+        }
+        elsif (scalar @temp ==2) #Genotype information. Applyied by genotype
+        {
+            $variable="GEN[$temp[0]].DP[*]";
+            $max_cover=$temp[1];
+        }
+        else
+        {
+            die "--max_coverage does not have the proper format. It must by just the value, or a genotype indicator, _ , and the value. Example: 1_10\n";
+        }
+	}
+	else 
+	{
+		die "This variant caller is not supported by this script\n";
+	}
+
+	$out_filter.=" ( $variable <= $max_cover ) &";
+}
+
 if ($min_reads_strand)
 {	
 	if ($platypus)
@@ -300,7 +359,7 @@ if ($min_freq_alt) ##So far only this option requires my own filtering step. Thi
 	{
 		
 		my @temp=split("_",$min_freq_alt);
-		unless($min_freq_alt==-1)
+		unless($min_freq_alt eq "-1")
 		{
             $min_freq_alt=$temp[1];
 			my $comment;
