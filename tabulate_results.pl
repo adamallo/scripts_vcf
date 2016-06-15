@@ -97,7 +97,8 @@ my %out_hash; ##Using a hash equivalent conditions are automatically collapsed
 
 for (my $row=1;$row<scalar @content; ++$row)
 {
-	my @columns=split($FS,$content[$row]);
+	chomp($content[$row]);
+    my @columns=split($FS,$content[$row]);
 	my $condition=join($OFS,@{get_condition_values($columns[0])});
 	$out_hash{$condition}=join($OFS,@columns[@indexes]);
 	##print($OFILE join($OFS,$condition,@columns[@indexes]),"\n");
