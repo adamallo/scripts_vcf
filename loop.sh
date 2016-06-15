@@ -1,4 +1,20 @@
+#!/bin/bash
+
+usage="$0 directory torun_file"
+
+if [[ $# -ne 2 ]] || [[ ! -d $1 ]] || [[ ! -f $2 ]] 
+then
+    echo $usage
+    exit
+else
+    dir=$1
+    torun=$2
+fi
+
 while read -r output normal a b
 do
-(time ./vcfFilteringTableV2_control.pl -e second_round_params/exe_params -f second_round_params/filtering_params --NABfilt_cond_inputfile second_round_params/NAB_params -o ${output}.csv --normal_bamfile $normal --sample_A_bamfile $a --sample_B_bamfile $b --output_dir $output --n_cores 16 > ${output}.out ) &
-done < $1
+(time ./vcfFilteringTableV2_control.pl -e $dir/exe_params -f $dir/filtering_params --NABfilt_cond_inputfile $dir/NAB_params --NABfilt_cond_inputfile2 $dir/NAB_params2 -o $dir/${output}.csv --normal_bamfile $normal --sample_A_bamfile $a --sample_B_bamfile $b --output_dir $dir/$output --n_cores 16 > ${output}.out ) &
+done < $torun
+
+wait
+

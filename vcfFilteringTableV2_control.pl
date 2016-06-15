@@ -20,8 +20,10 @@ our $helper_sh="vcfFilteringTableV2_analyser_helper.sh";
 our $helper_pl="vcfFilteringTableV2_analyser.pl";
 #our $annotation_sh="annovar.sh";
 our $n_cores=1;
-our $qsub="qsub -e e_logs/ -o o_logs/ -q shortq -l nodes=1:ppn=";
-our $qsub_noparallel="qsub -e e_logs/ -o o_logs/ -q shortq";
+our $qsub="sbatch -p private -N 1 -c ";
+our $qsub_noparallel="sbatch -p private -N 1 -n 1 -c 1";
+our $qstat="squeue -u dmalload -p private";
+our $sed='sed "s/Submitted batch job \(.*\)/\1/"';
 
 ######################################################
 
@@ -29,7 +31,8 @@ our $qsub_noparallel="qsub -e e_logs/ -o o_logs/ -q shortq";
 ######################################################
 my $execond_inputfile="";
 my $filtercond_inputfile="";
-my $NABfiltercond_inputfile="",
+my $NABfiltercond_inputfile1="",
+my $NABfiltercond_inputfile2="",
 my $output_dir="vcf_outputdir";
 my $output_file="";
 my $normal_bam="";
@@ -38,7 +41,7 @@ my $sample2_bam="";
 
 #Flags
 my $help;
-my $usage="Usage: $0 [options] -o output_file --normal_bamfile bamfile_normal_sample --sample_A_bamfile bamfile_A_sample --sample_B_bamfile bamfile_B_sample\n\n\nOptions:\n--------\n\t-e/--exec_cond_inputfile : input file for execution parameters and options\n\t-f/--filt_cond_inputfile : input file for execution parameters and options\n\t--NABfilt_cond_inputfile : input file for the filtering options of the NAB sample\n\t--output_dir : output directory for vcf files\n\t--n_cores : number of cores to execute some steps in parallel\n\t\n\n";
+my $usage="Usage: $0 [options] -o output_file --normal_bamfile bamfile_normal_sample --sample_A_bamfile bamfile_A_sample --sample_B_bamfile bamfile_B_sample\n\n\nOptions:\n--------\n\t-e/--exec_cond_inputfile : input file for execution parameters and options\n\t-f/--filt_cond_inputfile : input file for execution parameters and options\n\t--NABfilt_cond_inputfile : input file for the filtering options of the NAB sample\n\t--NABfilt_cond_inputfile2 : input file for the secondary filtering options of the NAB sample (OR filter implemented in a dirty way)\n\t--output_dir : output directory for vcf files\n\t--n_cores : number of cores to execute some steps in parallel\n\t\n\n";
 ######################################################
 
 ######################################################
@@ -50,7 +53,8 @@ my $usage="Usage: $0 [options] -o output_file --normal_bamfile bamfile_normal_sa
 (! GetOptions(
         'exec_cond_inputfile|e=s' => \$execond_inputfile,
 	'filt_cond_inputfile|f=s' => \$filtercond_inputfile,
-	'NABfilt_cond_inputfile=s' => \$NABfiltercond_inputfile,
+	'NABfilt_cond_inputfile=s' => \$NABfiltercond_inputfile1,
+    'NABfilt_cond_inputfile2=s' => \$NABfiltercond_inputfile2,
         'output_dir=s' => \$output_dir,
 	'output_file|o=s' => \$output_file,
 	'normal_bamfile=s' => \$normal_bam,
@@ -108,7 +112,8 @@ mkdir $output_dir;
 my $original_dir=dirname(Cwd::abs_path($0));
 my $oefile=Cwd::abs_path($execond_inputfile);
 my $offile=Cwd::abs_path($filtercond_inputfile);
-my $onfile=Cwd::abs_path($NABfiltercond_inputfile);
+my $onfile=Cwd::abs_path($NABfiltercond_inputfile1);
+my $onfile2=Cwd::abs_path($NABfiltercond_inputfile2);
 chdir $output_dir or die "The output directory $output_dir is not accesible";
 
 #my $vcf_filt_exe="vcf_filtering.pl";
@@ -177,7 +182,7 @@ if(! -f "N.vcf")
 {
 	$bamfiles=$normal_bam;
 	$exe_condition="";
-	my $job_id=`$qsub $variant_calling_sh -F "$bamfiles N.vcf N_platypus.log $exe_condition" | sed "s/.master.cm.cluster//"`;
+	my $job_id=`$qsub $variant_calling_sh $bamfiles N.vcf N_platypus.log $exe_condition | $sed`;
    		chomp($job_id);
     	$job_ids{$job_id}=1;
 	print("\tNormal tissue variant calling submited with job_id $job_id\n");
@@ -191,7 +196,7 @@ if(! -f "A.vcf")
 {
 	$bamfiles=$sample1_bam;
 	$exe_condition="";
-	my $job_id=`$qsub $variant_calling_sh -F "$bamfiles A.vcf A_platypus.log $exe_condition" | sed "s/.master.cm.cluster//"`;
+	my $job_id=`$qsub $variant_calling_sh $bamfiles A.vcf A_platypus.log $exe_condition | $sed`;
     	chomp($job_id);
     	$job_ids{$job_id}=1;
 	print("\tSample A variant calling submited with job_id $job_id\n");
@@ -206,7 +211,7 @@ if(! -f "B.vcf")
 {
 	$bamfiles=$sample2_bam;
 	$exe_condition="";
-	my $job_id=`$qsub $variant_calling_sh -F "$bamfiles B.vcf B_platypus.log $exe_condition" | sed "s/.master.cm.cluster//"`;
+	my $job_id=`$qsub $variant_calling_sh $bamfiles B.vcf B_platypus.log $exe_condition | $sed`;
     	chomp($job_id);
     	$job_ids{$job_id}=1;
 	print("\tSample B variant calling submited with job_id $job_id\n");
@@ -221,7 +226,7 @@ if(! -f "NAB.vcf")
 {
 	$bamfiles="$normal_bam,$sample1_bam,$sample2_bam";
 	$exe_condition="";
-	my $job_id=`$qsub $variant_calling_sh -F "$bamfiles NAB.vcf NAB_platypus.log $exe_condition" | sed "s/.master.cm.cluster//"`;
+	my $job_id=`$qsub $variant_calling_sh $bamfiles NAB.vcf NAB_platypus.log $exe_condition | $sed`;
     	chomp($job_id);
     	$job_ids{$job_id}=1;
 	print("\tSample NAB variant calling submited with job_id $job_id\n");
@@ -253,7 +258,7 @@ foreach my $exe_condition (@exe_conditions)
             		#print("DEBUG: A: Real exe_conditions\n");
         		}
         		#print("DEBUG: qsub -e e_logs/ -o o_logs/ -q shortq $variant_calling_sh -F \"$bamfiles $actual_exe_conditions A$sep_param$exe_condition.vcf A$sep_param${exe_conditions}_platypus.log\" | sed \"s/.master.cm.cluster//\"");
-		$job_id=`$qsub $variant_calling_sh -F "$bamfiles A$sep_param$exe_condition.vcf A$sep_param${exe_condition}_platypus.log $actual_exe_conditions"  | sed "s/.master.cm.cluster//"`;
+		$job_id=`$qsub $variant_calling_sh $bamfiles A$sep_param$exe_condition.vcf A$sep_param${exe_condition}_platypus.log $actual_exe_conditions  | $sed`;
 		chomp($job_id);
         		$job_ids{$job_id}=1;
 		print("\tSample A variant calling for conditions $exe_condition submited with job_id $job_id\n");
@@ -277,7 +282,7 @@ foreach my $exe_condition (@exe_conditions)
            	 		$actual_exe_conditions=join(" ",split("$sep_value",join(" ",split("$sep_param",$exe_condition))));
             		#print("DEBUG: B: Real exe_conditions\n");
         		}
-		$job_id=`$qsub $variant_calling_sh -F "$bamfiles B$sep_param$exe_condition.vcf B$sep_param${exe_condition}_platypus.log $actual_exe_conditions" | sed "s/.master.cm.cluster//"`;
+		$job_id=`$qsub $variant_calling_sh $bamfiles B$sep_param$exe_condition.vcf B$sep_param${exe_condition}_platypus.log $actual_exe_conditions | $sed`;
     		chomp($job_id);	
         		$job_ids{$job_id}=1;
 		print("\tSample B variant calling for conditions $exe_condition submited with job_id $job_id\n");
@@ -297,17 +302,23 @@ while (scalar keys %job_ids != 0)##Check
     	print("\tPending jobs ",join(",",keys %job_ids),"\n");
 	foreach my $id (keys %job_ids)
 	{
-		my $status=system "qstat $id >/dev/null 2>&1";
+		my $status=`$qstat -j $id | wc -l`;
         		#print("DEBUG: Status job id $id : $status\n");
-        		if($status!=0)
+        		if($status==1) ## 1 means that the job has finished. 2 that it is running
         		{
             		delete($job_ids{$id});
         		}
 	}
 	
 }
-
-$job_id=`$qsub $helper_sh -F "$helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile -o $output_file --original_directory $original_dir" | sed "s/.master.cm.cluster//"`;
+if(-f $onfile2)
+{
+    $job_id=`$qsub $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile2 $onfile2 -o $output_file --original_directory $original_dir | $sed`;
+}
+else
+{
+    $job_id=`$qsub $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile -o $output_file --original_directory $original_dir | $sed`;
+}
 chomp($job_id);
 $job_ids{$job_id}=1;
 
@@ -318,9 +329,9 @@ while (scalar keys %job_ids != 0)
     	sleep(60); 
     	foreach my $id (keys %job_ids)
 	    {
-		        my $status=system "qstat $id >/dev/null 2>&1";
+		        my $status=`$qstat -j $id | wc -l`;
         		#print("DEBUG: Status job id $id : $status\n");
-        		if($status!=0)
+        		if($status==1)
         		{
             		delete($job_ids{$id});
         		}
