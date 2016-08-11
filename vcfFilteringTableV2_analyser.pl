@@ -386,8 +386,8 @@ sub filter
                 write_variant_vcf($ref_common_variantsAfiltN,"AfiltN$sep_param${condition}_common.vcf","A.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
                 write_variant_vcf($ref_common_variantsBfiltN,"BfiltN$sep_param${condition}_common.vcf","B.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
 	        }
-            write_variant_2vcf($ref_common_variantsBfilt,"filt$sep_param${condition}_common.vcf","A.vcf","B.vcf","## A U B Filtered with vcfFilterTableV1. Condition ${condition}");
-            write_variant_2vcf($ref_common_variantsBfiltN,"filtN$sep_param${condition}_common.vcf","A.vcf","B.vcf","## A U B Filtered with vcfFilterTableV1. Condition ${condition}");
+            write_variant_2vcf($ref_common_variantsfilt,"filt$sep_param${condition}_common.vcf","A.vcf","B.vcf","## A U B Filtered with vcfFilterTableV1. Condition ${condition}");
+            write_variant_2vcf($ref_common_variantsfiltN,"filtN$sep_param${condition}_common.vcf","A.vcf","B.vcf","## A U B Filtered with vcfFilterTableV1. Condition ${condition}");
 	    } 
 
 	for (my $i=0; $i< scalar @NABfiltering_conditions; ++$i)
