@@ -25,8 +25,8 @@ our $n_cores=1;
 ######################################################
 my $execond_inputfile="";
 my $filtercond_inputfile="";
-my $NABfiltercond_inputfile1="",
-my $NABfiltercond_inputfile2="",
+my $NABfiltercond_inputfile1="";
+my $NABfiltercond_inputfile2="";
 my $output_file="";
 my $original_dir="";
 
@@ -126,6 +126,7 @@ if(`which vcf_filtering.pl 2>/dev/null` eq "")
 
 my (%A,%B,%N);
 my ($ref_n,$nameN);
+my @nofilt_results;
 
 if ( -f "A.vcf" && -f "B.vcf" && -f "N.vcf")
 {
@@ -134,6 +135,9 @@ if ( -f "A.vcf" && -f "B.vcf" && -f "N.vcf")
     ($ref_n,$nameN)=parse_vcf_name("N.vcf");
     #print("DEBUG: N genotype name $nameN\n");
     %N=%{$ref_n};
+    my %AN=%{vcf_prune_single(\%A,\%N)};
+    my %BN=%{vcf_prune_single(\%B,\%N)};
+    @nofilt_results=(scalar keys %A, scalar keys %B, scalar keys %N, scalar keys %AN, scalar keys %BN);
 }
 else
 {
@@ -282,13 +286,14 @@ foreach my $exe_condition (@exe_conditions) ##Options that require to call varia
 ## Output
 #############################################################
 open(my $OFILE,">$output_file");
-print($OFILE "Sample,Condition,Afilt_prop,Afilt_N,Afilt_#,Bfilt_prop,Bfilt_N,Bfilt_#,filt_propU,filt_NU,filt_#U,filt_propI,filt_NI,filt_#I,filt_prop_mean,filt_N_mean,filt_#_mean,AfiltN_prop,AfiltN_N,AfiltN_#,BfiltN_prop,BfiltN_N,BfiltN_#,filtN_propU,filtN_NU,filtN_#U,filtN_propI,filtN_NI,filtN_#I,filtN_prop_mean,filtN_N_mean,filtN_#_mean,AfiltNAB_prop,AfiltNAB_N,AfiltNAB_#,BfiltNAB_prop,BfiltNAB_N,BfiltNAB_#,filtNAB_propU,filtNAB_NU,filtNAB_#U,filtNAB_propI,filtNAB_NI,filtNAB_#I,filtNAB_prop_mean,filtNAB_N_mean,filtNAB_#_mean\n");
+print($OFILE "Sample,Condition,A_#,B_#,N_#,AN_#,BN_#,Afilt_prop,Afilt_N,Afilt_#,Bfilt_prop,Bfilt_N,Bfilt_#,filt_propU,filt_NU,filt_#U,filt_propI,filt_NI,filt_#I,filt_prop_mean,filt_N_mean,filt_#_mean,AfiltN_prop,AfiltN_N,AfiltN_#,BfiltN_prop,BfiltN_N,BfiltN_#,filtN_propU,filtN_NU,filtN_#U,filtN_propI,filtN_NI,filtN_#I,filtN_prop_mean,filtN_N_mean,filtN_#_mean,AfiltNAB_prop,AfiltNAB_N,AfiltNAB_#,BfiltNAB_prop,BfiltNAB_N,BfiltNAB_#,filtNAB_propU,filtNAB_NU,filtNAB_#U,filtNAB_propI,filtNAB_NI,filtNAB_#I,filtNAB_prop_mean,filtNAB_N_mean,filtNAB_#_mean\n");
+#A_#,B_#,N_#,AN_#,BN_#,Afilt_prop,Afilt_N,Afilt_#,Bfilt_prop,Bfilt_N,Bfilt_#,filt_propU,filt_NU,filt_#U,filt_propI,filt_NI,filt_#I,filt_prop_mean,filt_N_mean,filt_#_mean,AfiltN_prop,AfiltN_N,AfiltN_#,BfiltN_prop,BfiltN_N,BfiltN_#,filtN_propU,filtN_NU,filtN_#U,filtN_propI,filtN_NI,filtN_#I,filtN_prop_mean,filtN_N_mean,filtN_#_mean,AfiltNAB_prop,AfiltNAB_N,AfiltNAB_#,BfiltNAB_prop,BfiltNAB_N,BfiltNAB_#,filtNAB_propU,filtNAB_NU,filtNAB_#U,filtNAB_propI,filtNAB_NI,filtNAB_#I,filtNAB_prop_mean,filtNAB_N_mean,filtNAB_#_mean
 my $sample=$output_file;
 $sample=basename($sample);
 $sample=~s/(.*)\..*/$1/;
 foreach my $condition (keys %results)
 {
-    print($OFILE "$sample$OFS$condition$OFS",array_to_string(@{$results{$condition}}),"\n");
+    print($OFILE "$sample$OFS$condition$OFS",array_to_string(@nofilt_results),$OFS,array_to_string(@{$results{$condition}}),"\n");
 }
 close($OFILE);
 
@@ -456,7 +461,7 @@ sub filter
 
 #Store and/or print
         my @statistics=(@statsAfilt,@statsBfilt,@statsfiltU,@statsfiltI,@statsfiltmean,@statsAfiltN,@statsBfiltN,@statsfiltNU,@statsfiltNI,@statsfiltNmean,@statsAfiltNAB,@statsBfiltNAB,@statsfiltNABU,@statsfiltNABI,@statsfiltNABmean);
-#Condition,Afilt_prop,Afilt_N,Afilt_#,Bfilt_prop,Bfilt_N,Bfilt_#,filt_propU,filt_NU,filt_#U,filt_propI,filt_NI,filt_#I,filt_prop_mean,filt_N_mean,filt_#_mean,AfiltN_prop,AfiltN_N,AfiltN_#,BfiltN_prop,BfiltN_N,BfiltN_#,filtN_propU,filtN_NU,filtN_#U,filtN_propI,filtN_NI,filtN_#I,filtN_prop_mean,filtN_N_mean,filtN_#_mean,AfiltNAB_prop,AfiltNAB_N,AfiltNAB_#,BfiltNAB_prop,BfiltNAB_N,BfiltNAB_#,filtNAB_propU,filtNAB_NU,filtNAB_#U,filtNAB_propI,filtNAB_NI,filtNAB_#I,filtNAB_prop_mean,filtNAB_N_mean,filtNAB_#_mean
+#Condition,A_#,B_#,N_#,AN_#,BN_#,Afilt_prop,Afilt_N,Afilt_#,Bfilt_prop,Bfilt_N,Bfilt_#,filt_propU,filt_NU,filt_#U,filt_propI,filt_NI,filt_#I,filt_prop_mean,filt_N_mean,filt_#_mean,AfiltN_prop,AfiltN_N,AfiltN_#,BfiltN_prop,BfiltN_N,BfiltN_#,filtN_propU,filtN_NU,filtN_#U,filtN_propI,filtN_NI,filtN_#I,filtN_prop_mean,filtN_N_mean,filtN_#_mean,AfiltNAB_prop,AfiltNAB_N,AfiltNAB_#,BfiltNAB_prop,BfiltNAB_N,BfiltNAB_#,filtNAB_propU,filtNAB_NU,filtNAB_#U,filtNAB_propI,filtNAB_NI,filtNAB_#I,filtNAB_prop_mean,filtNAB_N_mean,filtNAB_#_mean
         $results{"$condition${sep_param}NAB$sep_param$NAB_condition"}=\@statistics;
 #print("DEBUG:$condition$OFS",array_to_string(@statistics),"\n");
     }
@@ -744,6 +749,32 @@ sub vcf_prune
 	    @{ $ref_statistics }=($n_selvariants/($n_selvariants+$n_filtvariants),$n_selvariants,$n_selvariants+$n_filtvariants); ##Stats= proportion of selected reads in the reference, number of selected variants
 	}
     return (\%variants1,\%variants2);
+}
+
+#Filter out variants in one hash from another
+#############################################
+sub vcf_prune_single
+{
+    my ($vcf_1,$vcf_todelete)=@_;
+    my %variants1=%{$vcf_1};
+
+    foreach my $variant_to_remove (keys %{$vcf_todelete})
+    {
+#print("DEBUG: Variant $variant_to_remove ");
+		if (exists($variants1{$variant_to_remove}))
+		{
+			delete($variants1{$variant_to_remove});
+            #print("deleted in vcf1");
+		}
+		#print("\n");
+		if(scalar(keys %variants1)==0)
+		{
+            last;
+            #print("DEBUG: No more variants in vcf1\n");
+		}
+		
+	}
+    return (\%variants1);
 }
 
 #Combines the variants of two samples. Calculates the union of the two samples

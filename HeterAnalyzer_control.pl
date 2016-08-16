@@ -18,6 +18,7 @@ our $variant_caller="platypus";
 our $variant_calling_sh;
 our $helper_sh="vcfFilteringTableV2_analyser_helper.sh";
 our $helper_pl="HeterAnalyzer.pl";
+our $tstv_sh="tstv.sbatch";
 #our $annotation_sh="annovar.sh";
 our $n_cores=1;
 our $qsub="sbatch -p private -N 1 -c ";
@@ -148,6 +149,15 @@ else
 {
 	die "Error, the sh file for the secondary analysis of the data, $helper_sh is not located in $original_dir, named $original_dir/$helper_pl. Please, fix this in order to use this script\n"
 }
+
+if (-f "$original_dir/$tstv_sh")
+{
+    $tstv_sh="$original_dir/$tstv_sh";
+}
+else
+{
+	die "Error, the sh file to get the TsTv data, $tstv_sh is not located in $original_dir, named $original_dir/$tstv_sh. Please, fix this in order to use this script\n"
+}
 #
 #if (-f "$original_dir/$annotation_sh")
 #{
@@ -170,7 +180,7 @@ my $bamfiles;
 ###Generate all combinations of proposed values for execution
 combs(0,"",\@exe_parameters,\@exe_param_values,\@exe_conditions);
 
-my %job_ids;
+our %job_ids;
 my $exe_condition;
 
 mkdir("e_logs");
@@ -300,21 +310,8 @@ foreach my $exe_condition (@exe_conditions)
 
 } 
 
-while (scalar keys %job_ids != 0)##Check 
-{
-    	sleep(60); 
-    	print("\tPending jobs ",join(",",keys %job_ids),"\n");
-	foreach my $id (keys %job_ids)
-	{
-		my $status=`$qstat -j $id | wc -l`;
-        		#print("DEBUG: Status job id $id : $status\n");
-        		if($status==1) ## 1 means that the job has finished. 2 that it is running
-        		{
-            		delete($job_ids{$id});
-        		}
-	}
-	
-}
+wait_for_jobs();
+
 if(-f $onfile2)
 {
     $job_id=`$qsub $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile2 $onfile2 -o $output_file --original_directory $original_dir | $sed`;
@@ -327,21 +324,16 @@ chomp($job_id);
 $job_ids{$job_id}=1;
 
 print "The filtering and analysis of the vcf files is being conducted with the job_id $job_id\n";
+wait_for_jobs();
 
-while (scalar keys %job_ids != 0)
-{
-    	sleep(60); 
-    	foreach my $id (keys %job_ids)
-	    {
-		        my $status=`$qstat -j $id | wc -l`;
-        		#print("DEBUG: Status job id $id : $status\n");
-        		if($status==1)
-        		{
-            		delete($job_ids{$id});
-        		}
-	    }
-	
-}
+
+$job_id=`$qsub_noparallel $tstv_sh $output_dir | $sed`;
+
+chomp($job_id);
+$job_ids{$job_id}=1;
+
+print "Ts/Tv statistics are being calculated in the job_id $job_id\n";
+wait_for_jobs();
 
 #print("Analysis finished.\n\nAnnotation:\n");
 #opendir(my $DIR, ".");
@@ -384,6 +376,24 @@ exit;
 ###################################################################################
 ###FUNCTIONS
 ###################################################################################
+
+sub wait_for_jobs
+{
+    while (scalar keys %job_ids != 0)##Check 
+    {
+    	sleep(60); 
+    	print("\tPending jobs ",join(",",keys %job_ids),"\n");
+    	foreach my $id (keys %job_ids)
+	    {
+		    my $status=`$qstat -j $id | wc -l`;
+        	#print("DEBUG: Status job id $id : $status\n");
+        	if($status==1) ## 1 means that the job has finished. 2 that it is running
+        	{
+            	delete($job_ids{$id});
+        	}
+	    }
+    }
+}
 
 #Recursive function to generate parameter combinations
 #One recursion per parameter
