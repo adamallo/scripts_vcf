@@ -32,7 +32,7 @@ export -f fun
 
 echo "File,tstv" > tstv.csv
 
-parallel -j $SLURM_JOB_CPUS_PER_NODE --joblog tstv.log --resume fun ::: $files >> tstv.csv
+parallel -j $SLURM_JOB_CPUS_PER_NODE --joblog tstv.log fun {1} ::: $files >> tstv.csv
 
 #for vcf in $dir/*.vcf
 #do

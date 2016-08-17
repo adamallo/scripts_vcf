@@ -13,7 +13,7 @@ fi
 
 while read -r output normal a b
 do
-(time ./vcfFilteringTableV2_control.pl -e $dir/exe_params -f $dir/filtering_params --NABfilt_cond_inputfile $dir/NAB_params --NABfilt_cond_inputfile2 $dir/NAB_params2 -o $dir/${output}.csv --normal_bamfile $normal --sample_A_bamfile $a --sample_B_bamfile $b --output_dir $dir/$output --n_cores 16 > ${output}.out ) &
+(time ./vcfFilteringTableV2_control.pl -e $dir/exe_params -f $dir/filtering_params --NABfilt_cond_inputfile $dir/NAB_params --NABfilt_cond_inputfile2 $dir/NAB_params2 -o $dir/${output}.csv --normal_bamfile $normal --sample_A_bamfile $a --sample_B_bamfile $b --output_dir $dir/$output --n_cores 16 > $dir/${output}.out ) &
 done < $torun
 
 wait
