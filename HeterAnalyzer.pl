@@ -5,6 +5,7 @@ use Getopt::Long qw(GetOptions);
 Getopt::Long::Configure qw(gnu_getopt);
 use Cwd;
 use File::Basename;
+use Env;
 #use Parallel::Loops;
 
 ##Configuration variables
@@ -28,11 +29,11 @@ my $filtercond_inputfile="";
 my $NABfiltercond_inputfile1="";
 my $NABfiltercond_inputfile2="";
 my $output_file="";
-my $original_dir="";
+my $SCRIPTSVCF_DIR=$ENV{'SCRIPTSVCF_DIR'};
 
 #Flags
 my $help;
-my $usage="Usage: $0 [options] -o output_file \n\nWARNING: This is a secondary script that is not inteded to be executed directly.\n\n\nOptions:\n--------\n\t-e/--exec_cond_inputfile : input file for execution parameters and options\n\t-f/--filt_cond_inputfile : input file for execution parameters and options\n\t--NABfilt_cond_inputfile : input file for the filtering options of the NAB sample\n\t--NABfilt_cond_inputfile2 : secondary input file for a secondary filter (OR filter implemented in a dirty way) of the NAB sample\n\t--output_dir : output directory for vcf files\n\t--n_cores : number of cores to execute some steps in parallel (requires the perl package Parallel::Loops)\n\t--original_directory : directory where the main script is located\n\n";
+my $usage="Usage: $0 [options] -o output_file \n\nWARNING: This is a secondary script that is not inteded to be executed directly.\n\n\nOptions:\n--------\n\t-e/--exec_cond_inputfile : input file for execution parameters and options\n\t-f/--filt_cond_inputfile : input file for execution parameters and options\n\t--NABfilt_cond_inputfile : input file for the filtering options of the NAB sample\n\t--NABfilt_cond_inputfile2 : secondary input file for a secondary filter (OR filter implemented in a dirty way) of the NAB sample\n\t--output_dir : output directory for vcf files\n\t--n_cores : number of cores to execute some steps in parallel (requires the perl package Parallel::Loops)\n\n";
 ######################################################
 
 ######################################################
@@ -47,10 +48,9 @@ my $usage="Usage: $0 [options] -o output_file \n\nWARNING: This is a secondary s
 	'NABfilt_cond_inputfile=s' => \$NABfiltercond_inputfile1,
     'NABfilt_cond_inputfile2=s' => \$NABfiltercond_inputfile2,
 	'output_file|o=s' => \$output_file,
-	'original_directory=s' => \$original_dir,
     'n_cores=i' => \$n_cores,
     'help|h' => \$help,
-                )) or (($output_file eq "") || ($original_dir eq "") || $help) and die $usage;
+                )) or (($output_file eq "") || $help) and die $usage;
 
 ##Load Parallel::Loops if it is available and it's needed
 #########################################################
@@ -60,9 +60,9 @@ if($n_cores>1)
     eval "use Parallel::Loops";
     if($@)
     {
-        $n_cores=1;
         print "\n\nWARNING: You are asking to execute this script using $n_cores cores, but the required module \"Parallel::Loops\" has not been found in \@INC\n\n";
-    }
+         $n_cores=1;
+   }
     else
     {
         print "\nUsing Parallel::Loops with $n_cores cores\n\n";
@@ -107,18 +107,11 @@ if ($NABfiltercond_inputfile2 ne "")
     parse_parameters_values($NABfiltercond_inputfile2,\@NABfiltering_parameters2,\@NABfiltering_param_values2);
 }
 
-my $vcf_filt_exe="vcf_filtering.pl";
+my $vcf_filt_exe="$SCRIPTSVCF_DIR/vcf_filtering.pl";
 
-if(`which vcf_filtering.pl 2>/dev/null` eq "")
+if (! -f "$vcf_filt_exe")
 {
-    if (-f "$original_dir/$vcf_filt_exe")
-    {
-        $vcf_filt_exe="$original_dir/$vcf_filt_exe";
-    }
-    else 
-    {
-        die "The executable vcf_filtering.pl is neither in your PATH nor in the directory $original_dir. This script needs to locate it to continue\n";
-    }
+    die "The executable vcf_filtering.pl can't be located. Please, make sure that the environment variable SCRIPTSVCF_DIR indicates the directory with this package of scripts\n";
 }
 
 ## Parsing static variants
@@ -174,8 +167,8 @@ combs(0,"",\@filtering_parameters,\@filtering_param_values,\@filtering_condition
 combs(0,"",\@NABfiltering_parameters1,\@NABfiltering_param_values1,\@NABfiltering_conditions1);
 combs(0,"",\@NABfiltering_parameters2,\@NABfiltering_param_values2,\@NABfiltering_conditions2);
 
-print("DEBUG: @exe_parameters, @exe_param_values");
-print("DEBUG: @exe_conditions,@filtering_conditions,@NABfiltering_conditions1,@NABfiltering_conditions2\n");
+#print("DEBUG: @exe_parameters, @exe_param_values");
+#print("DEBUG: @exe_conditions,@filtering_conditions,@NABfiltering_conditions1,@NABfiltering_conditions2\n");
 
 if ($n_cores>1)
 {

@@ -1,31 +1,29 @@
 #!/bin/bash
-#
-#SBATCH -p private
-#SBATCH -N 1
-#SBATCH -n 1
-#SBATCH -c 16
 #SBATCH -t 4-00:00
+#SBATCH --mem 64000
 
 module load perl/5.22.1
 module load parallel/20140822
 
 args=($@)
-last_arg=$(( $#-1 ))
-ordir=${args[$last_arg]}
+n_cores_arg=$(( $#-1 ))
+n_cores=${args[$n_cores_arg]}
 
 if [[ $# -ne 1 ]]
 then
     echo "Variant analysis"
-    perl $@ --n_cores $SLURM_JOB_CPUS_PER_NODE
+    perl $@
 else
     echo "Skipping the analysis of variants, directly executing annovar"
 fi
 
-if [[ -x $ordir/annovar.sh ]]
+#I have to get the number of cores from the arguments in $@ instead of from SLURM_JOB_CPUS_PER_NODE since if I increase the required memory I get more nodes that the ones I ask for!!!!!
+
+if [[ -x $SCRIPTSVCF_DIR/annovar.sh ]]
 then
 
     files=$(ls filt*.vcf)
-    parallel --delay "0.2" -j $SLURM_JOB_CPUS_PER_NODE --joblog annovar.log --resume "echo \"Annotating {1}\"; $ordir/annovar.sh {1}" ::: $files
+    parallel --delay "0.2" -j $n_cores --joblog annovar.log --resume "echo \"Annotating {1}\"; $SCRIPTSVCF_DIR/annovar.sh {1}" ::: $files
 
 #	for i in filt*.vcf
 #	do
@@ -35,6 +33,6 @@ then
 #	done
 #	#sem --wait
 else
-	echo "Error finding the executable annovar.sh"
+	echo "Error finding the executable annovar.sh. Please, make sure that the environment variable SCRIPTSVCF_DIR is indicating the folder with this package of scripts"
 	exit
 fi

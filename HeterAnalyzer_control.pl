@@ -5,11 +5,12 @@ use Getopt::Long qw(GetOptions);
 Getopt::Long::Configure qw(gnu_getopt);
 use Cwd;
 use File::Basename;
+use Env;
 #use Parallel::Loops;
 
 ##Configuration variables
 ######################################################
-
+our $private="";
 our $sep_param="#";
 our $sep_value=":";
 our $OFS=",";
@@ -21,9 +22,9 @@ our $helper_pl="HeterAnalyzer.pl";
 our $tstv_sh="tstv.sbatch";
 #our $annotation_sh="annovar.sh";
 our $n_cores=1;
-our $qsub="sbatch -p private -N 1 -c ";
-our $qsub_noparallel="sbatch -p private -N 1 -n 1 -c 1";
-our $qstat="squeue -u dmalload -p private";
+our $qsub="sbatch ${private} -N 1 -c ";
+our $qsub_noparallel="sbatch ${private} -N 1 -n 1 -c 1";
+our $qstat="qstat";
 our $sed='sed "s/Submitted batch job \(.*\)/\1/"';
 
 ######################################################
@@ -39,6 +40,7 @@ my $output_file="";
 my $normal_bam="";
 my $sample1_bam="";
 my $sample2_bam="";
+my $SCRIPTSVCF_DIR=$ENV{'SCRIPTSVCF_DIR'};
 
 #Flags
 my $help;
@@ -110,63 +112,41 @@ else
 }
 
 mkdir $output_dir;
-my $original_dir=dirname(Cwd::abs_path($0));
 my $oefile=Cwd::abs_path($execond_inputfile);
 my $offile=Cwd::abs_path($filtercond_inputfile);
 my $onfile=Cwd::abs_path($NABfiltercond_inputfile1);
 my $onfile2=Cwd::abs_path($NABfiltercond_inputfile2);
 chdir $output_dir or die "The output directory $output_dir is not accesible";
+$output_dir=Cwd::abs_path($output_dir);
 
-#my $vcf_filt_exe="vcf_filtering.pl";
-#
-#if(`which vcf_filtering.pl 2>/dev/null` eq "")
-#{
-#	if (-f "$original_dir/$vcf_filt_exe")
-#	{
-#		$vcf_filt_exe="$original_dir/$vcf_filt_exe";
-#	}
-#	else 
-#	{
-#		die "The executable vcf_filtering.pl is neither in your PATH nor in the directory $original_dir. This script needs to locate it to continue\n";
-#	}
-#}
-
-if (-f "$original_dir/$variant_caller.sh")
+if (-f "$SCRIPTSVCF_DIR/$variant_caller.sh")
 {
-	$variant_calling_sh="$original_dir/$variant_caller.sh";
+    $variant_calling_sh="$SCRIPTSVCF_DIR/$variant_caller.sh";
 }
 else
 {
-	die "Error, the sh file for the variant caller $variant_caller is not located in $original_dir, named $original_dir/$variant_caller.sh. Please, fix this in order to use this script\n"
+    die "Error, the sh file for the variant caller $variant_caller can't be located. Please, make sure that the environment variable SCRIPTSVCF_DIR is indicating the folder with this package of scripts\n"
 }
 
-if (-f "$original_dir/$helper_sh" && -f "$original_dir/$helper_pl")
+if (-f "$SCRIPTSVCF_DIR/$helper_sh" && -f "$SCRIPTSVCF_DIR/$helper_pl")
 {
-    $helper_sh="$original_dir/$helper_sh";
-    $helper_pl="$original_dir/$helper_pl";
+    $helper_sh="$SCRIPTSVCF_DIR/$helper_sh";
+    $helper_pl="$SCRIPTSVCF_DIR/$helper_pl";
 }
 else
 {
-	die "Error, the sh file for the secondary analysis of the data, $helper_sh is not located in $original_dir, named $original_dir/$helper_pl. Please, fix this in order to use this script\n"
+    die "Error, the files for the secondary analysis of the data, $helper_sh and $helper_pl can't be located. Please, make sure that the environment variable SCRIPTSVCF_DIR is indicating the folder with this package of scripts\n"
 }
 
-if (-f "$original_dir/$tstv_sh")
+if (-f "$SCRIPTSVCF_DIR/$tstv_sh")
 {
-    $tstv_sh="$original_dir/$tstv_sh";
+    $tstv_sh="$SCRIPTSVCF_DIR/$tstv_sh";
 }
 else
 {
-	die "Error, the sh file to get the TsTv data, $tstv_sh is not located in $original_dir, named $original_dir/$tstv_sh. Please, fix this in order to use this script\n"
+  die "Error, the sh file to get the TsTv data, $tstv_sh can't be located. Please, make sure that the environment variable SCRIPTSVCF_DIR is indicating the folder with this package of scripts\n"
 }
-#
-#if (-f "$original_dir/$annotation_sh")
-#{
-#    $annotation_sh="$original_dir/$annotation_sh";
-#}
-#else
-#{
-#	die "Error, the sh file for the secondary analysis of the data, $annotation_sh is not located in $original_dir. Please, fix this in order to use this script\n"
-#}
+
 #
 ## Main conditions loop
 #######################
@@ -314,16 +294,16 @@ wait_for_jobs();
 
 if(-f $onfile2)
 {
-    $job_id=`$qsub $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile2 $onfile2 -o $output_file --original_directory $original_dir | $sed`;
+    $job_id=`$qsub $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile2 $onfile2 -o $output_file --n_cores $n_cores | $sed`;
 }
 else
 {
-    $job_id=`$qsub $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile -o $output_file --original_directory $original_dir | $sed`;
+    $job_id=`$qsub $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile -o $output_file --n_cores $n_cores | $sed`;
 }
 chomp($job_id);
 $job_ids{$job_id}=1;
 
-print "The filtering and analysis of the vcf files is being conducted with the job_id $job_id\n";
+print("The filtering and analysis of the vcf files is being conducted with the job_id $job_id\n");
 wait_for_jobs();
 
 
@@ -332,7 +312,7 @@ $job_id=`$qsub_noparallel $tstv_sh $output_dir | $sed`;
 chomp($job_id);
 $job_ids{$job_id}=1;
 
-print "Ts/Tv statistics are being calculated in the job_id $job_id\n";
+print("Ts/Tv statistics are being calculated in the job_id $job_id\n");
 wait_for_jobs();
 
 #print("Analysis finished.\n\nAnnotation:\n");
@@ -379,15 +359,16 @@ exit;
 
 sub wait_for_jobs
 {
+    my $awk='awk \'BEGIN{FS=" ";var=1}{if ($5 != "C"){var=0}}END{print var}\'';
     while (scalar keys %job_ids != 0)##Check 
     {
     	sleep(60); 
     	print("\tPending jobs ",join(",",keys %job_ids),"\n");
     	foreach my $id (keys %job_ids)
 	    {
-		    my $status=`$qstat -j $id | wc -l`;
+		    my $status=`$qstat $id | tail -n 1 | $awk`;
         	#print("DEBUG: Status job id $id : $status\n");
-        	if($status==1) ## 1 means that the job has finished. 2 that it is running
+        	if($status==1) ## 1 means that the job has finished
         	{
             	delete($job_ids{$id});
         	}
