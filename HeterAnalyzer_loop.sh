@@ -1,4 +1,5 @@
 #!/bin/bash
+#SBATCH -t 4-00:00
 
 usage="\n$0 directory torun_file exe_params filtering_params NAB_params NAB2_params n_cores\n\ntorun_file structure: output N_file A_file B_file\n-------------------------------------------------\n
 \n
