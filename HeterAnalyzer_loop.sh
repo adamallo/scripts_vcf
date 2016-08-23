@@ -52,7 +52,7 @@ do
 
     if [ $flag -ne 0 ]
     then
-        tail -n1 $dir/${output}_withtstv.csv >> $dir/results.csv
+        tail -n +2 $dir/${output}_withtstv.csv >> $dir/results.csv
     else
         cat $dir/${output}_withtstv.csv > $dir/results.csv
         echo "Sample,TsTv_A,TsTv_B,TsTv_N" > $dir/results_basictstv.csv

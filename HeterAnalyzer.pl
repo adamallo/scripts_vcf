@@ -16,7 +16,7 @@ our $sep_value=":";
 our $OFS=",";
 our $FS=",";
 our $output_vcfs=1;
-our $output_list=0;
+our $output_list=1;
 our $output_comprehensive=1;
 our $n_cores=1;
 
@@ -342,7 +342,6 @@ sub filter
 #Compare Afilt with B without filter --> Common variants + %
     my @statsAfilt;
     my ($ref_common_variantsAfilt,$ref_different_variantsAfilt)=vcf_compare_parsed(\%B,\%Afilt,\@statsAfilt); ##I have to generate two hashes. One with common variants, the other with non common. Thus, the consecutive filter I can do it towards these new (smallest) hashes.
-
 #Compare Bfiltered with A without filter --> Common variants + %
         my @statsBfilt;
     my ($ref_common_variantsBfilt,$ref_different_variantsBfilt)=vcf_compare_parsed(\%A,\%Bfilt,\@statsBfilt);
@@ -352,7 +351,6 @@ sub filter
     my @statsfiltI;
     my ($ref_common_variantsfiltU,$ref_different_variantsfiltU)=vcf_unite_parsed($ref_common_variantsAfilt,$ref_different_variantsAfilt,$ref_common_variantsBfilt,$ref_different_variantsBfilt,\@statsfiltU);
     my ($ref_common_variantsfiltI,$ref_different_variantsfiltI)=vcf_intersect_parsed($ref_common_variantsAfilt,$ref_different_variantsAfilt,$ref_common_variantsBfilt,$ref_different_variantsBfilt,\@statsfiltI);
-
     my @statsfiltmean=(($statsAfilt[0]+$statsBfilt[0])/2.0,($statsAfilt[1]+$statsBfilt[1])/2.0,($statsAfilt[2]+$statsBfilt[2])/2.0);
 
 #Substract N from Afilt. Compare the result to B without filter --> Common variants + %
@@ -684,6 +682,7 @@ sub vcf_compare_parsed
     my $n1=scalar(keys %{$vcf_reference});
     my $n2=scalar(keys %variants2);
 
+
     foreach my $variant (keys %{$vcf_reference})
     {
         if (exists $variants2{$variant})
@@ -695,6 +694,7 @@ sub vcf_compare_parsed
 
         if(scalar(keys %variants2)== 0)
         {
+            #print("DEBUG: Variants2 is empty\n");
             last; ##No more pending comparisons
         }
     }	
