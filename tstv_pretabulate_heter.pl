@@ -43,6 +43,10 @@ foreach my $line (@content)
 {
     chomp($line);
     @temp=split($FS,$line);
+    if($temp[0]=~m/different/)
+    {
+        next;
+    }
     if($temp[0]=~s/^filtNABU${sep_param}//)
     {
         $temp[0]=~s/_common//;

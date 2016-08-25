@@ -22,8 +22,8 @@ fi
 if [[ -x $SCRIPTSVCF_DIR/annovar.sh ]]
 then
 
-    files=$(ls *.vcf | egrep '^.filt.*')
-    parallel --delay "0.2" -j $n_cores --joblog annovar.log --resume "echo \"Annotating {1}\"; $SCRIPTSVCF_DIR/annovar.sh {1}" ::: $files
+    files=$(ls *.vcf | egrep '^.*filt.*')
+    parallel --delay "0.2" -j $n_cores "echo \"Annotating {1}\"; $SCRIPTSVCF_DIR/annovar.sh {1}" ::: $files
 
 #	for i in filt*.vcf
 #	do
