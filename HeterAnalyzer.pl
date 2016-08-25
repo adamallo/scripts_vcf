@@ -117,20 +117,21 @@ if (! -f "$vcf_filt_exe")
 ## Parsing static variants
 ############################################################################################
 
-my (%A,%B,%N);
+#my (%A,%B,%N);
+my %N;
 my ($ref_n,$nameN);
-my @nofilt_results;
 
-if ( -f "A.vcf" && -f "B.vcf" && -f "N.vcf")
+#if ( -f "A.vcf" && -f "B.vcf" && -f "N.vcf")
+if ( -f "N.vcf")
 {
-    %A=%{parse_vcf("A.vcf")};
-    %B=%{parse_vcf("B.vcf")};
+#    %A=%{parse_vcf("A.vcf")};
+#    %B=%{parse_vcf("B.vcf")};
     ($ref_n,$nameN)=parse_vcf_name("N.vcf");
     #print("DEBUG: N genotype name $nameN\n");
     %N=%{$ref_n};
-    my %AN=%{vcf_prune_single(\%A,\%N)};
-    my %BN=%{vcf_prune_single(\%B,\%N)};
-    @nofilt_results=(scalar keys %A, scalar keys %B, scalar keys %N, scalar keys %AN, scalar keys %BN);
+#    my %AN=%{vcf_prune_single(\%A,\%N)};
+#    my %BN=%{vcf_prune_single(\%B,\%N)};
+#    @nofilt_results=(scalar keys %A, scalar keys %B, scalar keys %N, scalar keys %AN, scalar keys %BN);
 }
 else
 {
@@ -286,7 +287,7 @@ $sample=basename($sample);
 $sample=~s/(.*)\..*/$1/;
 foreach my $condition (keys %results)
 {
-    print($OFILE "$sample$OFS$condition$OFS",array_to_string(@nofilt_results),$OFS,array_to_string(@{$results{$condition}}),"\n");
+    print($OFILE "$sample$OFS$condition$OFS",array_to_string(@{$results{$condition}}),"\n");
 }
 close($OFILE);
 
@@ -307,6 +308,23 @@ sub filter
     my $condition="$exe_condition$sep_param$filtering_condition";
     my $filtering_command="$vcf_filt_exe ";
     $filtering_command.=join(" ",split("$sep_value",join(" ",split("$sep_param",$filtering_condition))));
+   
+    my(%A,%B);
+    my @nofilt_results;
+    
+    if ( -f "A$sep_param$exe_condition.vcf" && -f "B$sep_param$exe_condition.vcf")
+    {
+        %A=%{parse_vcf("A$sep_param$exe_condition.vcf")};
+        %B=%{parse_vcf("B$sep_param$exe_condition.vcf")};
+        my %AN=%{vcf_prune_single(\%A,\%N)};
+        my %BN=%{vcf_prune_single(\%B,\%N)};
+        @nofilt_results=(scalar keys %A, scalar keys %B, scalar keys %N, scalar keys %AN, scalar keys %BN);
+    }
+    else
+    {
+        die "Missing vcf files. Something weird has happend between the execution of the previous script and this one. Check that the variant calling step has finished succesfully and try to execute this script again\n";
+    }
+
 
     if (!-f "A$sep_param$condition.vcf")
     {
@@ -480,7 +498,7 @@ sub filter
         }
 
 #Store and/or print
-        my @statistics=(@statsAfilt,@statsBfilt,@statsfiltU,@statsfiltI,@statsfiltmean,@statsAfiltN,@statsBfiltN,@statsfiltNU,@statsfiltNI,@statsfiltNmean,@statsAfiltNAB,@statsBfiltNAB,@statsfiltNABU,@statsfiltNABI,@statsfiltNABmean);
+        my @statistics=(@nofilt_results,@statsAfilt,@statsBfilt,@statsfiltU,@statsfiltI,@statsfiltmean,@statsAfiltN,@statsBfiltN,@statsfiltNU,@statsfiltNI,@statsfiltNmean,@statsAfiltNAB,@statsBfiltNAB,@statsfiltNABU,@statsfiltNABI,@statsfiltNABmean);
 #Condition,A_#,B_#,N_#,AN_#,BN_#,Afilt_prop,Afilt_N,Afilt_#,Bfilt_prop,Bfilt_N,Bfilt_#,filt_propU,filt_NU,filt_#U,filt_propI,filt_NI,filt_#I,filt_prop_mean,filt_N_mean,filt_#_mean,AfiltN_prop,AfiltN_N,AfiltN_#,BfiltN_prop,BfiltN_N,BfiltN_#,filtN_propU,filtN_NU,filtN_#U,filtN_propI,filtN_NI,filtN_#I,filtN_prop_mean,filtN_N_mean,filtN_#_mean,AfiltNAB_prop,AfiltNAB_N,AfiltNAB_#,BfiltNAB_prop,BfiltNAB_N,BfiltNAB_#,filtNAB_propU,filtNAB_NU,filtNAB_#U,filtNAB_propI,filtNAB_NI,filtNAB_#I,filtNAB_prop_mean,filtNAB_N_mean,filtNAB_#_mean
         $results{"$condition${sep_param}NAB$sep_param$NAB_condition"}=\@statistics;
 #print("DEBUG:$condition$OFS",array_to_string(@statistics),"\n");

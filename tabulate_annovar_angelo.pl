@@ -31,7 +31,7 @@ foreach my $dir (@dirs)
     my $common_file=$common_files[0];
     if (scalar @common_files != 1)
     {
-        print("DEBUG: @common_files\n");
+#        print("DEBUG: @common_files\n");
         die "More than one files detected with the format filtNABU#*common.vcf.annotated.variant_function. This script is intended to analyse the output of only one filter\n";
     }
 
@@ -125,7 +125,7 @@ foreach my $dir (@dirs)
         }
         #print("DEBUG: @temp_data\n");
         push(@out_line,@temp_data);
-        print("DEBUG: @out_line\n");
+#        print("DEBUG: @out_line\n");
         print($OUTPUT print_array(@out_line),"\n");
     }
 }

@@ -118,13 +118,15 @@ if (! -f "$vcf_filt_exe")
 ## Parsing static variants
 ############################################################################################
 
-my (%A,%B,%N);
+#my (%A,%B,%N);
+my %N;
 my ($ref_n,$nameN);
 
-if ( -f "A.vcf" && -f "B.vcf" && -f "N.vcf")
+#if ( -f "A.vcf" && -f "B.vcf" && -f "N.vcf")
+if (-f  "N.vcf")
 {
-	%A=%{parse_vcf("A.vcf")};
-	%B=%{parse_vcf("B.vcf")};
+	#%A=%{parse_vcf("A.vcf")};
+	#%B=%{parse_vcf("B.vcf")};
     ($ref_n,$nameN)=parse_vcf_name("N.vcf");
     #print("DEBUG: N genotype name $nameN\n");
 	%N=%{$ref_n};
@@ -297,6 +299,21 @@ sub filter
 	my $condition="$exe_condition$sep_param$filtering_condition";
 	my $filtering_command="$vcf_filt_exe ";
 	$filtering_command.=join(" ",split("$sep_value",join(" ",split("$sep_param",$filtering_condition))));
+
+    my(%A,%B);
+
+    if ( -f "A$sep_param$exe_condition.vcf" && -f "B$sep_param$exe_condition.vcf")
+    {
+        %A=%{parse_vcf("A$sep_param$exe_condition.vcf")};
+        %B=%{parse_vcf("B$sep_param$exe_condition.vcf")};
+        #my %AN=%{vcf_prune_single(\%A,\%N)};
+        #my %BN=%{vcf_prune_single(\%B,\%N)};
+        #@nofilt_results=(scalar keys %A, scalar keys %B, scalar keys %N, scalar keys %AN, scalar keys %BN);
+    }
+    else
+    {
+        die "Missing vcf files. Something weird has happend between the execution of the previous script and this one. Check that the variant calling step has finished succesfully and try to execute this script again\n";
+    }
 
 	if (!-f "A$sep_param$condition.vcf")
 	{
