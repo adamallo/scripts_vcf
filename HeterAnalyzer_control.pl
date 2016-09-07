@@ -18,8 +18,9 @@ our $FS=",";
 our $variant_caller="platypus";
 our $variant_calling_sh;
 our $helper_sh="vcfFilteringTableV2_analyser_helper.sh";
-our $helper_pl="vcfFilteringTableV2_analyser.pl";
+our $helper_pl="HeterAnalyzer.pl";
 our $tstv_sh="tstv.sbatch";
+#our $annotation_sh="annovar.sh";
 our $n_cores=1;
 our $qsub="sbatch ${private} -N 1 -c ";
 our $qsub_noparallel="sbatch ${private} -N 1 -n 1 -c 1";
@@ -120,11 +121,11 @@ $output_dir=Cwd::abs_path($output_dir);
 
 if (-f "$SCRIPTSVCF_DIR/$variant_caller.sh")
 {
-	$variant_calling_sh="$SCRIPTSVCF_DIR/$variant_caller.sh";
+    $variant_calling_sh="$SCRIPTSVCF_DIR/$variant_caller.sh";
 }
 else
 {
-	die "Error, the sh file for the variant caller $variant_caller can't be located. Please, make sure that the environment variable SCRIPTSVCF_DIR is indicating the folder with this package of scripts\n"
+    die "Error, the sh file for the variant caller $variant_caller can't be located. Please, make sure that the environment variable SCRIPTSVCF_DIR is indicating the folder with this package of scripts\n"
 }
 
 if (-f "$SCRIPTSVCF_DIR/$helper_sh" && -f "$SCRIPTSVCF_DIR/$helper_pl")
@@ -134,7 +135,7 @@ if (-f "$SCRIPTSVCF_DIR/$helper_sh" && -f "$SCRIPTSVCF_DIR/$helper_pl")
 }
 else
 {
-	die "Error, the files for the secondary analysis of the data, $helper_sh and $helper_pl can't be located. Please, make sure that the environment variable SCRIPTSVCF_DIR is indicating the folder with this package of scripts\n"
+    die "Error, the files for the secondary analysis of the data, $helper_sh and $helper_pl can't be located. Please, make sure that the environment variable SCRIPTSVCF_DIR is indicating the folder with this package of scripts\n"
 }
 
 if (-f "$SCRIPTSVCF_DIR/$tstv_sh")
@@ -146,7 +147,7 @@ else
   die "Error, the sh file to get the TsTv data, $tstv_sh can't be located. Please, make sure that the environment variable SCRIPTSVCF_DIR is indicating the folder with this package of scripts\n"
 }
 
-
+#
 ## Main conditions loop
 #######################
 
@@ -154,7 +155,9 @@ my $name_condition;
 my @exe_conditions;
 my $bamfiles;
 
-##Generate all combinations of proposed values for execution
+
+
+###Generate all combinations of proposed values for execution
 combs(0,"",\@exe_parameters,\@exe_param_values,\@exe_conditions);
 
 our %job_ids;
@@ -227,9 +230,11 @@ else
 }
 
 ### Calling with filters (Only cancer samples so far)
+
+### Calling with filters (Only cancer samples so far)
 ##############################################################
 my $job_id;
-my $actual_exe_conditions;
+	my $actual_exe_conditions;
 print("Filtered variant calling detection/execution:\n");	
 foreach my $exe_condition (@exe_conditions)
 {
@@ -284,6 +289,7 @@ foreach my $exe_condition (@exe_conditions)
 	}
 
 } 
+
 wait_for_jobs();
 
 if(-f $onfile2)
@@ -298,15 +304,15 @@ chomp($job_id);
 $job_ids{$job_id}=1;
 
 print("The filtering and analysis of the vcf files is being conducted with the job_id $job_id\n");
-
 wait_for_jobs();
 
+
 $job_id=`$qsub_noparallel $tstv_sh $output_dir | $sed`;
+
 chomp($job_id);
 $job_ids{$job_id}=1;
 
 print("Ts/Tv statistics are being calculated in the job_id $job_id\n");
-
 wait_for_jobs();
 
 #print("Analysis finished.\n\nAnnotation:\n");
@@ -350,6 +356,25 @@ exit;
 ###################################################################################
 ###FUNCTIONS
 ###################################################################################
+
+sub wait_for_jobs
+{
+    my $awk='awk \'BEGIN{FS=" ";var=1}{if ($5 != "C"){var=0}}END{print var}\'';
+    while (scalar keys %job_ids != 0)##Check 
+    {
+    	sleep(60); 
+    	print("\tPending jobs ",join(",",keys %job_ids),"\n");
+    	foreach my $id (keys %job_ids)
+	    {
+		    my $status=`$qstat $id | tail -n 1 | $awk`;
+        	#print("DEBUG: Status job id $id : $status\n");
+        	if($status==1) ## 1 means that the job has finished
+        	{
+            	delete($job_ids{$id});
+        	}
+	    }
+    }
+}
 
 #Recursive function to generate parameter combinations
 #One recursion per parameter
@@ -687,8 +712,6 @@ sub variants_to_hash
 	}
 	return \%hash;
 }
-
-# Writes a list of variants in csv format contained in a hash
 # ############################################################
 sub write_variant_list
 {
@@ -752,21 +775,3 @@ sub write_variant_vcf
     close $OFILE;
 }
 
-sub wait_for_jobs
-{
-    my $awk='awk \'BEGIN{FS=" ";var=1}{if ($5 != "C"){var=0}}END{print var}\'';
-    while (scalar keys %job_ids != 0)##Check
-    {
-      sleep(60);
-      print("\tPending jobs ",join(",",keys %job_ids),"\n");
-      foreach my $id (keys %job_ids)
-      {
-          my $status=`$qstat $id | tail -n 1 | $awk`;
-          #print("DEBUG: Status job id $id : $status\n");
-          if($status==1) ## 1 means that the job has finished
-          {
-              delete($job_ids{$id});
-          }
-      }
-    }
-}

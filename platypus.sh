@@ -1,6 +1,5 @@
 #!/bin/bash
 #
-#SBATCH -p private
 #SBATCH -n 1
 
 module load parallel/20140822 platypus/0.8.1 python/2.7.9

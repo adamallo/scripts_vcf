@@ -25,6 +25,10 @@ if (defined $SNPSIFT_DIR)
 	{
 		$exe="$SNPSIFT_DIR/SnpSift.jar";
 	}
+    else
+    {
+        die "ERROR: SnpSift.jar not found. Please, specify its location using the environmental variable SNPSIFT_DIR\n";
+    }
 }
 elsif (-f "SnpSift.jar")
 {
