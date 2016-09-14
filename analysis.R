@@ -587,3 +587,89 @@ p_valuew=wilcox.test(foldsfiltNAB_.~type,data=data_problem)$p.value
 
 violin_folds_mutburden=ggplot(data=data_problem, aes(y=foldsfiltNAB_.,x=type,fill=type))+geom_violin()+geom_boxplot(width=.05,outlier.size=0.5)+scale_y_continuous(name=NULL)+labs(title="Fold-differences in \n number of mutations \n between regions")+scale_x_discrete(name=NULL,limits=types,labels=c("Pure DCIS", "DCIS with\n adjacent invasive"))+scale_fill_manual(values=c("#009E73","#0072B2"))+guides(fill=FALSE)+theme(text=element_text(size=6,face="bold"),axis.text.y=element_text(size=4),axis.text.x=element_text(size=4,face="bold"),plot.margin=unit(c(0.2,0.1,0.1,0.1),"cm"),plot.title=element_text(size=5))+annotate("text",x=1.2,y=6,label=paste0("T-test p-value = ",round(p_value,digits=3)),size=1.1)+annotate("text",x=1.2,y=5.7,label=paste0("Wilcoxon p-value = ",round(p_valuew,digits=3)),size=1.1)
 save_plot("folds.png",violin_folds_mutburden,base_height=2,base_aspect_ratio=.5)
+
+
+
+########################################################
+########################################################
+#ROIS
+########################################################
+########################################################
+setwd("~/Desktop/dcis")
+data=read.csv("rois.csv")
+out_data=as.data.frame(list(id = vector("character", nrow(data)), test = vector("character",nrow(data)), p_value=vector("numeric",nrow(data)), t_test.p_value = vector("numeric", nrow(data)),wilcox.p_value=vector("numeric",nrow(data)), f_test.p_value = vector("numeric", nrow(data)),shapiro_test_A.p_value=vector("numeric",nrow(data)),shapiro_test_B.p_value=vector("numeric",nrow(data))),stringsAsFactors=FALSE)
+
+for (i in 3:length(names(data)))
+{
+	name=as.character(names(data)[i])
+	shapiro_test_A.p_value=as.numeric(tryCatch({shapiro.test(data[data$Type=="Pure",names(data)[i]])$p.value},error=function(err){return(0)}))
+	shapiro_test_B.p_value=as.numeric(tryCatch({shapiro.test(data[data$Type=="Inv",names(data)[i]])$p.value},error=function(err){return(0)}))
+	f_test.p_value=as.numeric(var.test(as.formula(paste0((names(data))[i],"~Type")),data=data)$p.value)
+	wilcox.p_value=as.numeric(wilcox.test(as.formula(paste0((names(data))[i],"~Type")),data=data)$p.value)
+	if(is.nan(f_test.p_value) || f_test.p_value>0.05)
+	{
+	t_test.p_value=as.numeric(t.test(as.formula(paste0((names(data))[i],"~Type")),data=data,var.equal=TRUE)$p.value)
+	}
+	else
+	{
+	t_test.p_value=as.numeric(t.test(as.formula(paste0((names(data))[i],"~Type")),data=data)$p.value)
+	}
+	if(shapiro_test_A.p_value>0.05 && shapiro_test_B.p_value>0.05)
+	{
+		p_value=t_test.p_value
+		test="t_test"
+	}
+	else
+	{
+		p_value=wilcox.p_value
+		test="wilcoxon"
+	}
+	  row=c(name,test,p_value,t_test.p_value,wilcox.p_value,f_test.p_value,shapiro_test_A.p_value,shapiro_test_B.p_value)
+	length(shapiro_test_A.p_value)
+  out_data[i-2,]=row
+}
+write.csv(out_data,file="rois_out.csv",row.names=FALSE)
+
+##
+#Violin plots
+##
+
+data$Type=as.factor(data$Type)
+types=levels(data$Type)
+types=rev(types)
+
+p_value=as.numeric(out_data[out_data$id=="stroma.ALDH.0",]$p_value)
+plot_aldh=ggplot(data=data, aes(y=stroma.ALDH.0,x=Type,fill=Type))+geom_violin()+geom_boxplot(width=.05,outlier.size=0.5)+scale_y_continuous(name=NULL)+labs(title="Difference in % of\n slide without ALDH stain\n in the stroma")+scale_x_discrete(name=NULL,limits=types,labels=c("Pure DCIS", "DCIS with\n adjacent invasive"))+scale_fill_manual(values=c("#009E73","#0072B2"))+guides(fill=FALSE)+theme(text=element_text(size=6,face="bold"),axis.text.y=element_text(size=4),axis.text.x=element_text(size=4,face="bold"),plot.margin=unit(c(0.2,0.1,0.1,0.1),"cm"),plot.title=element_text(size=5))+annotate("text",x=1.8,y=85,label=paste0("Wilcoxon \np-value = ",round(p_value,digits=3)),size=1.1)
+save_plot("aldh0.png",plot_aldh,base_height=2,base_aspect_ratio=.5)
+
+p_value=as.numeric(out_data[out_data$id=="stroma.ALDH.2",]$p_value)
+plot_aldh2=ggplot(data=data, aes(y=stroma.ALDH.2,x=Type,fill=Type))+geom_violin()+geom_boxplot(width=.05,outlier.size=0.5)+scale_y_continuous(name=NULL)+labs(title="Difference in % of\n slide with intensity 2\nof ALDH stain\n in the stroma")+scale_x_discrete(name=NULL,limits=types,labels=c("Pure DCIS", "DCIS with\n adjacent invasive"))+scale_fill_manual(values=c("#009E73","#0072B2"))+guides(fill=FALSE)+theme(text=element_text(size=6,face="bold"),axis.text.y=element_text(size=4),axis.text.x=element_text(size=4,face="bold"),plot.margin=unit(c(0.2,0.1,0.1,0.1),"cm"),plot.title=element_text(size=5))+annotate("text",x=1.8,y=85,label=paste0("Wilcoxon \np-value = ",round(p_value,digits=3)),size=1.1)
+save_plot("aldh2.png",plot_aldh2,base_height=2,base_aspect_ratio=.5)
+
+p_value=as.numeric(out_data[out_data$id=="Mean.Number.Cancer.HS",]$p_value)
+plot_mean_cancer_hs=ggplot(data=data, aes(y=Mean.Number.Cancer.HS,x=Type,fill=Type))+geom_violin()+geom_boxplot(width=.05,outlier.size=0.5)+scale_y_continuous(name=NULL)+labs(title="Difference in mean\nnumber of cancer\nhotspots")+scale_x_discrete(name=NULL,limits=types,labels=c("Pure DCIS", "DCIS with\n adjacent invasive"))+scale_fill_manual(values=c("#009E73","#0072B2"))+guides(fill=FALSE)+theme(text=element_text(size=6,face="bold"),axis.text.y=element_text(size=4),axis.text.x=element_text(size=4,face="bold"),plot.margin=unit(c(0.2,0.1,0.1,0.1),"cm"),plot.title=element_text(size=5))+annotate("text",x=1.8,y=85,label=paste0("Wilcoxon \np-value = ",round(p_value,digits=3)),size=1.1)
+save_plot("meanhs.png",plot_mean_cancer_hs,base_height=2,base_aspect_ratio=.5)
+
+p_value=as.numeric(out_data[out_data$id=="DCIS.P.FAK.3",]$p_value)
+plot_pfak=ggplot(data=data, aes(y=DCIS.P.FAK.3,x=Type,fill=Type))+geom_violin()+geom_boxplot(width=.05,outlier.size=0.5)+scale_y_continuous(name=NULL)+labs(title="Difference in % of\nslide with the maximum\n intensity of pFAK stain")+scale_x_discrete(name=NULL,limits=types,labels=c("Pure DCIS", "DCIS with\n adjacent invasive"))+scale_fill_manual(values=c("#009E73","#0072B2"))+guides(fill=FALSE)+theme(text=element_text(size=6,face="bold"),axis.text.y=element_text(size=4),axis.text.x=element_text(size=4,face="bold"),plot.margin=unit(c(0.2,0.1,0.1,0.1),"cm"),plot.title=element_text(size=5))+annotate("text",x=1.8,y=85,label=paste0("Wilcoxon \np-value = ",round(p_value,digits=3)),size=1.1)
+save_plot("pfak.png",plot_pfak,base_height=2,base_aspect_ratio=.5)
+
+p_value=as.numeric(out_data[out_data$id=="DCIS.RANK.1",]$p_value)
+plot_rank=ggplot(data=data, aes(y=DCIS.RANK.1,x=Type,fill=Type))+geom_violin()+geom_boxplot(width=.05,outlier.size=0.5)+scale_y_continuous(name=NULL)+labs(title="Difference in % of\nslide with the DCIS rank 1")+scale_x_discrete(name=NULL,limits=types,labels=c("Pure DCIS", "DCIS with\n adjacent invasive"))+scale_fill_manual(values=c("#009E73","#0072B2"))+guides(fill=FALSE)+theme(text=element_text(size=6,face="bold"),axis.text.y=element_text(size=4),axis.text.x=element_text(size=4,face="bold"),plot.margin=unit(c(0.2,0.1,0.1,0.1),"cm"),plot.title=element_text(size=5))+annotate("text",x=1.8,y=95,label=paste0("Wilcoxon \np-value = ",round(p_value,digits=3)),size=1.1)
+save_plot("rank.png",plot_rank,base_height=2,base_aspect_ratio=.5)
+
+p_value=as.numeric(out_data[out_data$id=="DCIS.RANK.0",]$p_value)
+plot_rank0=ggplot(data=data, aes(y=DCIS.RANK.0,x=Type,fill=Type))+geom_violin()+geom_boxplot(width=.05,outlier.size=0.5)+scale_y_continuous(name=NULL)+labs(title="Difference in % of\nslide with the DCIS rank 0")+scale_x_discrete(name=NULL,limits=types,labels=c("Pure DCIS", "DCIS with\n adjacent invasive"))+scale_fill_manual(values=c("#009E73","#0072B2"))+guides(fill=FALSE)+theme(text=element_text(size=6,face="bold"),axis.text.y=element_text(size=4),axis.text.x=element_text(size=4,face="bold"),plot.margin=unit(c(0.2,0.1,0.1,0.1),"cm"),plot.title=element_text(size=5))+annotate("text",x=1.8,y=95,label=paste0("Wilcoxon \np-value = ",round(p_value,digits=3)),size=1.1)
+save_plot("rank0.png",plot_rank0,base_height=2,base_aspect_ratio=.5)
+
+p_value=as.numeric(out_data[out_data$id=="DCIS.PR.1",]$p_value)
+plot_pr=ggplot(data=data, aes(y=DCIS.PR.1,x=Type,fill=Type))+geom_violin()+geom_boxplot(width=.05,outlier.size=0.5)+scale_y_continuous(name=NULL)+labs(title="Difference in % of\nslide with intensity 1\nof PR stain")+scale_x_discrete(name=NULL,limits=types,labels=c("Pure DCIS", "DCIS with\n adjacent invasive"))+scale_fill_manual(values=c("#009E73","#0072B2"))+guides(fill=FALSE)+theme(text=element_text(size=6,face="bold"),axis.text.y=element_text(size=4),axis.text.x=element_text(size=4,face="bold"),plot.margin=unit(c(0.2,0.1,0.1,0.1),"cm"),plot.title=element_text(size=5))+annotate("text",x=1.9,y=7,label=paste0("Wilcoxon \np-value = ",round(p_value,digits=3)),size=1.1)
+save_plot("pr.png",plot_pr,base_height=2,base_aspect_ratio=.5)
+
+p_value=as.numeric(out_data[out_data$id=="DCIS.PR.2",]$p_value)
+plot_pr2=ggplot(data=data, aes(y=DCIS.PR.2,x=Type,fill=Type))+geom_violin()+geom_boxplot(width=.05,outlier.size=0.5)+scale_y_continuous(name=NULL)+labs(title="Difference in % of\nslide with intensity 2\nof PR stain")+scale_x_discrete(name=NULL,limits=types,labels=c("Pure DCIS", "DCIS with\n adjacent invasive"))+scale_fill_manual(values=c("#009E73","#0072B2"))+guides(fill=FALSE)+theme(text=element_text(size=6,face="bold"),axis.text.y=element_text(size=4),axis.text.x=element_text(size=4,face="bold"),plot.margin=unit(c(0.2,0.1,0.1,0.1),"cm"),plot.title=element_text(size=5))+annotate("text",x=1.9,y=7,label=paste0("Wilcoxon \np-value = ",round(p_value,digits=3)),size=1.1)
+save_plot("pr2.png",plot_pr2,base_height=2,base_aspect_ratio=.5)
+
+p_value=as.numeric(out_data[out_data$id=="DCIS.CA9.1",]$p_value)
+plot_ca9=ggplot(data=data, aes(y=DCIS.CA9.1,x=Type,fill=Type))+geom_violin()+geom_boxplot(width=.05,outlier.size=0.5)+scale_y_continuous(name=NULL)+labs(title="Difference in % of\nslide with intensity 1\nof CA9 stain")+scale_x_discrete(name=NULL,limits=types,labels=c("Pure DCIS", "DCIS with\n adjacent invasive"))+scale_fill_manual(values=c("#009E73","#0072B2"))+guides(fill=FALSE)+theme(text=element_text(size=6,face="bold"),axis.text.y=element_text(size=4),axis.text.x=element_text(size=4,face="bold"),plot.margin=unit(c(0.2,0.1,0.1,0.1),"cm"),plot.title=element_text(size=5))+annotate("text",x=1.9,y=40,label=paste0("Wilcoxon \np-value = ",round(p_value,digits=3)),size=1.1)
+save_plot("ca9.png",plot_ca9,base_height=2,base_aspect_ratio=.5)
