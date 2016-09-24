@@ -18,3 +18,15 @@ for i in *.bam; do sbatch -p private <(echo -e '#!/bin/bash'"\nmodule load samto
 #BAM files merging
 while read name a b; do sbatch -p private <(echo -e '#!/bin/bash'"\nmodule load bamtools/2.4.0\n bamtools merge -in $a -in $b -out ${name}.bam");done<tomerge.txt
 
+#ychrom
+########
+
+#Removes the y chromosome from the human genome
+perl -p0e 's/>Y.*?>/>/s' GRCh37-lite.fa > GRCh37-lite_noY.fa
+
+#Fasta index
+samtools faidx /home/dmalload/temp_storage/GRCh37-lite_noY.fa
+
+#BWA indexes (needs quite a lot of RAM)
+bwa index /home/dmalload/temp_storage/GRCh37-lite.fa
+bwa index /home/dmalload/temp_storage/GRCh37-lite_noY.fa
