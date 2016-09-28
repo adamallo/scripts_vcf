@@ -73,7 +73,7 @@ foreach my $dir (@dirs)
     my @db_content_aux=<$DB_AUX>;
 
     my @lengths=(scalar @c_content,scalar @da_content,scalar @db_content);
-    @lengths=sort(@lengths);
+    @lengths=sort{$a <=> $b} @lengths;
    
     close($COMMON);
     close($DA);

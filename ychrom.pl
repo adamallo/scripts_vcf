@@ -62,13 +62,13 @@ my %job_ids;
 ######################
 my $filtered_total_pairs=0;
 
-foreach my $region (@ids)
-{
-    my @filtered_total = $sam->get_features_by_location(-type=>'read_pair',-seq_id=>$region,-filter => \&filter);
-    $filtered_total_pairs+=scalar(@filtered_total);
-#    print("DEBUG: adding ",scalar(@filtered_total),"alignments to the total\n");
-    @filtered_total=();
-}
+#foreach my $region (@ids)
+#{
+#    my @filtered_total = $sam->get_features_by_location(-type=>'read_pair',-seq_id=>$region,-filter => \&filter);
+#    $filtered_total_pairs+=scalar(@filtered_total);
+##    print("DEBUG: adding ",scalar(@filtered_total),"alignments to the total\n");
+#    @filtered_total=();
+#}
 
 #my @pairs = $sam->get_features_by_location(-type=>'read_pair',-seq_id => 'Y');
 #my $unfiltered_y_pairs=scalar(@pairs);
