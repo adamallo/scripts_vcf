@@ -10,7 +10,7 @@ use Env;
 
 ##Configuration variables
 ######################################################
-our $private="";
+our $private="-p private";
 our $sep_param="#";
 our $sep_value=":";
 our $OFS=",";
@@ -26,7 +26,7 @@ our $qsub="sbatch ${private} -N 1 -c ";
 our $qsub_noparallel="sbatch ${private} -N 1 -n 1 -c 1";
 our $qstat="qstat";
 our $sed='sed "s/Submitted batch job \(.*\)/\1/"';
-
+our $sleep=60;
 ######################################################
 
 ##IO Variables
@@ -174,10 +174,8 @@ if(! -f "N.vcf")
 {
 	$bamfiles=$normal_bam;
 	$exe_condition="";
-	my $job_id=`$qsub $variant_calling_sh $bamfiles N.vcf N_platypus.log $exe_condition | $sed`;
-   		chomp($job_id);
-    	$job_ids{$job_id}=1;
-	print("\tNormal tissue variant calling submited with job_id $job_id\n");
+    my $job_id=submit_job("$qsub $variant_calling_sh $bamfiles N.vcf N_platypus.log $exe_condition");
+    print("\tNormal tissue variant calling submited with job_id $job_id\n");
 }
 else
 {
@@ -188,11 +186,8 @@ if(! -f "A.vcf")
 {
 	$bamfiles=$sample1_bam;
 	$exe_condition="";
-	my $job_id=`$qsub $variant_calling_sh $bamfiles A.vcf A_platypus.log $exe_condition | $sed`;
-    	chomp($job_id);
-    	$job_ids{$job_id}=1;
+    my $job_id=submit_job("$qsub $variant_calling_sh $bamfiles A.vcf A_platypus.log $exe_condition"); 
 	print("\tSample A variant calling submited with job_id $job_id\n");
-
 }
 else
 {
@@ -203,11 +198,8 @@ if(! -f "B.vcf")
 {
 	$bamfiles=$sample2_bam;
 	$exe_condition="";
-	my $job_id=`$qsub $variant_calling_sh $bamfiles B.vcf B_platypus.log $exe_condition | $sed`;
-    	chomp($job_id);
-    	$job_ids{$job_id}=1;
+	my $job_id=submit_job("$qsub $variant_calling_sh $bamfiles B.vcf B_platypus.log $exe_condition");
 	print("\tSample B variant calling submited with job_id $job_id\n");
-
 }
 else
 {
@@ -218,11 +210,8 @@ if(! -f "NAB.vcf")
 {
 	$bamfiles="$normal_bam,$sample1_bam,$sample2_bam";
 	$exe_condition="";
-	my $job_id=`$qsub $variant_calling_sh $bamfiles NAB.vcf NAB_platypus.log $exe_condition | $sed`;
-    	chomp($job_id);
-    	$job_ids{$job_id}=1;
+	my $job_id=submit_job("$qsub $variant_calling_sh $bamfiles NAB.vcf NAB_platypus.log $exe_condition");
 	print("\tSample NAB variant calling submited with job_id $job_id\n");
-
 }
 else
 {
@@ -234,7 +223,7 @@ else
 ### Calling with filters (Only cancer samples so far)
 ##############################################################
 my $job_id;
-	my $actual_exe_conditions;
+my $actual_exe_conditions;
 print("Filtered variant calling detection/execution:\n");	
 foreach my $exe_condition (@exe_conditions)
 {
@@ -252,9 +241,8 @@ foreach my $exe_condition (@exe_conditions)
             		#print("DEBUG: A: Real exe_conditions\n");
         		}
         		#print("DEBUG: qsub -e e_logs/ -o o_logs/ -q shortq $variant_calling_sh -F \"$bamfiles $actual_exe_conditions A$sep_param$exe_condition.vcf A$sep_param${exe_conditions}_platypus.log\" | sed \"s/.master.cm.cluster//\"");
-		$job_id=`$qsub $variant_calling_sh $bamfiles A$sep_param$exe_condition.vcf A$sep_param${exe_condition}_platypus.log $actual_exe_conditions  | $sed`;
-		chomp($job_id);
-        		$job_ids{$job_id}=1;
+		
+        $job_id=submit_job("$qsub $variant_calling_sh $bamfiles A$sep_param$exe_condition.vcf A$sep_param${exe_condition}_platypus.log $actual_exe_conditions");
 		print("\tSample A variant calling for conditions $exe_condition submited with job_id $job_id\n");
 
 	}
@@ -276,9 +264,7 @@ foreach my $exe_condition (@exe_conditions)
            	 		$actual_exe_conditions=join(" ",split("$sep_value",join(" ",split("$sep_param",$exe_condition))));
             		#print("DEBUG: B: Real exe_conditions\n");
         		}
-		$job_id=`$qsub $variant_calling_sh $bamfiles B$sep_param$exe_condition.vcf B$sep_param${exe_condition}_platypus.log $actual_exe_conditions | $sed`;
-    		chomp($job_id);	
-        		$job_ids{$job_id}=1;
+		$job_id=submit_job("$qsub $variant_calling_sh $bamfiles B$sep_param$exe_condition.vcf B$sep_param${exe_condition}_platypus.log $actual_exe_conditions");
 		print("\tSample B variant calling for conditions $exe_condition submited with job_id $job_id\n");
 
 	}
@@ -294,25 +280,19 @@ wait_for_jobs();
 
 if(-f $onfile2)
 {
-    $job_id=`$qsub $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile2 $onfile2 -o $output_file --n_cores $n_cores | $sed`;
+    $job_id=submit_job("$qsub $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile3 $onfile2 -o $output_file --n_cores $n_cores");
 }
 else
 {
-    $job_id=`$qsub $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile -o $output_file --n_cores $n_cores | $sed`;
+    $job_id=submit_job("$qsub $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile -o $output_file --n_cores $n_cores");
 }
-chomp($job_id);
-$job_ids{$job_id}=1;
-
 print("The filtering and analysis of the vcf files is being conducted with the job_id $job_id\n");
+
 wait_for_jobs();
 
-
-$job_id=`$qsub_noparallel $tstv_sh $output_dir | $sed`;
-
-chomp($job_id);
-$job_ids{$job_id}=1;
-
+$job_id=submit_job("$qsub_noparallel $tstv_sh $output_dir");
 print("Ts/Tv statistics are being calculated in the job_id $job_id\n");
+
 wait_for_jobs();
 
 #print("Analysis finished.\n\nAnnotation:\n");
@@ -357,18 +337,35 @@ exit;
 ###FUNCTIONS
 ###################################################################################
 
+sub submit_job
+{
+    my ($command)=@_;
+    my $job_id="";
+    $job_id=`$command | $sed`;
+    chomp($job_id);
+    while ($job_id eq "")
+    {
+	    print("WARNING: Job submission has failed, trying again\n");
+        sleep($sleep);
+        $job_id=`$command | $sed`;
+   		chomp($job_id);
+    }
+    $job_ids{$job_id}=1;
+    return $job_id;
+}
+
 sub wait_for_jobs
 {
     my $awk='awk \'BEGIN{FS=" ";var=1}{if ($5 != "C"){var=0}}END{print var}\'';
     while (scalar keys %job_ids != 0)##Check 
     {
-    	sleep(60); 
+    	sleep($sleep); 
     	print("\tPending jobs ",join(",",keys %job_ids),"\n");
     	foreach my $id (keys %job_ids)
 	    {
 		    my $status=`$qstat $id | tail -n 1 | $awk`;
         	#print("DEBUG: Status job id $id : $status\n");
-        	if($status==1) ## 1 means that the job has finished
+        	if($status eq 1) ## 1 means that the job has finished
         	{
             	delete($job_ids{$id});
         	}

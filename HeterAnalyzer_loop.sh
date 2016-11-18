@@ -20,13 +20,27 @@ else
 fi
 
 EXE_DIR=$SCRIPTSVCF_DIR
+declare -A job_ids
 
 while read -r output normal a b
 do
-(time $EXE_DIR/HeterAnalyzer_control.pl -e $exe_params -f $filtering_params --NABfilt_cond_inputfile $NAB_params --NABfilt_cond_inputfile2 $NAB2_params -o $dir/${output}.csv --normal_bamfile $normal --sample_A_bamfile $a --sample_B_bamfile $b --output_dir $dir/$output --n_cores $n_cores > $dir/${output}.out) &
+id=$(sbatch -p private <( echo -e '#!/bin/bash'"\n $EXE_DIR/HeterAnalyzer_control.pl -e $exe_params -f $filtering_params --NABfilt_cond_inputfile $NAB_params --NABfilt_cond_inputfile2 $NAB2_params -o $dir/${output}.csv --normal_bamfile $normal --sample_A_bamfile $a --sample_B_bamfile $b --output_dir $dir/$output --n_cores $n_cores > $dir/${output}.out") | sed "s/Submitted batch job \(.*\)/\1/")
+#(time $EXE_DIR/HeterAnalyzer_control.pl -e $exe_params -f $filtering_params --NABfilt_cond_inputfile $NAB_params --NABfilt_cond_inputfile2 $NAB2_params -o $dir/${output}.csv --normal_bamfile $normal --sample_A_bamfile $a --sample_B_bamfile $b --output_dir $dir/$output --n_cores $n_cores > $dir/${output}.out) &
+job_ids[$id]=1
 done < $torun
 
-wait
+while [[ "${#job_ids[@]}" -ne 0 ]]
+do
+    for id in "${!job_ids[@]}"
+    do
+        qstat=$(qstat $id | tail -n 1 | awk 'BEGIN{FS=" ";var=1}{if ($5 != "C"){var=0}}END{print var}')
+        if [[ $qstat == 1 ]]
+        then
+            unset $job_ids[$id]
+        fi
+    done
+    sleep 10
+done
 
 #TsTv calculation has been integrated in HeterAnalyzer_control
 
