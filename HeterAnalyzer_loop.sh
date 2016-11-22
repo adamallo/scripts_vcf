@@ -24,15 +24,13 @@ EXE_DIR=$SCRIPTSVCF_DIR
 dependency=""
 while read -r output normal a b
 do
-id=$(sbatch -p private <( echo -e '#!/bin/bash'"\n $EXE_DIR/HeterAnalyzer_control.pl -e $exe_params -f $filtering_params --NABfilt_cond_inputfile $NAB_params --NABfilt_cond_inputfile2 $NAB2_params -o $dir/${output}.csv --normal_bamfile $normal --sample_A_bamfile $a --sample_B_bamfile $b --output_dir $dir/$output --n_cores $n_cores > $dir/${output}.out") | sed "s/Submitted batch job \(.*\)/\1/")
-#(time $EXE_DIR/HeterAnalyzer_control.pl -e $exe_params -f $filtering_params --NABfilt_cond_inputfile $NAB_params --NABfilt_cond_inputfile2 $NAB2_params -o $dir/${output}.csv --normal_bamfile $normal --sample_A_bamfile $a --sample_B_bamfile $b --output_dir $dir/$output --n_cores $n_cores > $dir/${output}.out) &
-dependency="${dependency}${id}:"
-#job_ids[$id]=1
+    id=$(sbatch -p private --job-name=${output}_HetAn <( echo -e '#!/bin/bash'"\n $EXE_DIR/HeterAnalyzer_control.pl -e $exe_params -f $filtering_params --NABfilt_cond_inputfile $NAB_params --NABfilt_cond_inputfile2 $NAB2_params -o $dir/${output}.csv --normal_bamfile $normal --sample_A_bamfile $a --sample_B_bamfile $b --output_dir $dir/$output --n_cores $n_cores > $dir/${output}.out") | sed "s/Submitted batch job \(.*\)/\1/")
+    #(time $EXE_DIR/HeterAnalyzer_control.pl -e $exe_params -f $filtering_params --NABfilt_cond_inputfile $NAB_params --NABfilt_cond_inputfile2 $NAB2_params -o $dir/${output}.csv --normal_bamfile $normal --sample_A_bamfile $a --sample_B_bamfile $b --output_dir $dir/$output --n_cores $n_cores > $dir/${output}.out) &
+    dependency="${dependency}:${id}"
+    #job_ids[$id]=1
 done < $torun
 
-dependency=${dependency:0:${#dependency} - 1}
-
-sbatch -p private --dependency=afterok:$dependency $EXE_DIR/postHeterAnalyzer.sh $dir $torun $exe_params $filtering_params $NAB_params $NAB2_params $n_cores 
+#dependency=${dependency:0:${#dependency} - 1}
 
 #while [[ "${#job_ids[@]}" -ne 0 ]]
 #do
@@ -46,6 +44,8 @@ sbatch -p private --dependency=afterok:$dependency $EXE_DIR/postHeterAnalyzer.sh
 #    done
 #    sleep 10
 #done
+
+sbatch -p private --job-name=getdependencies --dependency=afterok$dependency <(echo -e '#!/bin/bash' "\ndependency=\"\";while read -r output normal a b;do id=\$(tail -n 1 $dir/\${output}.out);dependency=\"\$dependency:\$id\";done < $torun;sbatch -p private --dependency=afterok\$dependency $EXE_DIR/postHeterAnalyzer.sh $dir $torun $exe_params $filtering_params $NAB_params $NAB2_params $n_cores")
 
 #TsTv calculation has been integrated in HeterAnalyzer_control
 

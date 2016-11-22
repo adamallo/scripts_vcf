@@ -276,24 +276,30 @@ foreach my $exe_condition (@exe_conditions)
 
 } 
 
-wait_for_jobs();
+my $deps=compile_dependencies();
+#wait_for_jobs();
 
 if(-f $onfile2)
-{
-    $job_id=submit_job("$qsub $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile3 $onfile2 -o $output_file --n_cores $n_cores");
+{   
+    $job_id=submit_job("$qsub --dependency=afterok:$deps $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile3 $onfile2 -o $output_file --n_cores $n_cores");
+    #$job_id=submit_job("$qsub $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile3 $onfile2 -o $output_file --n_cores $n_cores");
 }
 else
 {
-    $job_id=submit_job("$qsub $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile -o $output_file --n_cores $n_cores");
+    $job_id=submit_job("$qsub --dependency=afterok:$deps $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile -o $output_file --n_cores $n_cores");
+    #$job_id=submit_job("$qsub $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile -o $output_file --n_cores $n_cores");
 }
 print("The filtering and analysis of the vcf files is being conducted with the job_id $job_id\n");
 
-wait_for_jobs();
+$deps=compile_dependencies();
+#wait_for_jobs();
 
-$job_id=submit_job("$qsub_noparallel $tstv_sh $output_dir");
+#$job_id=submit_job("$qsub_noparallel $tstv_sh $output_dir");
+$job_id=submit_job("$qsub_noparallel --dependency=afterok:$deps $tstv_sh $output_dir");
+
 print("Ts/Tv statistics are being calculated in the job_id $job_id\n");
 
-wait_for_jobs();
+#wait_for_jobs();
 
 #print("Analysis finished.\n\nAnnotation:\n");
 #opendir(my $DIR, ".");
@@ -312,24 +318,9 @@ wait_for_jobs();
 #
 #closedir $DIR;
 #
-#while (scalar keys %job_ids != 0) 
-#{
-#    	sleep(60); 
-#        print("\tPending jobs ",join(",",keys %job_ids),"\n");
-#    	foreach my $id (keys %job_ids)
-#	    {
-#		        my $status=system "qstat $id >/dev/null 2>&1";
-#                
-#        		#print("DEBUG: Status job id $id : $status\n");
-#        		if($status!=0)
-#        		{
-#            		delete($job_ids{$id});
-#        		}
-#	    }
-#	
-#}
-#
-print("Finished!!!\n");
+
+print("Jobs submitted!\n$job_id");
+#print("Finished!!!\n");
 
 exit;
 
@@ -352,6 +343,28 @@ sub submit_job
     }
     $job_ids{$job_id}=1;
     return $job_id;
+}
+
+sub compile_dependencies
+{
+    my $option="";
+    if (scalar(@_) ==1)
+    {
+        ($option)=@_;
+    }
+    my $dependencies="";
+    my $keep=0;
+    if ($option =~/keep/i)
+    {
+        $keep=1;    
+    }
+    for my $key (keys %job_ids)
+    {
+        $dependencies="$dependencies$key:";
+        $keep == 0 and delete($job_ids{$key});
+    }
+    chop($dependencies);
+    return $dependencies;
 }
 
 sub wait_for_jobs
