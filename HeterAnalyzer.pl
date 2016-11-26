@@ -1148,7 +1148,7 @@ sub filtervalues_changepost
     #    print("DEBUG: before modification ",join(",",@temp));
         for (my $j=0; $j<scalar @temp; $j++)
         {
-            $temp[$j]=~s/0_/${pos_N}_/;
+            $temp[$j]=~s/0_/${pos}_/;
         }
         $array[$i]=\@temp;
     #    print(" after modification ",join(",",@{$array[$i]}),"\n");

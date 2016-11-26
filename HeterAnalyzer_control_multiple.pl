@@ -148,7 +148,7 @@ if (! -f "$vcf_filt_exe")
     die "The executable vcf_filtering.pl can't be located. Please, make sure that the environment variable SCRIPTSVCF_DIR indicates the directory with this package of scripts\n";
 }
 
-my $postanalyzer_exe="$SCRIPTSVCF_DIR/postHeterAnalyzer.sh";
+my $postanalyzer_exe="$SCRIPTSVCF_DIR/postHeterAnalyzer_multiple.sh";
 if (! -f $postanalyzer_exe)
 {
     die "The executable postanalyzer.exe can't be located. Please, make sure that the environment variable SCRIPTSVCF_DIR indicates the directory with this package of scripts\n";
@@ -290,7 +290,7 @@ for (my $i=0; $i<scalar(@afiles); ++$i)
         $bamfiles="$normalfile,".$afiles[$i].",".$afiles[$j];
         $vcfname=basename($normalfile)."_".basename($afiles[$i])."_".basename($afiles[$j]);
         $vcfname=~s/.bam//g;
-        unless (-f $vcfname) ##Variant calling for each NAB file
+        unless (-f "$vcfname.vcf") ##Variant calling for each NAB file
         {
             $job_id=submit_job_name($vcfname,"$qsub $variant_calling_sh $bamfiles $vcfname.vcf ${vcfname}_platypus.log $exe_condition");
             print("\tSample $vcfname variant calling submited with job_id $job_id\n");
@@ -337,11 +337,11 @@ foreach my $name (keys %cases)
     }
     if(-f $onfile2)
     {   
-        $job_id=submit_job_name("tstv","$qsub $deps $helper_sh $helper_pl --output_folder $output_dir/$name -n $normal -a $a -b $b -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile3 $onfile2 -o $name --n_cores $n_cores");
+        $job_id=submit_job_name("tstv","$qsub $deps $helper_sh $helper_pl --output_folder $output_dir/$name -n $normal -a $a -b $b -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile2 $onfile2 -o $name.csv --n_cores $n_cores");
     }
     else
     {
-        $job_id=submit_job_name("tstv","$qsub $deps $helper_sh $helper_pl --output_folder $output_dir/$name -n $normal -a $a -b $b -e $oefile -f $offile --NABfilt_cond_inputfile $onfile -o $name --n_cores $n_cores");
+        $job_id=submit_job_name("tstv","$qsub $deps $helper_sh $helper_pl --output_folder $output_dir/$name -n $normal -a $a -b $b -e $oefile -f $offile --NABfilt_cond_inputfile $onfile -o $name.csv --n_cores $n_cores");
     }
     print("The filtering and analysis of the vcf files is being conducted with the job_id $job_id\n");
     

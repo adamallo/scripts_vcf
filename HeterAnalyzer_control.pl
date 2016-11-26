@@ -281,7 +281,7 @@ my $deps=compile_dependencies();
 
 if(-f $onfile2)
 {   
-    $job_id=submit_job("$qsub --dependency=afterok:$deps $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile3 $onfile2 -o $output_file --n_cores $n_cores");
+    $job_id=submit_job("$qsub --dependency=afterok:$deps $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile2 $onfile2 -o $output_file --n_cores $n_cores");
     #$job_id=submit_job("$qsub $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile3 $onfile2 -o $output_file --n_cores $n_cores");
 }
 else

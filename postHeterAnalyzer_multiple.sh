@@ -25,11 +25,18 @@ while read -r output normal a b
 do
     ##General tstv postprocessing
     i=$dir/$output
-    tail -n +2 tstv.csv | sed -n -e "/${normal}_*.vcf/p" -e "/${a}_*.vcf/p" -e "/${b}_*.vcf/p" | sed -e "s/$normal/N/" -e "s/$a/A/" -e "s/$b/B/" -e "s/N_A_B/NAB/" -e "s/N_B_A/NAB/">> $i/tstv.csv
+    namenormal=$(basename $normal )
+    namenormal=$(echo $namenormal | sed "s/.bam//")
+    namea=$(basename $a)
+    namea=$(echo $namea | sed "s/.bam//")
+    nameb=$(basename $b)
+    nameb=$(echo $nameb | sed "s/.bam//")
+
+    tail -n +2 tstv.csv | sed -n -e "/^${namenormal},/p" -e "/^${namea}.*,/p" -e "/^${nameb}.*,/p" -e "/^${namenormal}_${namea}_${nameb}.*,/p" -e "/^${namenormal}_${nameb}_${namea}.*,/p" | sed -e "s/$namenormal/N/g" -e "s/$namea/A/g" -e "s/$nameb/B/g" -e "s/N_A_B/NAB/" -e "s/N_B_A/NAB/" | sort | uniq >> $i/tstv.csv
     perl $EXE_DIR/tstv_pretabulate_heter.pl $i/tstv.csv $i/tstv.tomerge
     #name=$(basename $i)
     #dir=$(echo $i | sed "s/\/[^\/]*$//")
-    cat ${dir}/${output}.csv | awk 'BEGIN{OFS=",";FS=","}{out="";for (i=2;i<=NF;++i){out=out $i OFS};out=substr(out,0,length(out)-1);print out}' > $i/csvtomerge.temp
+    cat ${i}/${output}.csv | awk 'BEGIN{OFS=",";FS=","}{out="";for (i=2;i<=NF;++i){out=out $i OFS};out=substr(out,0,length(out)-1);print out}' > $i/csvtomerge.temp
     perl $EXE_DIR/merge_csv.pl $i/csvtomerge.temp $i/tstv.tomerge $i/${output}_withtstv.temp
     rm -f $i/csvtomerge.temp
     cat $i/${output}_withtstv.temp | awk "BEGIN{OFS=\",\"}{if (NR==1) {print \"Sample\",\$0} else {print \"$output\",\$0}}" > ${dir}/${output}_withtstv.csv
