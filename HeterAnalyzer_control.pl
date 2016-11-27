@@ -278,20 +278,24 @@ foreach my $exe_condition (@exe_conditions)
 
 my $deps=compile_dependencies();
 #wait_for_jobs();
+if ($deps ne "")
+{
+    $deps="--dependency=afterok:$deps";
+}
 
 if(-f $onfile2)
 {   
-    $job_id=submit_job("$qsub --dependency=afterok:$deps $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile2 $onfile2 -o $output_file --n_cores $n_cores");
+    $job_id=submit_job("$qsub $deps $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile2 $onfile2 -o $output_file --n_cores $n_cores");
     #$job_id=submit_job("$qsub $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile3 $onfile2 -o $output_file --n_cores $n_cores");
 }
 else
 {
-    $job_id=submit_job("$qsub --dependency=afterok:$deps $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile -o $output_file --n_cores $n_cores");
+    $job_id=submit_job("$qsub $deps $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile -o $output_file --n_cores $n_cores");
     #$job_id=submit_job("$qsub $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile -o $output_file --n_cores $n_cores");
 }
 print("The filtering and analysis of the vcf files is being conducted with the job_id $job_id\n");
 
-$deps=compile_dependencies();
+$deps=compile_dependencies(); #This can never be ""
 #wait_for_jobs();
 
 #$job_id=submit_job("$qsub_noparallel $tstv_sh $output_dir");
