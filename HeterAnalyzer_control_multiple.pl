@@ -199,7 +199,6 @@ combs(0,"",\@NABfiltering_parameters1,\@NABfiltering_param_values1,\@NABfilterin
 combs(0,"",\@NABfiltering_parameters2,\@NABfiltering_param_values2,\@NABfiltering_conditions2);
 
 our %job_ids;
-my $exe_condition;
 
 mkdir("e_logs");
 mkdir("o_logs");
@@ -216,7 +215,7 @@ print("Unfiltered variant calling detection/execution:\n");
 if(! -f $normalvcf)
 {
 	$bamfiles=$normalfile;
-	$exe_condition="";
+	my $exe_condition="";
     $job_id=submit_job_name($vcfname,"$qsub $variant_calling_sh $bamfiles $vcfname.vcf ${vcfname}_platypus.log $exe_condition");
     print("\tNormal tissue variant calling submited with job_id $job_id\n");
 }
@@ -229,7 +228,6 @@ my @afiles=sort keys %datafiles; #If we do not sort them NAB files will not have
 my $fjob_id="";
 my $actual_exe_conditions;
 
-$exe_condition="";
 for (my $i=0; $i<scalar(@afiles); ++$i)
 {
     $bamfiles=$afiles[$i];
@@ -237,7 +235,7 @@ for (my $i=0; $i<scalar(@afiles); ++$i)
     $vcfname=~s/.bam//;
     unless (-f "$vcfname.vcf") ##Variant calling for each cancer file
     {
-        $job_id=submit_job_name($vcfname,"$qsub $variant_calling_sh $bamfiles $vcfname.vcf ${vcfname}_platypus.log $exe_condition"); ##Defaults do not generate dependencies
+        $job_id=submit_job_name($vcfname,"$qsub $variant_calling_sh $bamfiles $vcfname.vcf ${vcfname}_platypus.log"); ##Defaults do not generate dependencies
         print("\tSample $vcfname variant calling submited with job_id $job_id\n");
     }
     else
@@ -260,27 +258,34 @@ for (my $i=0; $i<scalar(@afiles); ++$i)
         		#print("DEBUG: A: Real exe_conditions\n");
         	}
             $job_id=submit_job_name($vcfname,"$qsub $variant_calling_sh $bamfiles $vcfname$sep_param$exe_condition.vcf $vcfname$sep_param${exe_condition}_platypus.log $actual_exe_conditions");
-            print("\tSample $vcfname variant calling submited with job_id $job_id\n");
+            print("\tSample $vcfname$sep_param$exe_condition.vcf variant calling submited with job_id $job_id\n");
         }
         else
         {
-            print("\tSample $vcfname variant calling already present. Skipping\n");
+            print("\tSample $vcfname$sep_param$exe_condition.vcf variant calling already present. Skipping\n");
         }
         for my $filtering_condition (@filtering_conditions)
         {
             my $condition="$exe_condition$sep_param$filtering_condition";
-            my $filtering_command="$vcf_filt_exe ";
-            $filtering_command.=join(" ",split("$sep_value",join(" ",split("$sep_param",$filtering_condition))));
-            if($job_id eq "")
+            unless (-f "$vcfname$sep_param$condition.vcf")
             {
-                #No dependency
-                $fjob_id=submit_job_name($vcfname,"$qsub_noparallel --job-name=$vcfname$sep_param${condition}_filtering $filtering_command -i $vcfname.vcf -o $vcfname$sep_param$condition.vcf");
-                print("\tFiltering $vcfname to generate $vcfname$sep_param$condition.vcf in job $fjob_id\n"); 
+                my $filtering_command="$vcf_filt_exe ";
+                $filtering_command.=join(" ",split("$sep_value",join(" ",split("$sep_param",$filtering_condition))));
+                if($job_id eq "")
+                {
+                    #No dependency
+                    $fjob_id=submit_job_name($vcfname,"$qsub_noparallel --job-name=$vcfname$sep_param${condition}_filtering $filtering_command -i $vcfname$sep_param$exe_condition.vcf -o $vcfname$sep_param$condition.vcf");
+                    print("\tFiltering $vcfname$sep_param$exe_condition to generate $vcfname$sep_param$condition.vcf in job $fjob_id\n"); 
+                }
+                else
+                {
+                    $fjob_id=submit_job_name($vcfname,"$qsub_noparallel --dependency=afterok:$job_id --job-name=$vcfname$sep_param${condition}_filtering $filtering_command -i $vcfname$sep_param$exe_condition.vcf -o $vcfname$sep_param$condition.vcf");
+                    print("\tFiltering $vcfname$sep_param$exe_condition to generate $vcfname$sep_param$condition.vcf in job $fjob_id\n"); 
+                }
             }
             else
             {
-                $fjob_id=submit_job_name($vcfname,"$qsub_noparallel --dependency=afterok:$job_id --job-name=$vcfname$sep_param${condition}_filtering $filtering_command -i $vcfname.vcf -o $vcfname$sep_param$condition.vcf");
-                print("\tFiltering $vcfname to generate $vcfname$sep_param$condition.vcf in job $fjob_id\n"); 
+                print("\tSample $vcfname$sep_param$condition.vcf already present. Skipping\n");
             }
         }
     }    
@@ -292,7 +297,7 @@ for (my $i=0; $i<scalar(@afiles); ++$i)
         $vcfname=~s/.bam//g;
         unless (-f "$vcfname.vcf") ##Variant calling for each NAB file
         {
-            $job_id=submit_job_name($vcfname,"$qsub $variant_calling_sh $bamfiles $vcfname.vcf ${vcfname}_platypus.log $exe_condition");
+            $job_id=submit_job_name($vcfname,"$qsub $variant_calling_sh $bamfiles $vcfname.vcf ${vcfname}_platypus.log");
             print("\tSample $vcfname variant calling submited with job_id $job_id\n");
         }
         else
@@ -327,6 +332,15 @@ foreach my $name (keys %cases)
     {
         push(@tempdeps,join(":",@{$job_ids{$b}}));
     }
+    if(exists $job_ids{"${normal}_${a}_${b}"}) ##
+    {
+        push(@tempdeps,join(":",@{$job_ids{"${normal}_${a}_${b}"}}));
+    }
+    if(exists $job_ids{"${normal}_${b}_${a}"})
+    {
+        push(@tempdeps,join(":",@{$job_ids{"${normal}_${b}_${a}"}}));
+    }
+
     if (scalar @tempdeps > 0)
     {
         $deps="--dependency=afterok:".join(":",@tempdeps);
