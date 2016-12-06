@@ -26,6 +26,7 @@ closedir($DH);
 
 foreach my $dir (@dirs)
 {
+    #print("DEBUG: $dir");
     my $name=basename($dir);
     my @common_files=glob("$dir/filtNABU#*common.vcf.annotated.variant_function");
     my $common_file=$common_files[0];

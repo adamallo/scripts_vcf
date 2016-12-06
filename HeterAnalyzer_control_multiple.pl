@@ -17,7 +17,7 @@ our $OFS=",";
 our $FS=",";
 our $variant_caller="platypus";
 our $variant_calling_sh;
-our $helper_sh="vcfFilteringTableV2_analyser_helper.sh";
+our $helper_sh="HeterAnalyzer_multiple_helper.sh";
 our $helper_pl="HeterAnalyzer_multiple.pl";
 our $tstv_sh="tstv.sbatch";
 #our $annotation_sh="annovar.sh";
@@ -364,31 +364,30 @@ foreach my $name (keys %cases)
    
 }
 
-$deps=join(":",@{$job_ids{"tstv"}});
+###Annovar and Ts/Tv for the main directory
+#Depends on variant calling
+my @temp;
+foreach my $key (keys %job_ids)
+{
+    unless ($key =~ /tstv/) #All variant callings
+    {
+        push(@temp,@{$job_ids{$key}});
+    }
+}
+if (scalar @temp > 0)
+{
+    $deps="--dependency=afterok:".join(":",@temp);
+}
+else
+{
+    $deps="";
+}
+$job_id=submit_job_name("tstv","$qsub $deps $helper_sh $n_cores");
 
-$job_id=submit_job_name("tstv","$qsub_noparallel --dependency=afterok:$deps $tstv_sh $output_dir");
+$job_id=submit_job_name("tstv","$qsub_noparallel --dependency=afterok:$job_id $tstv_sh $output_dir");
 
 print("Common Ts/Tv statistics are being calculated in the job_id $job_id\n");
 
-#wait_for_jobs();
-
-#print("Analysis finished.\n\nAnnotation:\n");
-#opendir(my $DIR, ".");
-#
-#while (my $file = readdir($DIR))
-#{
-#    next unless (-f $file);
-#    if ($file=~/^.filtN.*\.vcf$/)
-#    {
-#        $job_id=`$qsub_noparallel $annotation_sh -F "$file" | sed "s/.master.cm.cluster//"`;
-#         chomp($job_id);
-#        $job_ids{$job_id}=1;
-#        print "Job to annotate the file $file $job_id\n";
-#    }
-#}
-#
-#closedir $DIR;
-#
 $deps=join(":",@{$job_ids{"tstv"}});
 $job_id=submit_job_name("","$qsub_noparallel --dependency=afterok:$deps $postanalyzer_exe $output_dir $ifile $oefile $offile $onfile $onfile2");
 print("PostHeterAnalyzer job submitted with job_id $job_id\n");
