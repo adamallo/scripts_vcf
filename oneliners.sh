@@ -30,3 +30,10 @@ samtools faidx /home/dmalload/temp_storage/GRCh37-lite_noY.fa
 #BWA indexes (needs quite a lot of RAM)
 bwa index /home/dmalload/temp_storage/GRCh37-lite.fa
 bwa index /home/dmalload/temp_storage/GRCh37-lite_noY.fa
+
+##Checks md5 files in a folder
+for i in *.md5; do name=$(echo $i | sed "s/.md5//");echo $(cat $i) " $name" | md5sum -c -;done > out.md5
+
+#Fasta dictionary
+module load picard/2.3.0
+picard CreateSequenceDictionary R=~/my_storage/GRCh37-lite.fa O=~/my_storage/GRCh37-lite.dict
