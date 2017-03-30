@@ -21,9 +21,11 @@ for my $dir (@dirs)
 			my @filesvariants=glob("$dir/${sample}filt${filter}#*different.vcf.annotated.variant_function");
 			scalar @filesvariants != 1 and die "Error filtering the files";
 			my $filevariants=$filesvariants[0];
-			my $filecounts="$dir/${sample}_${filter}_counts.csv";
+			my $filecounts="$dir/${sample}_${filter}_counts.tsv";
 			-f $filecounts or die "Error filtering the files. The file $filecounts does not exist";
 			
+			print("Working on $filevariants $filecounts\n");
+
 			##Get annovar variants
 			open(my $AVARIANTS,$filevariants);
 			my @avariants=<$AVARIANTS>;
@@ -31,20 +33,22 @@ for my $dir (@dirs)
 			
 			##Dictionary of annotated variants	
 			my %avardict=();
-			open(my $OANNR,">$dir/${sample}_${filter}.INDELS");
+			open(my $OANNR,">$dir/${sample}_${filter}.INDELS.tsv");
 			
+			print($OANNR "kind\tname\tchr\tposS\tposE\tref\talt\tzyg\tqual\tdepth\n");
 			foreach my $var (@avariants)
 			{
 				next unless $var =~ /\S/;
 				my @cols=split("\t",$var);
 				my $id="$cols[2]_$cols[3]";
-				if (length($cols[5]) != 1)
+				if (length($cols[5]) != 1 or length($cols[6]) !=1 or $cols[5]=~/\-/ or $cols[6]=~/\-/)
 				{
 					print($OANNR $var); ##We do not treat INDELS
 				}
 				else
 				{
 	#				print("DEBUG: $id\n");
+					chomp($var);
 					$avardict{$id}=$var;
 				}
 			}
@@ -61,25 +65,39 @@ for my $dir (@dirs)
 			{      
 				next unless $var =~ /\S/;
                                 next if $var =~/^#/;##Comment
+				chomp($var);
 				my @cols=split("\t",$var);
-				print("WTF: $cols[4]\n");
 	                        my $id="$cols[0]_$cols[1]";
 				my $p="NA";
 #				print("DEBUG: $id\n");
-				if ($cols[4] != 0)
+				my @readsalt=split(",",$cols[5]);
+				my $totalt=0;
+				foreach my $nalt (@readsalt)
 				{
-					$p=$cols[5]/$cols[4];
+					$totalt+=$nalt;
+				}
+				if ($totalt + $cols[4] !=0)
+				{
+					$p=$totalt/($totalt + $cols[4]);
 				}
 	                        $countsdict{$id}=[$cols[4],$cols[5],$p];
 			}
 
-			open(my $OANN,">$dir/${sample}_${filter}.SNVs");	
+			open(my $OANN,">$dir/${sample}_${filter}.SNVs.tsv");
+			print($OANN "kind\tname\tchr\tposS\tposE\tref\talt\tzyg\tqual\tdepth\tnrefCompSample\tnaltCompSample\tpropAltCompSample\n");
 			foreach my $id (keys %avardict)
 			{
-				my $toadd=join("\t",$countsdict{$id});
-				print($OANN "$avardict{$id}\t$toadd");
+				if (!exists $countsdict{$id})
+				{
+					print("WARNING: ID $id not present in the counts\n");
+				}
+				else
+				{
+					my $toadd=join("\t",@{$countsdict{$id}});
+					print($OANN "$avardict{$id}\t$toadd\n");
+				}
 			}			
 			close($OANN);
-		}		
+		}
 	}
 }
