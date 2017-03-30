@@ -23,7 +23,7 @@ do
                         echo "Geting the number of alternatives for $comp from $vcffile"
                         vcf2bed --deletions < $vcffile > $ID/${problem}_${filter}_deletions.bed
                         vcf2bed --snvs < $vcffile > $ID/${problem}_${filter}_snvs.bed
-                        bedops --everything $ID/${problem}_${filter}_{deletions,snvs}.bed > $ID/${problem}_${filter}.bed
+                        bedops --everything $ID/${problem}_${filter}_{deletions,snvs}.bed | awk 'BEGIN{OFS="\t"}{print($1,$2,$3)}' > $ID/${problem}_${filter}.bed
                         if [[ ! -f $ID/${comp}tocompareto${problem}_${filter}.vcf ]]
                         then
                             java -Xms512m -Xmx6G -jar $GATKJAR -T UnifiedGenotyper -R $GENOME -I ${!comp} -o $ID/${comp}tocompareto${problem}_${filter}.vcf --intervals $ID/${problem}_${filter}.bed --output_mode EMIT_ALL_SITES > $ID/${comp}tocompareto${problem}_${filter}.log 2>&1
