@@ -530,8 +530,10 @@ data_problem$type=c("Pure DCIS","Pure DCIS","Pure DCIS","Pure DCIS","Pure DCIS",
 data_problem$type=as.factor(data_problem$type)
 types=levels(data_problem$type)
 types=rev(types)
-data_problem$filtNAB_NU_somatic=c(29,2,13,4,7,7,11,44,6,3,1,98,13,73,16,0,6,4,5,1,51,89)
-data_problem$filtNAB_.U_somatic=c(31,8,18,14,20,11,20,55,17,8,6,114,43,85,36,3,20,6,15,6,62,124)
+#data_problem$filtNAB_NU_somatic=c(29,2,13,4,7,7,11,44,6,3,1,98,13,73,16,0,6,4,5,1,51,89)
+data_problem=data_problem[-2,]
+data_problem=data_problem[-15,]
+data_problem$filtNAB_.U_somatic=c(35,22,370,56,12,24,61,366,18,20,122,170,97,45,55,26,41,16,71,133)
 
 ###
 
@@ -547,8 +549,10 @@ save_plot("mut_burden.png",violin_mut_burden,base_height=2,base_aspect_ratio=.5)
 p_value=t.test(filtNAB_.U_somatic~type,data=data_problem)$p.value
 p_valuew=wilcox.test(filtNAB_.U_somatic~type,data=data_problem)$p.value
 
-violin_coding_burden=ggplot(data=data_problem, aes(y=filtNAB_.U_somatic,x=type,fill=type))+geom_violin()+geom_boxplot(width=.08,outlier.size=0.5)+scale_y_continuous(name=NULL)+labs(title="Number of somatic\n non-synonymous\n mutations")+scale_x_discrete(name=NULL,limits=types,labels=c("Pure DCIS", "DCIS with\n adjacent invasive"))+scale_fill_manual(values=c("#009E73","#0072B2"))+guides(fill=FALSE)+theme(text=element_text(size=6,face="bold"),axis.text.y=element_text(size=4),axis.text.x=element_text(size=4,face="bold"),plot.margin=unit(c(0.2,0.1,0.1,0.1),"cm"),plot.title=element_text(size=5))+annotate("text",x=1.2,y=100,label=paste0("T-test p-value = ",round(p_value,digits=3)),size=1.1)+annotate("text",x=1.2,y=95,label=paste0("Wilcoxon p-value =",round(p_valuew,digits=3)),size=1.1)
-save_plot("coding_burden.png",violin_coding_burden,base_height=2,base_aspect_ratio=.5)
+#violin_coding_burden=ggplot(data=data_problem, aes(y=filtNAB_.U_somatic,x=type,fill=type))+geom_violin()+geom_boxplot(width=.08,outlier.size=0.5)+scale_y_continuous(name=NULL)+labs(title="Number of somatic\n non-synonymous\n mutations")+scale_x_discrete(name=NULL,limits=types,labels=c("Pure DCIS", "DCIS with\n adjacent invasive"))+scale_fill_manual(values=c("#009E73","#0072B2"))+guides(fill=FALSE)+theme(text=element_text(size=6,face="bold"),axis.text.y=element_text(size=4),axis.text.x=element_text(size=4,face="bold"),plot.margin=unit(c(0.2,0.1,0.1,0.1),"cm"),plot.title=element_text(size=5))+annotate("text",x=1.2,y=100,label=paste0("T-test p-value = ",round(p_value,digits=3)),size=1.1)+annotate("text",x=1.2,y=95,label=paste0("Wilcoxon p-value =",round(p_valuew,digits=3)),size=1.1)
+violin_coding_burden=ggplot(data=data_problem, aes(y=filtNAB_.U_somatic,x=type,fill=type))+geom_violin()+geom_boxplot(width=.08,outlier.size=0.5)+scale_y_continuous(name=NULL)+labs(title="Number of somatic\n non-synonymous\n mutations")+scale_x_discrete(name=NULL,limits=types,labels=c("Pure DCIS", "DCIS with\n adjacent invasive"))+scale_fill_manual(values=c("#009E73","#0072B2"))+guides(fill=FALSE)+theme(text=element_text(size=6,face="bold"),axis.text.y=element_text(size=4),axis.text.x=element_text(size=4,face="bold"),plot.margin=unit(c(0.2,0.1,0.1,0.1),"cm"),plot.title=element_text(size=5))
+
+save_plot("coding_burden.pdf",violin_coding_burden,base_height=2,base_aspect_ratio=.5)
 
 
 #Similarity plot
@@ -647,8 +651,21 @@ plot_aldh2=ggplot(data=data, aes(y=stroma.ALDH.2,x=Type,fill=Type))+geom_violin(
 save_plot("aldh2.png",plot_aldh2,base_height=2,base_aspect_ratio=.5)
 
 p_value=as.numeric(out_data[out_data$id=="Mean.Number.Cancer.HS",]$p_value)
-plot_mean_cancer_hs=ggplot(data=data, aes(y=Mean.Number.Cancer.HS,x=Type,fill=Type))+geom_violin()+geom_boxplot(width=.05,outlier.size=0.5)+scale_y_continuous(name=NULL)+labs(title="Difference in mean\nnumber of cancer\nhotspots")+scale_x_discrete(name=NULL,limits=types,labels=c("Pure DCIS", "DCIS with\n adjacent invasive"))+scale_fill_manual(values=c("#009E73","#0072B2"))+guides(fill=FALSE)+theme(text=element_text(size=6,face="bold"),axis.text.y=element_text(size=4),axis.text.x=element_text(size=4,face="bold"),plot.margin=unit(c(0.2,0.1,0.1,0.1),"cm"),plot.title=element_text(size=5))+annotate("text",x=1.8,y=85,label=paste0("Wilcoxon \np-value = ",round(p_value,digits=3)),size=1.1)
+plot_mean_cancer_hs=ggplot(data=data, aes(y=Mean.Number.Cancer.HS,x=Type,fill=Type))+geom_violin()+geom_boxplot(width=.05,outlier.size=0.5)+scale_y_continuous(name=NULL)+labs(title="Mean of the number\nof cancer hotspots")+scale_x_discrete(name=NULL,limits=types,labels=c("Pure DCIS", "DCIS with\n adjacent invasive"))+scale_fill_manual(values=c("#009E73","#0072B2"))+guides(fill=FALSE)+theme(text=element_text(size=6,face="bold"),axis.text.y=element_text(size=4),axis.text.x=element_text(size=4,face="bold"),plot.margin=unit(c(0.2,0.1,0.1,0.1),"cm"),plot.title=element_text(size=5))+annotate("text",x=1.8,y=85,label=paste0("Wilcoxon \np-value = ",round(p_value,digits=3)),size=1.1)
 save_plot("meanhs.png",plot_mean_cancer_hs,base_height=2,base_aspect_ratio=.5)
+
+p_valuef=as.numeric(out_data[out_data$id=="StD.number.Cancer.HS",]$f_test.p_value)
+plot_sd_cancer_hs=ggplot(data=data, aes(y=StD.number.Cancer.HS,x=Type,fill=Type))+geom_violin()+geom_boxplot(width=.05,outlier.size=0.5)+scale_y_continuous(name=NULL)+labs(title="SD of the numbern\nof cancer hotspots")+scale_x_discrete(name=NULL,limits=types,labels=c("Pure DCIS", "DCIS with\n adjacent invasive"))+scale_fill_manual(values=c("#009E73","#0072B2"))+guides(fill=FALSE)+theme(text=element_text(size=6,face="bold"),axis.text.y=element_text(size=4),axis.text.x=element_text(size=4,face="bold"),plot.margin=unit(c(0.2,0.1,0.1,0.1),"cm"),plot.title=element_text(size=5))+annotate("text",x=1.8,y=85,label=paste0("F-test \np-value = ",round(p_valuef,digits=3)),size=1.1)
+save_plot("sdhs.png",plot_sd_cancer_hs,base_height=2,base_aspect_ratio=.5)
+
+
+#p_value=as.numeric(out_data[out_data$id=="Mean.Number.Cancer.HS",]$p_value)
+#plot_mean_cancer_hs=ggplot(data=data, aes(y=Mean.Number.Cancer.HS,x=Type,fill=Type))+geom_violin()+geom_boxplot(width=.05,outlier.size=0.5)+scale_y_continuous(name=NULL)+labs(title="Mean of the number\nof cancer hotspots")+scale_x_discrete(name=NULL,limits=types,labels=c("Pure DCIS", "DCIS with\n adjacent invasive"))+scale_fill_manual(values=c("#fbb4b9","#7a0177"))+guides(fill=FALSE)+theme(text=element_text(size=6,face="bold"),axis.text.y=element_text(size=4),axis.text.x=element_text(size=4,face="bold"),plot.margin=unit(c(0.2,0.1,0.1,0.1),"cm"),plot.title=element_text(size=5))+annotate("text",x=1.8,y=85,label=paste0("Wilcoxon \np-value = ",round(p_value,digits=3)),size=1.1)
+#save_plot("meanhs.pdf",plot_mean_cancer_hs,base_height=2,base_aspect_ratio=.5)
+#
+#p_valuef=as.numeric(out_data[out_data$id=="StD.number.Cancer.HS",]$f_test.p_value)
+#plot_sd_cancer_hs=ggplot(data=data, aes(y=StD.number.Cancer.HS,x=Type,fill=Type))+geom_violin()+geom_boxplot(width=.05,outlier.size=0.5)+scale_y_continuous(name=NULL)+labs(title="SD of the numbern\nof cancer hotspots")+scale_x_discrete(name=NULL,limits=types,labels=c("Pure DCIS", "DCIS with\n adjacent invasive"))+scale_fill_manual(values=c("#fbb4b9","#7a0177"))+guides(fill=FALSE)+theme(text=element_text(size=6,face="bold"),axis.text.y=element_text(size=4),axis.text.x=element_text(size=4,face="bold"),plot.margin=unit(c(0.2,0.1,0.1,0.1),"cm"),plot.title=element_text(size=5))+annotate("text",x=1.8,y=85,label=paste0("F-test \np-value = ",round(p_valuef,digits=4)),size=1.1)
+#save_plot("sdhs.pdf",plot_sd_cancer_hs,base_height=2,base_aspect_ratio=.5)
 
 p_value=as.numeric(out_data[out_data$id=="DCIS.P.FAK.3",]$p_value)
 plot_pfak=ggplot(data=data, aes(y=DCIS.P.FAK.3,x=Type,fill=Type))+geom_violin()+geom_boxplot(width=.05,outlier.size=0.5)+scale_y_continuous(name=NULL)+labs(title="Difference in % of\nslide with the maximum\n intensity of pFAK stain")+scale_x_discrete(name=NULL,limits=types,labels=c("Pure DCIS", "DCIS with\n adjacent invasive"))+scale_fill_manual(values=c("#009E73","#0072B2"))+guides(fill=FALSE)+theme(text=element_text(size=6,face="bold"),axis.text.y=element_text(size=4),axis.text.x=element_text(size=4,face="bold"),plot.margin=unit(c(0.2,0.1,0.1,0.1),"cm"),plot.title=element_text(size=5))+annotate("text",x=1.8,y=85,label=paste0("Wilcoxon \np-value = ",round(p_value,digits=3)),size=1.1)
