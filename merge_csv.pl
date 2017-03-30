@@ -65,7 +65,7 @@ foreach my $key (keys %parsed_csv1)
     }
 }
 
-if(scalar %parsed_csv2 >=1)
+if(scalar(keys %parsed_csv2) >=1)
 {
     die ("The ids ".join($OFS,keys %parsed_csv2)." are not present in the first CSV. Make sure that the CSV files are compatible before using this script\n");
 }

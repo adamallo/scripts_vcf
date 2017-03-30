@@ -29,11 +29,15 @@ my $filtercond_inputfile="";
 my $NABfiltercond_inputfile1="";
 my $NABfiltercond_inputfile2="";
 my $output_file="";
+my $output_folder="";
+my $Aname="A";
+my $Bname="B";
+my $Nname="N";
 my $SCRIPTSVCF_DIR=$ENV{'SCRIPTSVCF_DIR'};
 
 #Flags
 my $help;
-my $usage="Usage: $0 [options] -o output_file \n\nWARNING: This is a secondary script that is not inteded to be executed directly.\n\n\nOptions:\n--------\n\t-e/--exec_cond_inputfile : input file for execution parameters and options\n\t-f/--filt_cond_inputfile : input file for execution parameters and options\n\t--NABfilt_cond_inputfile : input file for the filtering options of the NAB sample\n\t--NABfilt_cond_inputfile2 : secondary input file for a secondary filter (OR filter implemented in a dirty way) of the NAB sample\n\t--output_dir : output directory for vcf files\n\t--n_cores : number of cores to execute some steps in parallel (requires the perl package Parallel::Loops)\n\n";
+my $usage="Usage: $0 [options] -o output_file \n\nWARNING: This is a secondary script that is not inteded to be executed directly.\n\n\nOptions:\n--------\n\t-e/--exec_cond_inputfile : input file for execution parameters and options\n\t-f/--filt_cond_inputfile : input file for execution parameters and options\n\t--NABfilt_cond_inputfile : input file for the filtering options of the NAB sample\n\t--NABfilt_cond_inputfile2 : secondary input file for a secondary filter (OR filter implemented in a dirty way) of the NAB sample\n\t--output_dir : output directory for vcf files\n\t--output_folder : output folder\n\t-a/--Aname : Name of the A file\n\t-b/--Bname : Name of the B file\n\t-n/--Nname : Name of the N file\n\t--n_cores : number of cores to execute some steps in parallel (requires the perl package Parallel::Loops)\n\n";
 ######################################################
 
 ######################################################
@@ -47,10 +51,14 @@ my $usage="Usage: $0 [options] -o output_file \n\nWARNING: This is a secondary s
 	'filt_cond_inputfile|f=s' => \$filtercond_inputfile,
 	'NABfilt_cond_inputfile=s' => \$NABfiltercond_inputfile1,
     'NABfilt_cond_inputfile2=s' => \$NABfiltercond_inputfile2,
+    'output_folder=s' => \$output_folder,
+    'Aname|a=s' => \$Aname,
+    'Bname|b=s' => \$Bname,
+    'Nname|n=s' => \$Nname,
 	'output_file|o=s' => \$output_file,
     'n_cores=i' => \$n_cores,
     'help|h' => \$help,
-                )) or (($output_file eq "") || $help) and die $usage;
+                )) or (($output_file eq "") || ($output_folder eq "") || $help) and die $usage;
 
 ##Load Parallel::Loops if it is available and it's needed
 #########################################################
@@ -117,21 +125,14 @@ if (! -f "$vcf_filt_exe")
 ## Parsing static variants
 ############################################################################################
 
-#my (%A,%B,%N);
 my %N;
 my ($ref_n,$nameN);
 
-#if ( -f "A.vcf" && -f "B.vcf" && -f "N.vcf")
-if ( -f "N.vcf")
+if ( -f "$Nname.vcf")
 {
-#    %A=%{parse_vcf("A.vcf")};
-#    %B=%{parse_vcf("B.vcf")};
-    ($ref_n,$nameN)=parse_vcf_name("N.vcf");
+    ($ref_n,$nameN)=parse_vcf_name("$Nname.vcf");
     #print("DEBUG: N genotype name $nameN\n");
     %N=%{$ref_n};
-#    my %AN=%{vcf_prune_single(\%A,\%N)};
-#    my %BN=%{vcf_prune_single(\%B,\%N)};
-#    @nofilt_results=(scalar keys %A, scalar keys %B, scalar keys %N, scalar keys %AN, scalar keys %BN);
 }
 else
 {
@@ -142,7 +143,23 @@ else
 ## Fixing NAB filters, since the N column is not always 0 as expected (weird platypus behaviour)
 ##########################################################################
 
-my $pos_N=get_col_name_vcf("NAB.vcf",$nameN);
+##Locate NAB
+my $pos_N;
+my $NABname="";
+if( -f "${Nname}_${Aname}_${Bname}.vcf")
+{
+    $NABname="${Nname}_${Aname}_${Bname}";
+    $pos_N=get_col_name_vcf("$NABname.vcf",$nameN);
+}
+elsif ( -f "${Nname}_${Bname}_${Aname}.vcf")
+{
+    $NABname="${Nname}_${Bname}_${Aname}";
+    $pos_N=get_col_name_vcf("$NABname.vcf",$nameN);
+}
+else
+{
+    die "NAB file of $Nname, $Aname and $Bname was not located in the current folder\n";
+}
 
 #print("DEBUG: N genotype column $pos_N\n");
 
@@ -181,13 +198,6 @@ if ($n_cores>1)
 ## NAB filtering and parsing
 ##########################################################################################
 
-if ( ! -f "NAB.vcf")
-{
-    die "Missing vcf files. Something weird has happend between the execution of the previous script and this one. Check that the variant calling step has finished succesfully and try to execute this script again\n";
-}
-
-my @NAB_hash_pointers;
-
 if($n_cores>1)
 {
     $parallel->foreach(\@NABfiltering_conditions1,\&filterNAB);
@@ -205,18 +215,18 @@ else
     }
 
 }
-
+my @NAB_hash_pointers;
 my @NAB_hash_pointers1;
 my @NAB_hash_pointers2;
 
 for (my $i=0; $i<scalar @NABfiltering_conditions1; ++$i)
 {
-    $NAB_hash_pointers1[$i]=parse_vcf("NAB$sep_param$NABfiltering_conditions1[$i].vcf");
+    $NAB_hash_pointers1[$i]=parse_vcf("$NABname$sep_param$NABfiltering_conditions1[$i].vcf");
 }
 
 for (my $i=0; $i<scalar @NABfiltering_conditions2; ++$i)
 {
-    $NAB_hash_pointers2[$i]=parse_vcf("NAB$sep_param$NABfiltering_conditions2[$i].vcf");
+    $NAB_hash_pointers2[$i]=parse_vcf("$NABname$sep_param$NABfiltering_conditions2[$i].vcf");
 }
 
 my $pos=0;
@@ -230,35 +240,24 @@ for (my $i=0; $i<scalar @NABfiltering_conditions1; ++$i)
     }
 }
 
-## Old germline filtering
-#########################################################################################
+##Output directory
+##################
 
-#my $filtering_command="$vcf_filt_exe ";
-#$filtering_command.="--isvar 1";
-#if (!-f "NAB${sep_param}germline.vcf")
-#{
-#	print("Filtering NAB.vcf to generate NAB${sep_param}germline.vcf\n");
-#	## Filter the right vcf file generated ini the outside loop	
-#	system("$filtering_command -i NAB.vcf -o NAB${sep_param}germline.vcf");
-#	#print("DEBUG: $filtering_command -i A$sep_param$exe_condition.vcf -o A$sep_param$condition.vcf \n");
-#}
-#else
-#{
-#	print("NAB${sep_param}germline.vcf had been previously generated and it will be recycled\n");
-#}
+##Adding original directory before changing to the new one in 
+my $dir=getcwd;
+my $AfullName="$dir/$Aname";
+my $BfullName="$dir/$Bname";
+my $NfullName="$dir/$Nname";
+my $NABfullName="$dir/$NABname";
+mkdir($output_folder);
+chdir($output_folder);
 
 
-##my @temp=parse_vcf_name("NAB${sep_param}germline.vcf");
-##my %NAB=%{$temp[0]};
-##my $nameN=$temp[1];
-
+##Main Loop
+###########
 foreach my $exe_condition (@exe_conditions) ##Options that require to call variants again 
 {
 #print("DEBUG: Exe condition loop $exe_condition\n");
-    if ((!-f "A$sep_param$exe_condition.vcf") || (!-f "B$sep_param$exe_condition.vcf")) ##VCF file we will use for filtering, if it does not exist we have to perform the variant calling
-    {
-        die "Missing vcf files. Something weird has happend between the execution of the previous script and this one. Check that the two scripts are using the same filtering options\n";
-    }
     my @current_conditions=@filtering_conditions;
     for (my $i=0; $i<scalar @filtering_conditions;++$i)
     {
@@ -312,10 +311,10 @@ sub filter
     my(%A,%B);
     my @nofilt_results;
     
-    if ( -f "A$sep_param$exe_condition.vcf" && -f "B$sep_param$exe_condition.vcf")
+    if ( -f "$AfullName$sep_param$exe_condition.vcf" && -f "$BfullName$sep_param$exe_condition.vcf")
     {
-        %A=%{parse_vcf("A$sep_param$exe_condition.vcf")};
-        %B=%{parse_vcf("B$sep_param$exe_condition.vcf")};
+        %A=%{parse_vcf("$AfullName$sep_param$exe_condition.vcf")};
+        %B=%{parse_vcf("$BfullName$sep_param$exe_condition.vcf")};
         my %AN=%{vcf_prune_single(\%A,\%N)};
         my %BN=%{vcf_prune_single(\%B,\%N)};
         @nofilt_results=(scalar keys %A, scalar keys %B, scalar keys %N, scalar keys %AN, scalar keys %BN);
@@ -324,35 +323,9 @@ sub filter
     {
         die "Missing vcf files. Something weird has happend between the execution of the previous script and this one. Check that the variant calling step has finished succesfully and try to execute this script again\n";
     }
-
-
-    if (!-f "A$sep_param$condition.vcf")
-    {
-        print("Filtering A$sep_param$exe_condition.vcf to generate A$sep_param$condition.vcf\n");
-## Filter the right vcf file generated in the outside loop	
-        system("$filtering_command -i A$sep_param$exe_condition.vcf -o A$sep_param$condition.vcf"); ## I don't think speed would be an issue, thus I'll call the filtering script every time (instead of writting a package and/or functions here)
-#print("DEBUG: $filtering_command -i A$sep_param$exe_condition.vcf -o A$sep_param$condition.vcf \n");
-
-    }
-    else
-    {
-        print("A$sep_param$condition.vcf has been previously generated and it will be recycled\n");
-    }
-
-    if (!-f "B$sep_param$condition.vcf")
-    {
-        print("Filtering B$sep_param$exe_condition.vcf to generate B$sep_param$condition.vcf\n");
-## Filter the right vcf file generated in the outside loop		
-        system("$filtering_command -i B$sep_param$exe_condition.vcf -o B$sep_param$condition.vcf"); ## I don't think speed would be an issue, thus I'll call the filtering script every time (instead of writting a package and/or functions here)
-#print("DEBUG: $filtering_command -i B$sep_param$exe_condition.vcf -o B$sep_param$condition.vcf \n");
-    }
-    else
-    {
-        print("B$sep_param$condition.vcf has been previously generated and it will be recycled\n");
-    }
-
-    my %Afilt=%{parse_vcf("A$sep_param$condition.vcf")};
-    my %Bfilt=%{parse_vcf("B$sep_param$condition.vcf")};
+    
+    my %Afilt=%{parse_vcf("$AfullName$sep_param$condition.vcf")};
+    my %Bfilt=%{parse_vcf("$BfullName$sep_param$condition.vcf")};
 
 # Right now I'm keeping a lot of hashes in memory instead of reusing variables. I do it just in case I need them in posterior statistics/calculations etc.
 # We could be interested on changing this if the performance were really bad.
@@ -418,24 +391,24 @@ sub filter
     {
         if($output_comprehensive)
         {
-            write_variant_vcf($ref_common_variantsAfilt,"Afilt$sep_param${condition}_common.vcf","A$sep_param$condition.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
-            write_variant_vcf($ref_common_variantsBfilt,"Bfilt$sep_param${condition}_common.vcf","B$sep_param$condition.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
-            write_variant_vcf($ref_common_variantsAfiltN,"AfiltN$sep_param${condition}_common.vcf","A$sep_param$condition.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
-            write_variant_vcf($ref_common_variantsBfiltN,"BfiltN$sep_param${condition}_common.vcf","B$sep_param$condition.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
-            write_variant_vcf($ref_different_variantsAfilt,"Afilt$sep_param${condition}_different.vcf","A$sep_param$condition.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
-            write_variant_vcf($ref_different_variantsBfilt,"Bfilt$sep_param${condition}_different.vcf","B$sep_param$condition.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
-            write_variant_vcf($ref_different_variantsAfiltN,"AfiltN$sep_param${condition}_different.vcf","A$sep_param$condition.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
-            write_variant_vcf($ref_different_variantsBfiltN,"BfiltN$sep_param${condition}_different.vcf","B$sep_param$condition.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
-            write_variant_2vcf($ref_different_variantsfiltU,"filtU$sep_param${condition}_different.vcf","A$sep_param$condition.vcf","B$sep_param$condition.vcf","## U(AB) Filtered with vcfFilterTableV1. Condition ${condition}");
-            write_variant_2vcf($ref_different_variantsfiltNU,"filtNU$sep_param${condition}_different.vcf","A$sep_param$condition.vcf","B$sep_param$condition.vcf","## Somatic U(AB) Filtered with vcfFilterTableV1. Condition ${condition}");
-            write_variant_2vcf($ref_different_variantsfiltI,"filtI$sep_param${condition}_different.vcf","A$sep_param$condition.vcf","B$sep_param$condition.vcf","## I(AB) Filtered with vcfFilterTableV1. Condition ${condition}");
-            write_variant_2vcf($ref_different_variantsfiltNI,"filtNI$sep_param${condition}_different.vcf","A$sep_param$condition.vcf","B$sep_param$condition.vcf","## Somatic I(AB) Filtered with vcfFilterTableV1. Condition ${condition}");
+            write_variant_vcf($ref_common_variantsAfilt,"Afilt$sep_param${condition}_common.vcf","$AfullName$sep_param$condition.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
+            write_variant_vcf($ref_common_variantsBfilt,"Bfilt$sep_param${condition}_common.vcf","$BfullName$sep_param$condition.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
+            write_variant_vcf($ref_common_variantsAfiltN,"AfiltN$sep_param${condition}_common.vcf","$AfullName$sep_param$condition.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
+            write_variant_vcf($ref_common_variantsBfiltN,"BfiltN$sep_param${condition}_common.vcf","$BfullName$sep_param$condition.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
+            write_variant_vcf($ref_different_variantsAfilt,"Afilt$sep_param${condition}_different.vcf","$AfullName$sep_param$condition.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
+            write_variant_vcf($ref_different_variantsBfilt,"Bfilt$sep_param${condition}_different.vcf","$BfullName$sep_param$condition.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
+            write_variant_vcf($ref_different_variantsAfiltN,"AfiltN$sep_param${condition}_different.vcf","$AfullName$sep_param$condition.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
+            write_variant_vcf($ref_different_variantsBfiltN,"BfiltN$sep_param${condition}_different.vcf","$BfullName$sep_param$condition.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}");
+            write_variant_2vcf($ref_different_variantsfiltU,"filtU$sep_param${condition}_different.vcf","$AfullName$sep_param$condition.vcf","$BfullName$sep_param$condition.vcf","## U(AB) Filtered with vcfFilterTableV1. Condition ${condition}");
+            write_variant_2vcf($ref_different_variantsfiltNU,"filtNU$sep_param${condition}_different.vcf","$AfullName$sep_param$condition.vcf","$BfullName$sep_param$condition.vcf","## Somatic U(AB) Filtered with vcfFilterTableV1. Condition ${condition}");
+            write_variant_2vcf($ref_different_variantsfiltI,"filtI$sep_param${condition}_different.vcf","$AfullName$sep_param$condition.vcf","$BfullName$sep_param$condition.vcf","## I(AB) Filtered with vcfFilterTableV1. Condition ${condition}");
+            write_variant_2vcf($ref_different_variantsfiltNI,"filtNI$sep_param${condition}_different.vcf","$AfullName$sep_param$condition.vcf","$BfullName$sep_param$condition.vcf","## Somatic I(AB) Filtered with vcfFilterTableV1. Condition ${condition}");
 
         }
-        write_variant_2vcf($ref_common_variantsfiltU,"filtU$sep_param${condition}_common.vcf","A$sep_param$condition.vcf","B$sep_param$condition.vcf","## U(AB) Filtered with vcfFilterTableV1. Condition ${condition}");
-        write_variant_2vcf($ref_common_variantsfiltNU,"filtNU$sep_param${condition}_common.vcf","A$sep_param$condition.vcf","B$sep_param$condition.vcf","## Somatic U(AB) Filtered with vcfFilterTableV1. Condition ${condition}");
-        write_variant_2vcf($ref_common_variantsfiltI,"filtI$sep_param${condition}_common.vcf","A$sep_param$condition.vcf","B$sep_param$condition.vcf","## I(AB) Filtered with vcfFilterTableV1. Condition ${condition}");
-        write_variant_2vcf($ref_common_variantsfiltNI,"filtNI$sep_param${condition}_common.vcf","A$sep_param$condition.vcf","B$sep_param$condition.vcf","## Somatic I(AB) Filtered with vcfFilterTableV1. Condition ${condition}");
+        write_variant_2vcf($ref_common_variantsfiltU,"filtU$sep_param${condition}_common.vcf","$AfullName$sep_param$condition.vcf","$BfullName$sep_param$condition.vcf","## U(AB) Filtered with vcfFilterTableV1. Condition ${condition}");
+        write_variant_2vcf($ref_common_variantsfiltNU,"filtNU$sep_param${condition}_common.vcf","$AfullName$sep_param$condition.vcf","$BfullName$sep_param$condition.vcf","## Somatic U(AB) Filtered with vcfFilterTableV1. Condition ${condition}");
+        write_variant_2vcf($ref_common_variantsfiltI,"filtI$sep_param${condition}_common.vcf","$AfullName$sep_param$condition.vcf","$BfullName$sep_param$condition.vcf","## I(AB) Filtered with vcfFilterTableV1. Condition ${condition}");
+        write_variant_2vcf($ref_common_variantsfiltNI,"filtNI$sep_param${condition}_common.vcf","$AfullName$sep_param$condition.vcf","$BfullName$sep_param$condition.vcf","## Somatic I(AB) Filtered with vcfFilterTableV1. Condition ${condition}");
 
     } 
 
@@ -483,17 +456,17 @@ sub filter
         {
             if($output_comprehensive)
             {
-                write_variant_vcf($ref_common_variantsAfiltNAB,"AfiltNAB$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_common.vcf","A$sep_param$condition.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
-                write_variant_vcf($ref_common_variantsBfiltNAB,"BfiltNAB$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_common.vcf","B$sep_param$condition.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
-                write_variant_vcf($ref_different_variantsAfiltNAB,"AfiltNAB$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_different.vcf","A$sep_param$condition.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
-                write_variant_vcf($ref_different_variantsBfiltNAB,"BfiltNAB$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_different.vcf","B$sep_param$condition.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
-                write_variant_2vcf($ref_different_variantsfiltNABU,"filtNABU$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_different.vcf","A$sep_param$condition.vcf","B$sep_param$condition.vcf","## Somatic NAB U(AB) Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
-                write_variant_2vcf($ref_different_variantsfiltNABI,"filtNABI$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_different.vcf","A$sep_param$condition.vcf","B$sep_param$condition.vcf","## Somatic NAB I(AB) Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
+                write_variant_vcf($ref_common_variantsAfiltNAB,"AfiltNAB$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_common.vcf","$AfullName$sep_param$condition.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
+                write_variant_vcf($ref_common_variantsBfiltNAB,"BfiltNAB$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_common.vcf","$BfullName$sep_param$condition.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
+                write_variant_vcf($ref_different_variantsAfiltNAB,"AfiltNAB$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_different.vcf","$AfullName$sep_param$condition.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
+                write_variant_vcf($ref_different_variantsBfiltNAB,"BfiltNAB$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_different.vcf","$BfullName$sep_param$condition.vcf","##Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
+                write_variant_2vcf($ref_different_variantsfiltNABU,"filtNABU$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_different.vcf","$AfullName$sep_param$condition.vcf","$BfullName$sep_param$condition.vcf","## Somatic NAB U(AB) Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
+                write_variant_2vcf($ref_different_variantsfiltNABI,"filtNABI$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_different.vcf","$AfullName$sep_param$condition.vcf","$BfullName$sep_param$condition.vcf","## Somatic NAB I(AB) Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
 
 
             }
-            write_variant_2vcf($ref_common_variantsfiltNABU,"filtNABU$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_common.vcf","A$sep_param$condition.vcf","B$sep_param$condition.vcf","## Somatic NAB U(AB) Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
-            write_variant_2vcf($ref_common_variantsfiltNABI,"filtNABI$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_common.vcf","A$sep_param$condition.vcf","B$sep_param$condition.vcf","## Somatic NAB I(AB) Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
+            write_variant_2vcf($ref_common_variantsfiltNABU,"filtNABU$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_common.vcf","$AfullName$sep_param$condition.vcf","$BfullName$sep_param$condition.vcf","## Somatic NAB U(AB) Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
+            write_variant_2vcf($ref_common_variantsfiltNABI,"filtNABI$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_common.vcf","$AfullName$sep_param$condition.vcf","$BfullName$sep_param$condition.vcf","## Somatic NAB I(AB) Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
 
         }
 
@@ -934,8 +907,8 @@ sub write_variant_list
 sub write_variant_vcf
 {
     my ($ref_hash,$filename,$vcf,$comment)=@_;
-    open(my $OFILE, ">$filename");
-    open(my $IFILE, "$vcf");
+    open(my $OFILE, ">$filename") or die "Error opening the file $vcf\n";
+    open(my $IFILE, "$vcf") or die "Error opening the file $vcf\n";
     my @icontent= <$IFILE>;
     close($IFILE);
     my $flag=0;
@@ -1064,31 +1037,30 @@ sub filterNAB
         if (defined $_)
         {
             #($exe_condition,$filtering_condition)=@{$_};
-		    $filtering_condition=$_;
+            $filtering_condition=$_;
         }
         else
         {
             ##($exe_condition,$filtering_condition)=@{$_[0]};
-		    $filtering_condition=$_[0];
+            $filtering_condition=$_[0];
         }
-	#my $condition="$exe_condition$sep_param$filtering_condition";
-	my $condition="$filtering_condition";
-	my $filtering_command="$vcf_filt_exe ";
-	$filtering_command.=join(" ",split("$sep_value",join(" ",split("$sep_param",$filtering_condition))));
+    #my $condition="$exe_condition$sep_param$filtering_condition";
+    my $condition="$filtering_condition";
+    my $filtering_command="$vcf_filt_exe ";
+    $filtering_command.=join(" ",split("$sep_value",join(" ",split("$sep_param",$filtering_condition))));
 
-	if (!-f "NAB$sep_param$condition.vcf")
-	{
-		#print("Filtering NAB$sep_param$exe_condition.vcf to generate NAB$sep_param$condition.vcf\n");
-		print("Filtering NAB.vcf to generate NAB$sep_param$condition.vcf\n");
-		## Filter the right vcf file generated in the outside loop	
-		#system("$filtering_command -i NAB$sep_param$exe_condition.vcf -o NAB$sep_param$condition.vcf");
-		system("$filtering_command -i NAB.vcf -o NAB$sep_param$condition.vcf");
-		#print("DEBUG: $filtering_command -i A$sep_param$exe_condition.vcf -o A$sep_param$condition.vcf \n");
-	}
-	else
-	{
-		print("NAB$sep_param$condition.vcf has been previously generated and it will be recycled\n");
-	}
+    if (!-f "$NABname$sep_param$condition.vcf")
+    {
+        #print("Filtering $NABname$sep_param$exe_condition.vcf to generate $NABname$sep_param$condition.vcf\n");
+        print("Filtering $NABname.vcf to generate $NABname$sep_param$condition.vcf\n");
+        ## Filter the right vcf file generated in the outside loop
+        #system("$filtering_command -i $NABname$sep_param$exe_condition.vcf -o $NABname$sep_param$condition.vcf");
+        system("$filtering_command -i $NABname.vcf -o $NABname$sep_param$condition.vcf");
+    }
+    else
+    {
+        print("$NABname$sep_param$condition.vcf has been previously generated and it will be recycled\n");
+    }
 }
 
 ## Gets the position in a vcf file of the sample with the given name

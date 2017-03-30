@@ -26,6 +26,7 @@ closedir($DH);
 
 foreach my $dir (@dirs)
 {
+    #print("DEBUG: $dir");
     my $name=basename($dir);
     my @common_files=glob("$dir/filtNABU#*common.vcf.annotated.variant_function");
     my $common_file=$common_files[0];
@@ -73,7 +74,7 @@ foreach my $dir (@dirs)
     my @db_content_aux=<$DB_AUX>;
 
     my @lengths=(scalar @c_content,scalar @da_content,scalar @db_content);
-    @lengths=sort(@lengths);
+    @lengths=sort{$a <=> $b} @lengths;
    
     close($COMMON);
     close($DA);
