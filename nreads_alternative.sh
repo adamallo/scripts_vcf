@@ -28,7 +28,7 @@ do
                         then
                             java -Xms512m -Xmx6G -jar $GATKJAR -T UnifiedGenotyper -R $GENOME -I ${!comp} -o $ID/${comp}tocompareto${problem}_${filter}.vcf --intervals $ID/${problem}_${filter}.bed --output_mode EMIT_ALL_SITES > $ID/${comp}tocompareto${problem}_${filter}.log 2>&1
                         fi
-                        cat $ID/${comp}tocompareto${problem}_${filter}.vcf | sed "/^#/d" | perl -lane '$F[9]=~s/^[^:]*:([^:]*).*/$1/;@reads=split(",",$F[9]);$reads[1]=="" and $reads[1]=0;print join(",",@F[0,1,3,4],@reads)' > $ID/${problem}_${filter}_counts.csv
+                        cat $ID/${comp}tocompareto${problem}_${filter}.vcf | sed "/^#/d" | perl -lane '$F[9]=~s/^[^:]*:([^:]*).*/$1/;@reads=split(",",$F[9]);$reads[1]=="" and $reads[1]=0;if($reads[0] eq "./."){$readsref=0;$readsout=0}else{$readsref=splice(@reads,0,1);$readsout=join(",",@reads)};print join("\t",@F[0,1,3,4],$readsref,$readsout)' > $ID/${problem}_${filter}_counts.tsv
                         #save in tabular format
                     fi
                     #else
