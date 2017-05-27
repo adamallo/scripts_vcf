@@ -14,7 +14,7 @@ if (scalar @ARGV != 2 || !-d $ARGV[0])
 
 open(my $OUTPUT,">$ARGV[1]") or die "Impossible to open the output file $ARGV[1]\n";
 
-print($OUTPUT "Patient${OFS}Common${OFS}Common_pos${OFS}Common_type${OFS}A${OFS}A_pos${OFS}A_type${OFS}B${OFS}B_pos${OFS}B_type\n");
+print($OUTPUT "Patient${OFS}Chr${OFS}Start${OFS}End${OFS}Common${OFS}Common_pos${OFS}Common_type${OFS}Chr${OFS}Start${OFS}End${OFS}A${OFS}A_pos${OFS}A_type${OFS}Chr${OFS}Start${OFS}End${OFS}B${OFS}B_pos${OFS}B_type\n");
 
 chdir($ARGV[0]);
 
@@ -91,7 +91,7 @@ foreach my $dir (@dirs)
         my @out_line=("$name");
         if(scalar(@c_content) <= $i)
         {
-            @temp_data=("","","");
+            @temp_data=("","","","","","");
         }
         else
         {
@@ -113,14 +113,14 @@ foreach my $dir (@dirs)
             {
                 $type="";
             }
-            @temp_data=($temp_data[1],$temp_data[0],$type);
+            @temp_data=($temp_data[2],$temp_data[3],$temp_data[4],$temp_data[1],$temp_data[0],$type);
         }
         #print("DEBUG: @temp_data\n");
         push(@out_line,@temp_data);
         #print("DEBUG: @out_line\n");
         if(scalar(@da_content) <= $i)
         {
-            @temp_data=("","","");
+            @temp_data=("","","","","","");
         }
         else
         {
@@ -143,13 +143,13 @@ foreach my $dir (@dirs)
                 $type="";
             }
 
-             @temp_data=($temp_data[1],$temp_data[0],$type);
+             @temp_data=($temp_data[2],$temp_data[3],$temp_data[4],$temp_data[1],$temp_data[0],$type);
         }
         push(@out_line,@temp_data);
         
         if(scalar(@db_content) <= $i)
         {
-            @temp_data=("","","");
+            @temp_data=("","","","","","");
         }
         else
         {
@@ -172,7 +172,7 @@ foreach my $dir (@dirs)
                 $type="";
             }
 
-            @temp_data=($temp_data[1],$temp_data[0],$type);
+            @temp_data=($temp_data[2],$temp_data[3],$temp_data[4],$temp_data[1],$temp_data[0],$type);
         }
         #print("DEBUG: @temp_data\n");
         push(@out_line,@temp_data);
