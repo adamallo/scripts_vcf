@@ -15,6 +15,7 @@ else
     filtering_params=$(readlink -f $4)
     NAB_params=$(readlink -f $5)
     NAB2_params=$(readlink -f $6)
+    covB_params=$(readlink -f $7)
 fi
 
 flag=0

@@ -44,7 +44,7 @@ my $SCRIPTSVCF_DIR=$ENV{'SCRIPTSVCF_DIR'};
 
 #Flags
 my $help;
-my $usage="\nUsage: $0 [options] -i inputfile\n\n\nOptions:\n--------\n\t-e/--exec_cond_inputfile : input file for execution parameters and options\n\t-f/--filt_cond_inputfile : input file for execution parameters and options\n\t--NABfilt_cond_inputfile : input file for the filtering options of the NAB sample\n\t--NABfilt_cond_inputfile2 : input file for the secondary filtering options of the NAB sample (OR filter implemented in a dirty way)\n\t--output_dir : output directory for vcf files\n\t--n_cores : number of cores to execute some steps in parallel\n\t\n\n";
+my $usage="\nUsage: $0 [options] -i inputfile\n\n\nOptions:\n--------\n\t-e/--exec_cond_inputfile : input file for execution parameters and options\n\t-f/--filt_cond_inputfile : input file for execution parameters and options\n\t--NABfilt_cond_inputfile : input file for the filtering options of the NAB sample\n\t--NABfilt_cond_inputfile2 : input file for the secondary filtering options of the NAB sample (OR filter implemented in a dirty way)\n\t--covaltB_cond_inputfile : input file for the filtering taking into account characteristics of the unfiltered in the comparison\n\t--output_dir : output directory for vcf files\n\t--n_cores : number of cores to execute some steps in parallel\n\t\n\n";
 ######################################################
 
 ######################################################
@@ -58,6 +58,7 @@ my $usage="\nUsage: $0 [options] -i inputfile\n\n\nOptions:\n--------\n\t-e/--ex
 	'filt_cond_inputfile|f=s' => \$filtercond_inputfile,
 	'NABfilt_cond_inputfile=s' => \$NABfiltercond_inputfile1,
     'NABfilt_cond_inputfile2=s' => \$NABfiltercond_inputfile2,
+    'covaltB_cond_inputfile=s' => \$covBfiltercond_inputfile,
     'output_dir=s' => \$output_dir,
     'input_file|i=s' => \$input_file,
     'n_cores=i' => \$n_cores,
@@ -74,9 +75,12 @@ my @exe_param_values=([("")]);
 my @filtering_parameters=("");
 my @NABfiltering_parameters1=("");
 my @NABfiltering_parameters2=("");
+my @covBfiltering_parameters=("");
+
 my @filtering_param_values=([("")]);
 my @NABfiltering_param_values1=([("")]);
 my @NABfiltering_param_values2=([("")]);
+my @covBfiltering_param_values=([("")]);
 
 ##Input files
 
@@ -103,11 +107,18 @@ if ($NABfiltercond_inputfile2 ne "")
     parse_parameters_values($NABfiltercond_inputfile2,\@NABfiltering_parameters2,\@NABfiltering_param_values2);
 }
 
+if ($covBfiltercond_inputfile ne "")
+{
+    @covBfiltering_parameters=();
+    parse_parameters_values($covBfiltercond_inputfile,\@covBfiltering_parameters,\@covBfiltering_param_values);
+}
+
 my $oefile=Cwd::abs_path($execond_inputfile);
 my $offile=Cwd::abs_path($filtercond_inputfile);
 my $onfile=Cwd::abs_path($NABfiltercond_inputfile1);
 my $onfile2=Cwd::abs_path($NABfiltercond_inputfile2);
 my $ifile=Cwd::abs_path($input_file);
+my $ocfile=Cwd::abs_path($covBfiltercond_inputfile);
 
 mkdir $output_dir;
 chdir $output_dir or die "The output directory $output_dir is not accesible";
@@ -172,11 +183,14 @@ foreach my $case (@acases)
 {
     ($name,$normal, $a, $b) = split (" ",$case);
     $cases{$name}=[$normal,$a,$b];
-    if ($normalfile eq "")
-    {
-        $normalfile= $normal;
-    }
-    ($normal ne $normalfile) and die "Error, all normal files must be the same\n";
+
+##EDIT Why did I do this? I don't think this is right :S
+#    if ($normalfile eq "")
+#    {
+#        $normalfile= $normal;
+#    }
+#    ($normal ne $normalfile) and die "Error, all normal files must be the same\n";
+
     $datafiles{$a}=1;
     $datafiles{$b}=1;
 }
@@ -188,15 +202,17 @@ my $name_condition;
 my @exe_conditions;
 my $bamfiles;
 my @filtering_conditions;
-our @NABfiltering_conditions1; ##In order to be easily accesed from the filtering functions
-our @NABfiltering_conditions2;
-our @NABfiltering_conditions;
+my @NABfiltering_conditions1; 
+my @NABfiltering_conditions2;
+my @NABfiltering_conditions;
+my @covBfiltering_conditions;
 
 ##Generate all combinations of proposed values for execution and filtering parameters
 combs(0,"",\@exe_parameters,\@exe_param_values,\@exe_conditions);
 combs(0,"",\@filtering_parameters,\@filtering_param_values,\@filtering_conditions);
 combs(0,"",\@NABfiltering_parameters1,\@NABfiltering_param_values1,\@NABfiltering_conditions1);
 combs(0,"",\@NABfiltering_parameters2,\@NABfiltering_param_values2,\@NABfiltering_conditions2);
+combs(0,"",\@covBfiltering_parameters,\@covBfiltering_param_values,\@covBfiltering_conditions);
 
 our %job_ids;
 
@@ -242,6 +258,7 @@ for (my $i=0; $i<scalar(@afiles); ++$i)
     {
         print("\tSample $vcfname variant calling already present. Skipping\n");
     }
+
     foreach my $exe_condition (@exe_conditions)
     {
         $job_id="";
@@ -351,11 +368,11 @@ foreach my $name (keys %cases)
     }
     if(-f $onfile2)
     {   
-        $job_id=submit_job_name("tstv","$qsub $deps $helper_sh $helper_pl --output_folder $output_dir/$name -n $normal -a $a -b $b -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile2 $onfile2 -o $name.csv --n_cores $n_cores");
+        $job_id=submit_job_name("comp","$qsub $deps $helper_sh $helper_pl --output_folder $output_dir/$name -n $normal -a $a -b $b -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile2 $onfile2 --covaltB_cond_inputfile $ocfile -o $name.csv --n_cores $n_cores");
     }
     else
     {
-        $job_id=submit_job_name("tstv","$qsub $deps $helper_sh $helper_pl --output_folder $output_dir/$name -n $normal -a $a -b $b -e $oefile -f $offile --NABfilt_cond_inputfile $onfile -o $name.csv --n_cores $n_cores");
+        $job_id=submit_job_name("comp","$qsub $deps $helper_sh $helper_pl --output_folder $output_dir/$name -n $normal -a $a -b $b -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --covaltB_cond_inputfile $ocfile -o $name.csv --n_cores $n_cores");
     }
     print("The filtering and analysis of the vcf files is being conducted with the job_id $job_id\n");
     
@@ -382,16 +399,23 @@ else
 {
     $deps="";
 }
-$job_id=submit_job_name("tstv","$qsub $deps $helper_sh $n_cores");
 
-$job_id=submit_job_name("tstv","$qsub_noparallel --dependency=afterok:$job_id $tstv_sh $output_dir");
 
-print("Common Ts/Tv statistics are being calculated in the job_id $job_id\n");
+#$job_id=submit_job_name("tstv","$qsub $deps $helper_sh $n_cores"); ##Annovar ##I think this is wrong
+
+#$job_id=submit_job_name("tstv","$qsub_noparallel --dependency=afterok:$job_id $tstv_sh $output_dir"); #TsTv ##I think this is wrong
+
+#print("Common Ts/Tv statistics are being calculated in the job_id $job_id\n"); ##What are these?
 
 $deps=join(":",@{$job_ids{"tstv"}});
-$job_id=submit_job_name("","$qsub_noparallel --dependency=afterok:$deps $postanalyzer_exe $output_dir $ifile $oefile $offile $onfile $onfile2");
-print("PostHeterAnalyzer job submitted with job_id $job_id\n");
-print("Jobs submitted!\n");
+
+###EDIT: I definetly need to modify the postanalyzer, so that I can get all the data back.
+
+### I will need to bring back the postanalyzer step. However, I do need to check other things first, this starting to be too complicated
+
+#$job_id=submit_job_name("","$qsub_noparallel --dependency=afterok:$deps $postanalyzer_exe $output_dir $ifile $oefile $offile $onfile $onfile2 $ocfile");
+#print("PostHeterAnalyzer job submitted with job_id $job_id\n");
+#print("Jobs submitted!\n");
 
 exit;
 

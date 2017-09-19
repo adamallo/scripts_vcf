@@ -1,1 +1,2 @@
---filterDuplicates=,0,1
+--filterReadPairsWithSmallInserts=,1
+--minReads=,3

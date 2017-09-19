@@ -1,3 +1,4 @@
---qual,10,20,30
---min_coverage,10,20,30
---atoc,1,0
+--qual,240
+--min_coverage,0
+--min_reads_strand,0
+--min_reads_alternate,10
