@@ -33,8 +33,9 @@ our $sleep=60;
 ######################################################
 my $execond_inputfile="";
 my $filtercond_inputfile="";
-my $NABfiltercond_inputfile1="",
-my $NABfiltercond_inputfile2="",
+my $NABfiltercond_inputfile1="";
+my $NABfiltercond_inputfile2="";
+my $covBfiltercond_inputfile="";
 my $output_dir="vcf_outputdir";
 my $input_file="";
 #my $normal_bam="";
@@ -44,7 +45,7 @@ my $SCRIPTSVCF_DIR=$ENV{'SCRIPTSVCF_DIR'};
 
 #Flags
 my $help;
-my $usage="\nUsage: $0 [options] -i inputfile\n\n\nOptions:\n--------\n\t-e/--exec_cond_inputfile : input file for execution parameters and options\n\t-f/--filt_cond_inputfile : input file for execution parameters and options\n\t--NABfilt_cond_inputfile : input file for the filtering options of the NAB sample\n\t--NABfilt_cond_inputfile2 : input file for the secondary filtering options of the NAB sample (OR filter implemented in a dirty way)\n\t--covaltB_cond_inputfile : input file for the filtering taking into account characteristics of the unfiltered in the comparison\n\t--output_dir : output directory for vcf files\n\t--n_cores : number of cores to execute some steps in parallel\n\t\n\n";
+my $usage="\nUsage: $0 [options] -i inputfile\n\n\nOptions:\n--------\n\t-e/--exec_cond_inputfile : input file for execution parameters and options\n\t-f/--filt_cond_inputfile : input file for execution parameters and options\n\t--NABfilt_cond_inputfile : input file for the filtering options of the NAB sample\n\t--NABfilt_cond_inputfile2 : input file for the secondary filtering options of the NAB sample (OR filter implemented in a dirty way)\n\t--covaltB_cond_inputfile : input file for the filtering taking into account characteristics of the unfiltered in the comparison\n\t--output_dir : output directory for vcf files\n\t--n_cores : number of cores to execute some steps in parallel\n\t\n\nATTENTION: This version of the script is to run pairwise comparisons of multiple samples from the same individual (single normal) (i.e., large-dcis).\n\n";
 ######################################################
 
 ######################################################
@@ -184,12 +185,11 @@ foreach my $case (@acases)
     ($name,$normal, $a, $b) = split (" ",$case);
     $cases{$name}=[$normal,$a,$b];
 
-##EDIT Why did I do this? I don't think this is right :S
-#    if ($normalfile eq "")
-#    {
-#        $normalfile= $normal;
-#    }
-#    ($normal ne $normalfile) and die "Error, all normal files must be the same\n";
+    if ($normalfile eq "")
+    {
+        $normalfile= $normal;
+    }
+    ($normal ne $normalfile) and die "Error, all normal files must be the same\n";
 
     $datafiles{$a}=1;
     $datafiles{$b}=1;
@@ -219,7 +219,7 @@ our %job_ids;
 mkdir("e_logs");
 mkdir("o_logs");
 
-### Default calling parameters. This may be changed in the future
+### Normal with default calling parameters. This may be changed in the future
 #########################################################
 
 my $job_id;
@@ -401,11 +401,11 @@ else
 }
 
 
-#$job_id=submit_job_name("tstv","$qsub $deps $helper_sh $n_cores"); ##Annovar ##I think this is wrong
+$job_id=submit_job_name("tstv","$qsub $deps $helper_sh $n_cores"); ##Annovar ##I think this is wrong
 
-#$job_id=submit_job_name("tstv","$qsub_noparallel --dependency=afterok:$job_id $tstv_sh $output_dir"); #TsTv ##I think this is wrong
+$job_id=submit_job_name("tstv","$qsub_noparallel --dependency=afterok:$job_id $tstv_sh $output_dir"); #TsTv ##I think this is wrong
 
-#print("Common Ts/Tv statistics are being calculated in the job_id $job_id\n"); ##What are these?
+print("Common Ts/Tv statistics are being calculated in the job_id $job_id\n"); ##What are these?
 
 $deps=join(":",@{$job_ids{"tstv"}});
 
@@ -413,9 +413,9 @@ $deps=join(":",@{$job_ids{"tstv"}});
 
 ### I will need to bring back the postanalyzer step. However, I do need to check other things first, this starting to be too complicated
 
-#$job_id=submit_job_name("","$qsub_noparallel --dependency=afterok:$deps $postanalyzer_exe $output_dir $ifile $oefile $offile $onfile $onfile2 $ocfile");
-#print("PostHeterAnalyzer job submitted with job_id $job_id\n");
-#print("Jobs submitted!\n");
+$job_id=submit_job_name("","$qsub_noparallel --dependency=afterok:$deps $postanalyzer_exe $output_dir $ifile $oefile $offile $onfile $onfile2 $ocfile");
+print("PostHeterAnalyzer job submitted with job_id $job_id\n");
+print("Jobs submitted!\n");
 
 exit;
 

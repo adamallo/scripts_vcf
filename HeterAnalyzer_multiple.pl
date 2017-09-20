@@ -153,7 +153,7 @@ else
 }
 
 
-## Fixing NAB filters, since the N column is not always 0 as expected (weird platypus behaviour)
+#Geting NAB
 ##########################################################################
 
 ##Locate NAB
@@ -274,13 +274,26 @@ foreach my $exe_condition (@exe_conditions) ##Options that require to call varia
 {
 #print("DEBUG: Exe condition loop $exe_condition\n");
     my @current_conditions=@filtering_conditions;
-    for (my $i=0; $i<scalar @filtering_conditions;++$i)
+    my $icond=0;
+
+    if (scalar @covBfiltering_conditions == 0)
     {
-        $current_conditions[$i]=[$exe_condition,$filtering_conditions[$i],$covBfiltering_conditions[0]]; ##If we are not using covB this will be still used but undefined
-        for (my $j=1; $j<scalar @covBfiltering_conditions; ++$j)
+        for (my $i=0; $i<scalar @filtering_conditions;++$i)
         {
-            $current_conditions[$i]=[$exe_condition,$filtering_conditions[$i],$covBfiltering_conditions[$j]];
+            $current_conditions[$icond]=[$exe_condition,$filtering_conditions[$i],$covBfiltering_conditions[0]]; ##If we are not using covB this will be still used but undefined
+            $icond+=1;
         }
+    }
+    else
+    {
+       for (my $i=0; $i<scalar @filtering_conditions;++$i)
+       {
+           for (my $j=0; $j<scalar @covBfiltering_conditions; ++$j)
+           {
+               $current_conditions[$icond]=[$exe_condition,$filtering_conditions[$i],$covBfiltering_conditions[$j]];
+               $icond+=1;
+           }
+       }
     }
 
     #I do not need to paralelize per covBfiltering option, since the different options can be obtained from the same tsv, just considering the variants of interests, if we start with the unfiltered versions (supersets of the others)
@@ -420,6 +433,7 @@ sub filter
 
     #Union 
     my ($ref_common_variantsfiltNcovBU,$ref_different_variantsfiltNcovBU)=vcf_unite_parsed($ref_common_variantsAfiltNcovB,$ref_different_variantsAfiltNcovB,$ref_common_variantsBfiltNcovB,$ref_different_variantsBfiltNcovB,\@statsfiltNcovBU);
+
     #Intersection
     my ($ref_common_variantsfiltNcovBI,$ref_different_variantsfiltNcovBI)=vcf_intersect_parsed($ref_common_variantsAfiltNcovB,$ref_different_variantsAfiltNcovB,$ref_common_variantsBfiltNcovB,$ref_different_variantsBfiltNcovB,\@statsfiltNcovBI);
     

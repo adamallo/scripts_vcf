@@ -33,8 +33,9 @@ our $sleep=60;
 ######################################################
 my $execond_inputfile="";
 my $filtercond_inputfile="";
-my $NABfiltercond_inputfile1="",
-my $NABfiltercond_inputfile2="",
+my $NABfiltercond_inputfile1="";
+my $NABfiltercond_inputfile2="";
+my $covBfiltercond_inputfile="";
 my $output_dir="vcf_outputdir";
 my $output_file="";
 my $normal_bam="";
@@ -44,7 +45,7 @@ my $SCRIPTSVCF_DIR=$ENV{'SCRIPTSVCF_DIR'};
 
 #Flags
 my $help;
-my $usage="Usage: $0 [options] -o output_file --normal_bamfile bamfile_normal_sample --sample_A_bamfile bamfile_A_sample --sample_B_bamfile bamfile_B_sample\n\n\nOptions:\n--------\n\t-e/--exec_cond_inputfile : input file for execution parameters and options\n\t-f/--filt_cond_inputfile : input file for execution parameters and options\n\t--NABfilt_cond_inputfile : input file for the filtering options of the NAB sample\n\t--NABfilt_cond_inputfile2 : input file for the secondary filtering options of the NAB sample (OR filter implemented in a dirty way)\n\t--output_dir : output directory for vcf files\n\t--n_cores : number of cores to execute some steps in parallel\n\t\n\n";
+my $usage="Usage: $0 [options] -o output_file --normal_bamfile bamfile_normal_sample --sample_A_bamfile bamfile_A_sample --sample_B_bamfile bamfile_B_sample\n\n\nOptions:\n--------\n\t-e/--exec_cond_inputfile : input file for execution parameters and options\n\t-f/--filt_cond_inputfile : input file for execution parameters and options\n\t--NABfilt_cond_inputfile : input file for the filtering options of the NAB sample\n\t--NABfilt_cond_inputfile2 : input file for the secondary filtering options of the NAB sample (OR filter implemented in a dirty way)\n\t--covaltB_cond_inputfile : input file for the filtering taking into account characteristics of the unfiltered in the comparison\n\t--output_dir : output directory for vcf files\n\t--n_cores : number of cores to execute some steps in parallel\n\t\n\n";
 ######################################################
 
 ######################################################
@@ -58,6 +59,7 @@ my $usage="Usage: $0 [options] -o output_file --normal_bamfile bamfile_normal_sa
 	'filt_cond_inputfile|f=s' => \$filtercond_inputfile,
 	'NABfilt_cond_inputfile=s' => \$NABfiltercond_inputfile1,
     'NABfilt_cond_inputfile2=s' => \$NABfiltercond_inputfile2,
+    'covaltB_cond_inputfile=s' => \$covBfiltercond_inputfile,
         'output_dir=s' => \$output_dir,
 	'output_file|o=s' => \$output_file,
 	'normal_bamfile=s' => \$normal_bam,
@@ -116,6 +118,8 @@ my $oefile=Cwd::abs_path($execond_inputfile);
 my $offile=Cwd::abs_path($filtercond_inputfile);
 my $onfile=Cwd::abs_path($NABfiltercond_inputfile1);
 my $onfile2=Cwd::abs_path($NABfiltercond_inputfile2);
+my $ocfile=Cwd::abs_path($covBfiltercond_inputfile);
+
 chdir $output_dir or die "The output directory $output_dir is not accesible";
 $output_dir=Cwd::abs_path($output_dir);
 
@@ -285,12 +289,12 @@ if ($deps ne "")
 
 if(-f $onfile2)
 {   
-    $job_id=submit_job("$qsub $deps $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile2 $onfile2 -o $output_file --n_cores $n_cores");
+    $job_id=submit_job("$qsub $deps $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile2 $onfile2 --covaltB_cond_inputfile $ocfile -o $output_file --n_cores $n_cores");
     #$job_id=submit_job("$qsub $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile3 $onfile2 -o $output_file --n_cores $n_cores");
 }
 else
 {
-    $job_id=submit_job("$qsub $deps $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile -o $output_file --n_cores $n_cores");
+    $job_id=submit_job("$qsub $deps $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --covaltB_cond_inputfile $ocfile -o $output_file --n_cores $n_cores");
     #$job_id=submit_job("$qsub $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile -o $output_file --n_cores $n_cores");
 }
 print("The filtering and analysis of the vcf files is being conducted with the job_id $job_id\n");

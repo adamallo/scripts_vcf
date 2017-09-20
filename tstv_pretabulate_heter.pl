@@ -23,10 +23,12 @@ open(my $IFILE, $inputfile) or die "Error reading the input file $inputfile\n";
 my @content=<$IFILE>;
 close($IFILE);
 
-#Hash of hashes keys: common filtering conditions, value hash
+#Hash of hashes keys for NAB results: common filtering conditions, value hash
 #   secondary hashes: key=full filtering condition, value = tstv
 my %fullUconds;
 my %fullIconds;
+my %fullcovBUconds;
+my %fullcovBIconds;
 
 #Hashes, keys=filtering_condition, value=tstv
 my %Aconds;
@@ -35,6 +37,8 @@ my %filtUconds;
 my %filtIconds;
 my %filtNUconds;
 my %filtNIconds;
+my %filtcovBNUconds;
+my %filtcovBNIconds;
 
 my @temp;
 my $cond;
@@ -79,6 +83,38 @@ foreach my $line (@content)
             $fullIconds{$cond}=\%hash;
         }
     }
+    elsif($temp[0]=~s/^filtcovBNABU${sep_param}//)
+    {
+        $temp[0]=~s/_common//;
+        $cond=(split("${sep_param}NAB${sep_param}",$temp[0]))[0];
+        if(defined $fullcovBUconds{$cond})
+        {
+            #print("DEBUG $cond, $fullcovBUconds{$cond}\n");
+            ${$fullcovBUconds{$cond}}{$temp[0]}=$temp[1];
+        }
+        else
+        {
+            my %hash;
+            $hash{$temp[0]}=$temp[1];
+            $fullcovBUconds{$cond}=\%hash;
+        }
+    }
+    elsif($temp[0]=~s/^filtcovBNABI${sep_param}//)
+    {
+        $temp[0]=~s/_common//;
+        $cond=(split("${sep_param}NAB${sep_param}",$temp[0]))[0];
+        if(defined $fullcovBIconds{$cond})
+        {
+            #print("DEBUG $cond, $fullcovBIconds{$cond}\n");
+            ${$fullcovBIconds{$cond}}{$temp[0]}=$temp[1];
+        }
+        else
+        {
+            my %hash;
+            $hash{$temp[0]}=$temp[1];
+            $fullcovBIconds{$cond}=\%hash;
+        }
+    }
     elsif($temp[0]=~s/^A${sep_param}//)
     {
         $Aconds{$temp[0]}=$temp[1];
@@ -97,6 +133,16 @@ foreach my $line (@content)
         $temp[0]=~s/_common//;
         $filtNIconds{$temp[0]}=$temp[1];
     }
+    elsif($temp[0]=~s/^filtNcovBU${sep_param}//)
+    {
+        $temp[0]=~s/_common//;
+        $filtcovBNUconds{$temp[0]}=$temp[1];
+    }
+    elsif($temp[0]=~s/^filtNcovBI${sep_param}//)
+    {
+        $temp[0]=~s/_common//;
+        $filtcovBNIconds{$temp[0]}=$temp[1];
+    }
     elsif($temp[0]=~s/^filtU${sep_param}//)
     {
         $temp[0]=~s/_common//;
@@ -111,15 +157,15 @@ foreach my $line (@content)
 }
 
 open(my $OFILE, ">$outputfile") or die "The file $outputfile can't be opened, check your input options\n";
-print($OFILE join($OFS,("Condition","TsTv_A","TsTv_B","TsTv_filtU","TsTv_filtI","TsTv_filtNU","TsTv_filtNI","TsTv_filtNABU","TsTv_filtNABI")),"\n");
+print($OFILE join($OFS,("Condition","TsTv_A","TsTv_B","TsTv_filtU","TsTv_filtI","TsTv_filtNU","TsTv_filtNI","TsTv_filtNcovBU","TsTv_filtNcovBI","TsTv_filtNABU","TsTv_filtNABI","TsTv_filtcovBNABU","TsTv_filtcovBNABI")),"\n");
 
 ###Pending: I should make sure that I and U have the same keys for every filtering level
 
-foreach my $cond (keys %fullUconds)
+foreach my $cond (keys %fullcovBUconds)
 {
-    foreach my $fullcond (keys %{$fullUconds{$cond}})
+    foreach my $fullcond (keys %{$fullcovBUconds{$cond}})
     {
-        print($OFILE join($OFS,($fullcond,$Aconds{$cond},$Bconds{$cond},$filtUconds{$cond},$filtIconds{$cond},$filtNUconds{$cond},$filtNIconds{$cond},${$fullUconds{$cond}}{$fullcond},${$fullIconds{$cond}}{$fullcond})),"\n");
+        print($OFILE join($OFS,($fullcond,$Aconds{$cond},$Bconds{$cond},$filtUconds{$cond},$filtIconds{$cond},$filtNUconds{$cond},$filtNIconds{$cond},$filtcovBNUconds{$cond},$filtcovBNIconds{$cond},${$fullUconds{$cond}}{$fullcond},${$fullIconds{$cond}}{$fullcond},${$fullcovBUconds{$cond}}{$fullcond},${$fullcovBIconds{$cond}}{$fullcond})),"\n");
     }
 }
 close($OFILE);
