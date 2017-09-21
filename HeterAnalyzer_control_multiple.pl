@@ -172,7 +172,7 @@ if (! -f $postanalyzer_exe)
 my %cases;
 my %datafiles;
 my $normalfile="";
-open(my $INPUT,$input_file) or die "Error opening input file $input_file\n$usage";
+open(my $INPUT,$ifile) or die "Error opening input file $ifile\n$usage";
 my @acases=<$INPUT>;
 close($INPUT);
 my $name;
