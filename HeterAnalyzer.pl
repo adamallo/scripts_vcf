@@ -968,7 +968,7 @@ sub vcf_prune_covB
     my $max_propalt=1;
 
     my @covBfiltering_params=split($sep_param,$covBfiltering_options);
-    foreach my $covBoption (@covBfilteriong_params)
+    foreach my $covBoption (@covBfiltering_params)
     {
         my ($param, $value)= split($sep_value,$covBoption);
 
@@ -997,10 +997,10 @@ sub vcf_prune_covB
     foreach my $tsv_variant (keys %{$tsv_todelete})
     {
 
-        #print("DEBUG: Variant $variant_to_remove ");
+        #print("DEBUG: Variant $tsv_variant ");
         $totalreads=0;
-        $totalaltreads+=$_ for split(",",${$tsv_todelete{$tsv_variant}}[3]); ##Oneline for loop
-        $totalreads=$totalaltreads+${$tsv_todelete{$tsv_variant}}[2];
+        $totalaltreads+=$_ for split(",",${${%{$tsv_todelete}}{$tsv_variant}}[3]); ##Oneline for loop
+        $totalreads=$totalaltreads+${${%{$tsv_todelete}}{$tsv_variant}}[2];
         $prop_alts=($totalaltreads+0.0)/$totalreads;
 
         if($totalreads < $min_coverage || $totalaltreads>$max_alternative || $prop_alts>$max_propalt)
@@ -1012,16 +1012,16 @@ sub vcf_prune_covB
             $remove_var=0;
         }
 
-        print("DEBUG: totalreads $totalreads, totalalternative $totalaltreads, proportion alternative $prop_alts,var 1 ${$tsv_todelete{$tsv_variant}}[2], var 2 ${$tsv_todelete{$tsv_variant}}[3]\n");###$tsv_todelete[2] Number of bases in the reference allele $tsv_todelete[3]
+        print("DEBUG: totalreads $totalreads, totalalternative $totalaltreads, proportion alternative $prop_alts,var 1 ${${%{$tsv_todelete}}{$tsv_variant}}[2], var 2 ${${%{$tsv_todelete}}{$tsv_variant}}[3]\n");###$tsv_todelete[2] Number of bases in the reference allele $tsv_todelete[3]
 
-        if ($tag1==0 and exists($variants1{$variant_to_remove}) and $remove_var==1)
+        if ($tag1==0 and $remove_var==1 and exists($variants1{$tsv_variant}))
         {
-            delete($variants1{$variant_to_remove});
+            delete($variants1{$tsv_variant});
             print("DEBUG: deleted in vcf1\n");
         }
-        if ($tag2==0 and exists($variants2{$variant_to_remove}) and $remove_var==1)
+        if ($tag2==0 and $remove_var==1 and exists($variants2{$tsv_variant}))
         {
-            delete($variants2{$variant_to_remove});
+            delete($variants2{$tsv_variant});
             print("DEBUG: deleted in vcf2\n");
         }
         #print("\n");
