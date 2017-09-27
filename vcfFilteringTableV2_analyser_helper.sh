@@ -1,6 +1,8 @@
 #!/bin/bash
 #SBATCH -t 4-00:00
-#SBATCH --mem 64000
+###Removed #SBATCH --mem 64000
+
+###The memory is generating problems
 
 module load perl/5.22.1
 module load parallel/20140822
@@ -22,7 +24,8 @@ fi
 if [[ -x $SCRIPTSVCF_DIR/annovar.sh ]]
 then
 
-    files=$(ls *.vcf | egrep '^.*filt.*')
+    #files=$(ls *.vcf | egrep '^.*filt.*')
+    files=$(awk 'BEGIN{FS=","}{if($1~/^.*filt.*/){print $2}}' vcfdict.csv)
     parallel --delay "0.2" -j $n_cores "echo \"Annotating {1}\"; $SCRIPTSVCF_DIR/annovar.sh {1}" ::: $files
 
 #	for i in filt*.vcf

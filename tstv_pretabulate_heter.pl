@@ -23,12 +23,6 @@ open(my $IFILE, $inputfile) or die "Error reading the input file $inputfile\n";
 my @content=<$IFILE>;
 close($IFILE);
 
-#Hash of hashes keys for NAB results: common filtering conditions, value hash
-#   secondary hashes: key=full filtering condition, value = tstv
-my %fullUconds;
-my %fullIconds;
-my %fullcovBUconds;
-my %fullcovBIconds;
 
 #Hashes, keys=filtering_condition, value=tstv
 my %Aconds;
@@ -39,14 +33,18 @@ my %filtNUconds;
 my %filtNIconds;
 my %filtcovBNUconds;
 my %filtcovBNIconds;
+my %fullUconds;
+my %fullIconds;
+my %fullcovBUconds;
+my %fullcovBIconds;
 
 my @temp;
-my $cond;
 
 foreach my $line (@content)
 {
     chomp($line);
     @temp=split($FS,$line);
+    #print("DEBUG: $temp[0], $temp[1]\n");
     if($temp[0]=~m/different/)
     {
         next;
@@ -54,66 +52,22 @@ foreach my $line (@content)
     if($temp[0]=~s/^filtNABU${sep_param}//)
     {
         $temp[0]=~s/_common//;
-        $cond=(split("${sep_param}NAB${sep_param}",$temp[0]))[0];
-        if(defined $fullUconds{$cond})
-        {
-            #print("DEBUG $cond, $fullconds{$cond}\n");
-            ${$fullUconds{$cond}}{$temp[0]}=$temp[1];
-        }
-        else
-        {
-            my %hash;
-            $hash{$temp[0]}=$temp[1];
-            $fullUconds{$cond}=\%hash;
-        }
+        $fullUconds{$temp[0]}=$temp[1];
     }
     elsif($temp[0]=~s/^filtNABI${sep_param}//)
     {
         $temp[0]=~s/_common//;
-        $cond=(split("${sep_param}NAB${sep_param}",$temp[0]))[0];
-        if(defined $fullIconds{$cond})
-        {
-            #print("DEBUG $cond, $fullconds{$cond}\n");
-            ${$fullIconds{$cond}}{$temp[0]}=$temp[1];
-        }
-        else
-        {
-            my %hash;
-            $hash{$temp[0]}=$temp[1];
-            $fullIconds{$cond}=\%hash;
-        }
+        $fullIconds{$temp[0]}=$temp[1];
     }
     elsif($temp[0]=~s/^filtcovBNABU${sep_param}//)
     {
         $temp[0]=~s/_common//;
-        $cond=(split("${sep_param}NAB${sep_param}",$temp[0]))[0];
-        if(defined $fullcovBUconds{$cond})
-        {
-            #print("DEBUG $cond, $fullcovBUconds{$cond}\n");
-            ${$fullcovBUconds{$cond}}{$temp[0]}=$temp[1];
-        }
-        else
-        {
-            my %hash;
-            $hash{$temp[0]}=$temp[1];
-            $fullcovBUconds{$cond}=\%hash;
-        }
+        $fullcovBUconds{$temp[0]}=$temp[1];
     }
     elsif($temp[0]=~s/^filtcovBNABI${sep_param}//)
     {
         $temp[0]=~s/_common//;
-        $cond=(split("${sep_param}NAB${sep_param}",$temp[0]))[0];
-        if(defined $fullcovBIconds{$cond})
-        {
-            #print("DEBUG $cond, $fullcovBIconds{$cond}\n");
-            ${$fullcovBIconds{$cond}}{$temp[0]}=$temp[1];
-        }
-        else
-        {
-            my %hash;
-            $hash{$temp[0]}=$temp[1];
-            $fullcovBIconds{$cond}=\%hash;
-        }
+        $fullcovBIconds{$temp[0]}=$temp[1];
     }
     elsif($temp[0]=~s/^A${sep_param}//)
     {
@@ -161,12 +115,15 @@ print($OFILE join($OFS,("Condition","TsTv_A","TsTv_B","TsTv_filtU","TsTv_filtI",
 
 ###Pending: I should make sure that I and U have the same keys for every filtering level
 
-foreach my $cond (keys %fullcovBUconds)
+my $filtcond;
+my $covBcond;
+my $NABcond;
+
+foreach my $fullcond (keys %fullcovBUconds)
 {
-    foreach my $fullcond (keys %{$fullcovBUconds{$cond}})
-    {
-        print($OFILE join($OFS,($fullcond,$Aconds{$cond},$Bconds{$cond},$filtUconds{$cond},$filtIconds{$cond},$filtNUconds{$cond},$filtNIconds{$cond},$filtcovBNUconds{$cond},$filtcovBNIconds{$cond},${$fullUconds{$cond}}{$fullcond},${$fullIconds{$cond}}{$fullcond},${$fullcovBUconds{$cond}}{$fullcond},${$fullcovBIconds{$cond}}{$fullcond})),"\n");
-    }
+    ($filtcond,$covBcond,$NABcond)=($fullcond=~m/^(.*?)(${sep_param}covB${sep_param}.*?)(${sep_param}NAB${sep_param}.*?)$/);
+    print($OFILE join($OFS,($fullcond,$Aconds{$filtcond},$Bconds{$filtcond},$filtUconds{$filtcond},$filtIconds{$filtcond},$filtNUconds{$filtcond},$filtNIconds{$filtcond},$filtcovBNUconds{"$filtcond$covBcond"},$filtcovBNIconds{"$filtcond$covBcond"},$fullUconds{"$filtcond$NABcond"},$fullIconds{"$filtcond$NABcond"},$fullcovBUconds{$fullcond},$fullcovBIconds{$fullcond})),"\n");
+
 }
 close($OFILE);
 exit;

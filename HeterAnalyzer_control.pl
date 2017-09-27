@@ -22,7 +22,7 @@ our $helper_pl="HeterAnalyzer.pl";
 our $tstv_sh="tstv.sbatch";
 #our $annotation_sh="annovar.sh";
 our $n_cores=1;
-our $qsub="sbatch ${private} -N 1 -c ";
+our $qsub="sbatch ${private} -N 1 -n 1 -c ";
 our $qsub_noparallel="sbatch ${private} -N 1 -n 1 -c 1";
 our $qstat="qstat";
 our $sed='sed "s/Submitted batch job \(.*\)/\1/"';
@@ -55,18 +55,18 @@ my $usage="Usage: $0 [options] -o output_file --normal_bamfile bamfile_normal_sa
 ##Getopt
 ######################################################
 (! GetOptions(
-        'exec_cond_inputfile|e=s' => \$execond_inputfile,
+    'exec_cond_inputfile|e=s' => \$execond_inputfile,
 	'filt_cond_inputfile|f=s' => \$filtercond_inputfile,
 	'NABfilt_cond_inputfile=s' => \$NABfiltercond_inputfile1,
     'NABfilt_cond_inputfile2=s' => \$NABfiltercond_inputfile2,
     'covaltB_cond_inputfile=s' => \$covBfiltercond_inputfile,
-        'output_dir=s' => \$output_dir,
+    'output_dir=s' => \$output_dir,
 	'output_file|o=s' => \$output_file,
 	'normal_bamfile=s' => \$normal_bam,
 	'sample_A_bamfile=s' => \$sample1_bam,
 	'sample_B_bamfile=s' => \$sample2_bam,
-        'n_cores=i' => \$n_cores,
-        'help|h' => \$help,
+    'n_cores=i' => \$n_cores,
+    'help|h' => \$help,
                 )) or (($output_file eq "") || ($normal_bam eq "")  || ($sample1_bam eq "") || ($sample2_bam eq "")  || $help) and die $usage;
 
 $qsub.=$n_cores;
@@ -289,12 +289,12 @@ if ($deps ne "")
 
 if(-f $onfile2)
 {   
-    $job_id=submit_job("$qsub $deps $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile2 $onfile2 --covaltB_cond_inputfile $ocfile -o $output_file --n_cores $n_cores");
+    $job_id=submit_job("$qsub $deps $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile2 $onfile2 --covaltB_cond_inputfile $ocfile --Nbam $normal_bam --Abam $sample1_bam --Bbam $sample2_bam -o $output_file --n_cores $n_cores");
     #$job_id=submit_job("$qsub $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile3 $onfile2 -o $output_file --n_cores $n_cores");
 }
 else
 {
-    $job_id=submit_job("$qsub $deps $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --covaltB_cond_inputfile $ocfile -o $output_file --n_cores $n_cores");
+    $job_id=submit_job("$qsub $deps $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --covaltB_cond_inputfile $ocfile --Nbam $normal_bam --Abam $sample1_bam --Bbam $sample2_bam -o $output_file --n_cores $n_cores");
     #$job_id=submit_job("$qsub $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile -o $output_file --n_cores $n_cores");
 }
 print("The filtering and analysis of the vcf files is being conducted with the job_id $job_id\n");

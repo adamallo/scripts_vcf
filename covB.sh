@@ -1,8 +1,8 @@
 #!/bin/bash
 
-usage="$0 vcf1 vcf2 outputvcf_datavcf1bedvcf2 outputvcf_datavcf2bedvcf1 \n Environment variable GATKJAR should point to GATK\'s jar executable"
+usage="$0 vcf1 vcf2 outputvcf_datavcf1bedvcf2 outputvcf_datavcf2bedvcf1 bam1 bam2\n Environment variable GATKJAR should point to GATK\'s jar executable"
 
-if [[ $# -ne 4 ]] || [[ ! -f $1 ]] || [[ ! -f $2 ]]
+if [[ $# -ne 6 ]] || [[ ! -f $1 ]] || [[ ! -f $2 ]] || [[ ! -f $5 ]] || [[ ! -f $6 ]]
 then
     echo -e $usage
     exit 1
@@ -12,15 +12,17 @@ vcf1=$1
 vcf2=$2
 out1=$3
 out2=$4
+bam1=$5
+bam2=$6
 
-module load module load gatk/3.5.0
+module load gatk/3.5.0
 
 DATA=/home/dmalload/dcis/problem_data/new_data
-GENOME=/home/dmalload/my_storage/GRCh37-lite.f
+GENOME=/home/dmalload/my_storage/GRCh37-lite.fa
 
 dothething ()
 {
-    vcf1=$1
+    bam1=$1
     vcf2=$2
     out=$3
 
@@ -31,11 +33,10 @@ dothething ()
         vcf2bed --deletions < $vcf2 > ${name_vcf2}_deletions.bed
         vcf2bed --snvs < $vcf2 > ${name_vcf2}_snvs.bed
         bedops --everything ${name_vcf2}_{deletions,snvs}.bed | awk 'BEGIN{OFS="\t"}{print($1,$2,$3)}' > ${name_vcf2}.bed
-        ###The input for GATK is wrong
-        java -Xms512m -Xmx6G -jar $GATKJAR -T UnifiedGenotyper -R $GENOME -I $vcf1 -o "$name_out.vcf" --intervals ${name_vcf2}.bed --output_mode EMIT_ALL_SITES > "$name_out.log" 2>&1
+        java -Xms512m -Xmx6G -jar $GATKJAR -T UnifiedGenotyper -R $GENOME -I $bam1 -o "$name_out.vcf" --intervals ${name_vcf2}.bed --output_mode EMIT_ALL_SITES > "$name_out.log" 2>&1
         cat "$name_out.vcf" | sed "/^#/d" | perl -lane '$F[9]=~s/^[^:]*:([^:]*).*/$1/;@reads=split(",",$F[9]);$reads[2]=="" and $reads[1]=0;if($reads[0] eq "./."){$readsref=0;$readsout=0}else{$readsref=splice(@reads,0,1);$readsout=join(",",@reads)};print join("\t",@F[0,1,3,4],$readsref,$readsout)' > $out
     fi
 }
 
-dothething $vcf1 $vcf2 $out1
-dothething $vcf2 $vcf1 $out2
+dothething $bam1 $vcf2 $out1
+dothething $bam2 $vcf1 $out2
