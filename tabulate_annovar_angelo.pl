@@ -14,9 +14,11 @@ if (scalar @ARGV < 2 || scalar @ARGV > 3 || !-d $ARGV[0])
     die($usage);
 }
 
+$ARGV[2] = '' unless defined $ARGV[2];
 $covB=$ARGV[2];
 chomp($covB);
-print("DEBUG: $covB\n");
+
+#print("DEBUG: $covB\n");
 open(my $OUTPUT,">$ARGV[1]") or die "Impossible to open the output file $ARGV[1]\n";
 
 print($OUTPUT "Patient${OFS}Chr${OFS}Start${OFS}End${OFS}Common${OFS}Common_pos${OFS}Common_type${OFS}Chr${OFS}Start${OFS}End${OFS}A${OFS}A_pos${OFS}A_type${OFS}Chr${OFS}Start${OFS}End${OFS}B${OFS}B_pos${OFS}B_type\n");
@@ -31,7 +33,7 @@ closedir($DH);
 
 foreach my $dir (@dirs)
 {
-    print("DEBUG: $dir\n");
+    #print("DEBUG: $dir\n");
     my $name=basename($dir);
 
     open(my $IFILE,"$dir/vcfdict.csv");
@@ -46,24 +48,24 @@ foreach my $dir (@dirs)
     for my $line (@listfiles)
     {
         chomp($line);
-        print("DEBUG: $line\n");
+        #print("DEBUG: $line\n");
         if ($line =~ m/filtcovBNABU#.*common\.vcf/)
         {
             @temp=split(",",$line);
             push(@common_files,"$dir/".$temp[1].".annotated.variant_function");
-            print("\tDEBUG: pushing $temp[1] in common files\n");
+           #print("\tDEBUG: pushing $temp[1] in common files\n");
         }
         elsif( $line =~ m/Afilt${covB}NAB#.*different\.vcf/)
         {
             @temp=split(",",$line);
             push(@da_files,"$dir/".$temp[1].".annotated.variant_function");
-            print("\tDEBUG: pushing $temp[1] in da files\n");
+            #print("\tDEBUG: pushing $temp[1] in da files\n");
         }
         elsif( $line =~ m/Bfilt${covB}NAB#.*different\.vcf/)
         { 
             @temp=split(",",$line);
             push(@db_files,"$dir/".$temp[1].".annotated.variant_function");
-            print("\tDEBUG: pushing $temp[1] in db files\n");
+            #print("\tDEBUG: pushing $temp[1] in db files\n");
         }
     }
 
