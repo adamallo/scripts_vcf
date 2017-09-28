@@ -3,15 +3,20 @@ use strict;
 use warnings;
 use File::Basename;
 
+our $covB="";
+
 my $outfile="";
 our $OFS="\t";
-my $usage="$0 main_directory output_file\n";
+my $usage="$0 main_directory output_file [covBprefix]\n";
 
-if (scalar @ARGV != 2 || !-d $ARGV[0])
+if (scalar @ARGV < 2 || scalar @ARGV > 3 || !-d $ARGV[0])
 {
     die($usage);
 }
 
+$covB=$ARGV[2];
+chomp($covB);
+print("DEBUG: $covB\n");
 open(my $OUTPUT,">$ARGV[1]") or die "Impossible to open the output file $ARGV[1]\n";
 
 print($OUTPUT "Patient${OFS}Chr${OFS}Start${OFS}End${OFS}Common${OFS}Common_pos${OFS}Common_type${OFS}Chr${OFS}Start${OFS}End${OFS}A${OFS}A_pos${OFS}A_type${OFS}Chr${OFS}Start${OFS}End${OFS}B${OFS}B_pos${OFS}B_type\n");
@@ -26,9 +31,43 @@ closedir($DH);
 
 foreach my $dir (@dirs)
 {
-    #print("DEBUG: $dir");
+    print("DEBUG: $dir\n");
     my $name=basename($dir);
-    my @common_files=glob("$dir/filtNABU#*common.vcf.annotated.variant_function");
+
+    open(my $IFILE,"$dir/vcfdict.csv");
+    my @listfiles=<$IFILE>;
+    close($IFILE);
+
+    my @temp;
+    my @common_files;
+    my @da_files;
+    my @db_files;
+
+    for my $line (@listfiles)
+    {
+        chomp($line);
+        print("DEBUG: $line\n");
+        if ($line =~ m/filtcovBNABU#.*common\.vcf/)
+        {
+            @temp=split(",",$line);
+            push(@common_files,"$dir/".$temp[1].".annotated.variant_function");
+            print("\tDEBUG: pushing $temp[1] in common files\n");
+        }
+        elsif( $line =~ m/Afilt${covB}NAB#.*different\.vcf/)
+        {
+            @temp=split(",",$line);
+            push(@da_files,"$dir/".$temp[1].".annotated.variant_function");
+            print("\tDEBUG: pushing $temp[1] in da files\n");
+        }
+        elsif( $line =~ m/Bfilt${covB}NAB#.*different\.vcf/)
+        { 
+            @temp=split(",",$line);
+            push(@db_files,"$dir/".$temp[1].".annotated.variant_function");
+            print("\tDEBUG: pushing $temp[1] in db files\n");
+        }
+    }
+
+#    my @common_files=glob("$dir/filt${covB}NABU#*common.vcf.annotated.variant_function");
     my $common_file=$common_files[0];
     my $common_file_aux=$common_file;
     $common_file_aux=~s/variant_function/exonic_variant_function/;
@@ -36,27 +75,27 @@ foreach my $dir (@dirs)
     if (scalar @common_files != 1)
     {
 #        print("DEBUG: @common_files\n");
-        die "More than one files detected with the format filtNABU#*common.vcf.annotated.variant_function. This script is intended to analyse the output of only one filter\n";
+        die "More than one files detected with the format filt${covB}NABU#*common.vcf.annotated.variant_function. This script is intended to analyse the output of only one filter\n";
     }
 
-    my @da_files=glob("$dir/AfiltNAB#*different.vcf.annotated.variant_function");
+#   my @da_files=glob("$dir/Afilt${covB}NAB#*different.vcf.annotated.variant_function");
     my $da_file=$da_files[0];
     my $da_file_aux=$da_file;
     $da_file_aux=~s/variant_function/exonic_variant_function/;
 
     if (scalar @da_files != 1)
     {
-        die "More than one files detected with the format AfiltNAB#*different.vcf.annotated.variant_function. This script is intended to analyse the output of only one filter\n";
+        die "More than one files detected with the format Afilt${covB}NAB#*different.vcf.annotated.variant_function. This script is intended to analyse the output of only one filter\n";
     }
 
-    my @db_files=glob("$dir/BfiltNAB#*different.vcf.annotated.variant_function");
+#   my @db_files=glob("$dir/Bfilt${covB}NAB#*different.vcf.annotated.variant_function");
     my $db_file=$db_files[0];
     my $db_file_aux=$db_file;
     $db_file_aux=~s/variant_function/exonic_variant_function/;
 
     if (scalar @db_files != 1)
     {
-        die "More than one files detected with the format BfiltNAB#*different.vcf.annotated.variant_function. This script is intended to analyse the output of only one filter\n";
+        die "More than one files detected with the format Bfilt${covB}NAB#*different.vcf.annotated.variant_function. This script is intended to analyse the output of only one filter\n";
     }
 
     open(my $COMMON,$common_file) or die "Impossible to open the input file $common_file\n";
