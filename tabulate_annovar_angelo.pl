@@ -49,7 +49,7 @@ foreach my $dir (@dirs)
     {
         chomp($line);
         #print("DEBUG: $line\n");
-        if ($line =~ m/filtcovBNABU#.*common\.vcf/)
+        if ($line =~ m/filt${covB}NABU#.*common\.vcf/)
         {
             @temp=split(",",$line);
             push(@common_files,"$dir/".$temp[1].".annotated.variant_function");
