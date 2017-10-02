@@ -1131,17 +1131,17 @@ sub vcf_covN_filter
         $totalreads=$totalaltreads+${$variants{$variant}}[2];
         $prop_alts=$totalreads != 0 ? ($totalaltreads+0.0)/$totalreads : 0 ;
 
-        print("DEBUG: Variant $variant\n");
-        print("DEBUG: totalreads $totalreads, totalalternative $totalaltreads, proportion alternative $prop_alts\n");
+       # print("DEBUG: Variant $variant\n");
+       # print("DEBUG: totalreads $totalreads, totalalternative $totalaltreads, proportion alternative $prop_alts\n");
 
         if($totalreads < $min_coverage || $totalaltreads>$max_alternative || $prop_alts>$max_propalt)
         #if($totalreads < $min_coverage || ($totalaltreads>$max_alternative && $prop_alts>$max_propalt)) ##OR between the second two for backwards compatibility
         {
-            print("\tDEBUG: covN variant will be kept, to be removed from A or B if present\n");
+           # print("\tDEBUG: covN variant will be kept, to be removed from A or B if present\n");
         }
         else
         { 
-            print("\tDEBUG: good N variant, removed from the list\n");
+            #print("\tDEBUG: good N variant, removed from the list\n");
             delete($variants{$variant}); 
         }
     }
