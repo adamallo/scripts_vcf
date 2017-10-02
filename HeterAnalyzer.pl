@@ -1090,7 +1090,7 @@ sub vcf_covN_filter
     my $max_alternative=9**9**9; ##pseudo +inf
     my $max_propalt=1;
 
-    print("DEBUG: covN filtering options $covNfiltering_options\n");    
+    #print("DEBUG: covN filtering options $covNfiltering_options\n");    
 
     my @covNfiltering_params=split($sep_param,$covNfiltering_options);
     foreach my $covNoption (@covNfiltering_params)
@@ -1098,7 +1098,7 @@ sub vcf_covN_filter
         my ($param, $value)= split($sep_value,$covNoption);
         $value=~s/0_//; ##They start with 0_ for backwards compatiblity
 
-        print("DEBUG: covN option $covNoption, param: $param, value: $value\n");
+        #print("DEBUG: covN option $covNoption, param: $param, value: $value\n");
         
         if ($param =~ /--min_coverage/i || $param =~ /--max_coverage/i) ##The second term is included for backwards compatibility and it is misleading
         {
@@ -1117,7 +1117,7 @@ sub vcf_covN_filter
             die "The param $param has not been recognized properly in the covN filtering step\n";
         }
     }
-    print("DEBUG:Final filtering options, minimum coverage in B: $min_coverage, maximum number of reads supporting the alternative allele in B: $max_alternative, maximum proportion of alternative alleles in B: $max_propalt, variants with data in covN" . scalar (keys %variants) . "\n");
+    #print("DEBUG:Final filtering options, minimum coverage in B: $min_coverage, maximum number of reads supporting the alternative allele in B: $max_alternative, maximum proportion of alternative alleles in B: $max_propalt, variants with data in covN" . scalar (keys %variants) . "\n");
     
     ##Filtering loop
     ###############
