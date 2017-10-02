@@ -210,18 +210,6 @@ else
 	print("\tSample B variant calling already present, skipping it\n");
 }
 
-if(! -f "NAB.vcf")
-{
-	$bamfiles="$normal_bam,$sample1_bam,$sample2_bam";
-	$exe_condition="";
-	my $job_id=submit_job("$qsub $variant_calling_sh $bamfiles NAB.vcf NAB_platypus.log $exe_condition");
-	print("\tSample NAB variant calling submited with job_id $job_id\n");
-}
-else
-{
-	print("\tNAB variant calling already present, skipping it\n");
-}
-
 ### Calling with filters (Only cancer samples so far)
 
 ### Calling with filters (Only cancer samples so far)

@@ -20,6 +20,7 @@ our $output_list=1;
 our $output_comprehensive=1;
 our $n_cores=1;
 our $covB_sh="covB.sh";
+our $covN_sh="covN.sh";
 #our $covB_sh="covBdoublecheck.sh";
 
 ######################################################
@@ -142,39 +143,21 @@ if (! -f "$vcf_filt_exe")
 ## Parsing static variants
 ############################################################################################
 
-#my (%A,%B,%N);
 my %N;
 my ($ref_n,$nameN);
 
 push(@namedvcffiles,("A.vcf","B.vcf","N.vcf","NAB.vcf"));
 
-#if ( -f "A.vcf" && -f "B.vcf" && -f "N.vcf")
 if ( -f "N.vcf")
 {
-#    %A=%{parse_vcf("A.vcf")};
-#    %B=%{parse_vcf("B.vcf")};
     ($ref_n,$nameN)=parse_vcf_name("N.vcf");
     #print("DEBUG: N genotype name $nameN\n");
     %N=%{$ref_n};
-#    my %AN=%{vcf_prune_single(\%A,\%N)};
-#    my %BN=%{vcf_prune_single(\%B,\%N)};
-#    @nofilt_results=(scalar keys %A, scalar keys %B, scalar keys %N, scalar keys %AN, scalar keys %BN);
 }
 else
 {
     die "Missing vcf files. Something weird has happend between the execution of the previous script and this one. Check that the variant calling step has finished succesfully and try to execute this script again\n";
 }
-
-
-## Fixing NAB filters, since the N column is not always 0 as expected (weird platypus behaviour)
-##########################################################################
-
-my $pos_N=get_col_name_vcf("NAB.vcf",$nameN);
-
-#print("DEBUG: N genotype column $pos_N\n");
-
-@NABfiltering_param_values1=filtervalues_changepost(\@NABfiltering_param_values1,$pos_N);
-@NABfiltering_param_values2=filtervalues_changepost(\@NABfiltering_param_values2,$pos_N);
 
 ## Main conditions loop
 #######################
@@ -200,6 +183,17 @@ combs(0,"",\@covBfiltering_parameters,\@covBfiltering_param_values,\@covBfilteri
 #print("DEBUG: @exe_parameters, @exe_param_values");
 #print("DEBUG: @exe_conditions,@filtering_conditions,@NABfiltering_conditions1,@NABfiltering_conditions2\n");
 
+##Generating final NAB filtering conditions
+###########################################
+my $pos=0;
+for (my $i=0; $i<scalar @NABfiltering_conditions1; ++$i)
+{
+    for (my $j=0; $j< scalar @NABfiltering_conditions2; ++$j)
+    {
+        $NABfiltering_conditions[$pos]="$NABfiltering_conditions1[$i]$sep_param$NABfiltering_conditions2[$j]";
+        $pos+=1;
+    }
+}
 
 if ($n_cores>1)
 {
@@ -207,90 +201,13 @@ if ($n_cores>1)
     $parallel->share(\%results, \@listfiles, \@vcffiles,\@namedvcffiles);
 }
 
-
-## NAB filtering and parsing
-##########################################################################################
-
-if ( ! -f "NAB.vcf")
-{
-    die "Missing vcf files. Something weird has happend between the execution of the previous script and this one. Check that the variant calling step has finished succesfully and try to execute this script again\n";
-}
-
-my @NAB_hash_pointers;
-
-if($n_cores>1)
-{
-    $parallel->foreach(\@NABfiltering_conditions1,\&filterNAB);
-    $parallel->foreach(\@NABfiltering_conditions2,\&filterNAB);
-}
-else
-{
-    foreach my $filtering_condition (@NABfiltering_conditions1)
-    {
-        filterNAB($filtering_condition);
-    }
-    foreach my $filtering_condition (@NABfiltering_conditions2)
-    {
-        filterNAB($filtering_condition);
-    }
-
-}
-
-my @NAB_hash_pointers1;
-my @NAB_hash_pointers2;
-my $thisNABname;
-
-for (my $i=0; $i<scalar @NABfiltering_conditions1; ++$i)
-{
-    $thisNABname="NAB$sep_param$NABfiltering_conditions1[$i].vcf"; ##This name should be obtained if I include them in the vcf dictionary
-    $NAB_hash_pointers1[$i]=parse_vcf($thisNABname);
-}
-
-for (my $i=0; $i<scalar @NABfiltering_conditions2; ++$i)
-{
-    $thisNABname="NAB$sep_param$NABfiltering_conditions2[$i].vcf";##This name should be obtained if I include them in the vcf dictionary
-    $NAB_hash_pointers2[$i]=parse_vcf($thisNABname);
-}
-
-my $pos=0;
-for (my $i=0; $i<scalar @NABfiltering_conditions1; ++$i)
-{  
-    for (my $j=0; $j< scalar @NABfiltering_conditions2; ++$j)
-    {
-        $NABfiltering_conditions[$pos]="$NABfiltering_conditions1[$i]$sep_param$NABfiltering_conditions2[$j]";
-        $NAB_hash_pointers[$pos]=combine_vcf_hashes($NAB_hash_pointers1[$i],$NAB_hash_pointers2[$j]);
-        $pos+=1;
-    }
-}
-
-## Old germline filtering
-#########################################################################################
-
-#my $filtering_command="$vcf_filt_exe ";
-#$filtering_command.="--isvar 1";
-#if (!-f "NAB${sep_param}germline.vcf")
-#{
-#	print("Filtering NAB.vcf to generate NAB${sep_param}germline.vcf\n");
-#	## Filter the right vcf file generated ini the outside loop	
-#	system("$filtering_command -i NAB.vcf -o NAB${sep_param}germline.vcf");
-#	#print("DEBUG: $filtering_command -i A$sep_param$exe_condition.vcf -o A$sep_param$condition.vcf \n");
-#}
-#else
-#{
-#	print("NAB${sep_param}germline.vcf had been previously generated and it will be recycled\n");
-#}
-
-
-##my @temp=parse_vcf_name("NAB${sep_param}germline.vcf");
-##my %NAB=%{$temp[0]};
-##my $nameN=$temp[1];
-
 foreach my $exe_condition (@exe_conditions) ##Options that require to call variants again 
 {
     my $Aexecondname="A$sep_param$exe_condition.vcf"; ##So far I am not using numbers for execondnames. If I change this, I will need to get the number names here and in the filter function
     my $Bexecondname="B$sep_param$exe_condition.vcf";
     my $AcovBname="A$sep_param$exe_condition${sep_param}covBfiltering.tsv"; #Same here, although these are tsvs
     my $BcovBname="B$sep_param$exe_condition${sep_param}covBfiltering.tsv";
+    my $covNname="covN$sep_param$exe_condition.tsv";
 
 #print("DEBUG: Exe condition loop $exe_condition\n");
     if ((!-f $Aexecondname) || (!-f $Bexecondname)) ##VCF file we will use for filtering, if it does not exist we have to perform the variant calling
@@ -301,6 +218,19 @@ foreach my $exe_condition (@exe_conditions) ##Options that require to call varia
     {
         push(@namedvcffiles,$Aexecondname); ##Fixed name instead of numbers
         push(@namedvcffiles,$Bexecondname);
+    }
+
+    ## covN filtering and parsing
+    ##########################################################################################
+    
+    if ( ! -f "$covNname")
+    {
+        print("Calling variants in the N file for the calculation of covN for the exe_conditions $exe_condition\n");
+        `$SCRIPTSVCF_DIR/$covN_sh $Aexecondname $Bexecondname $covNname $Nbam_file`;
+    }
+    else
+    {
+        print("Reusing previously generated $covNname\n");
     }
 
     my @current_conditions=@filtering_conditions;
@@ -394,8 +324,9 @@ sub filter
     my $Aexecondname="A$sep_param$exe_condition.vcf"; ##So far I am not using numbers for execondnames. If I change this I need to obtain the names here from the array (I may make a hash then)
     my $Bexecondname="B$sep_param$exe_condition.vcf";
     my $AcovBname="A$sep_param$exe_condition${sep_param}covBfiltering.tsv"; #Same here, although these are tsvs
-    my $BcovBname="B$sep_param$exe_condition${sep_param}covBfiltering.tsv";
-    
+    my $BcovBname="B$sep_param$exe_condition${sep_param}covBfiltering.tsv"; 
+    my $covNname="covN$sep_param$exe_condition.tsv";
+
     if ( -f $Aexecondname && -f $Bexecondname)
     {
         %A=%{parse_vcf($Aexecondname)};
@@ -443,6 +374,10 @@ sub filter
 ##Data to filter variants according to covB.
 ############################################
 
+##TODO: This could be done outside the parallel section, once per exe_condition and store references to the hashes in another hash,
+#then, in the parallel section I would recover the hash reference with the exe_condition. For this version of the script it is no necessary, but for 
+#the duplicates it may be necessary for speed. I am not doing it right now just because I am in a rush, but it should be very easy.
+
     my %dataAfiltcovB;
     my %dataBfiltcovB;
 
@@ -454,6 +389,24 @@ sub filter
     else
     {
         die "Missing tsv files. There may be an error in the internal reference to \$covB_sh\n";
+    }
+
+##Data to filter variants according to covN.
+############################################
+
+##TODO: This could be done outside the parallel section, once per exe_condition and store references to the hashes in another hash,
+#then, in the parallel section I would recover the hash reference with the exe_condition. For this version of the script it is no necessary, but for 
+#the duplicates it may be necessary for speed. I am not doing it right now just because I am in a rush, but it should be very easy.
+
+    my %datacovN;
+
+    if ( -f $covNname)
+    {
+        %datacovN=%{parse_tsv($covNname)};
+    }
+    else
+    {
+        die "Missing tsv file. There may be an error in the internal reference to \$covN_sh\n";
     }
 
 # Right now I'm keeping a lot of hashes in memory instead of reusing variables. I do it just in case I need them in posterior statistics/calculations etc.
@@ -581,7 +534,9 @@ sub filter
     {
 
         my $NAB_condition=$NABfiltering_conditions[$i];
-        my $NAB=$NAB_hash_pointers[$i];
+        #my $NAB=$NAB_hash_pointers[$i]; ##TODO: I am not using this, but I may want to do it for speed
+        
+        my $NAB=vcf_covN_filter(\%datacovN,$NAB_condition);
 
 #Substract NAB from AfiltN. Compare the results to B without filter --> Common variants + % ###We want to apply filter to NAB and remove only variants that are Alternative for N
         my @statsAfiltNAB;
@@ -1115,6 +1070,82 @@ sub vcf_prune_covB
         @{ $ref_statistics }=($n_selvariants/($n_selvariants+$n_filtvariants),$n_selvariants,$n_selvariants+$n_filtvariants); ##Stats= proportion of selected reads in the reference, number of selected variants
     }
     return (\%common_variants,\%private_variants);
+}
+
+#Filter out variants in one hash depending on certain filters from two others and generate statistics
+#####################################################################################################
+sub vcf_covN_filter
+{
+    
+    my ($ref_datacovN,$covNfiltering_options)=@_;
+    my %variants=%{$ref_datacovN};
+    my $totalreads=0;
+    my $totalaltreads=0;
+    my $prop_alts=0;
+    
+    #Parser for covNfiltering_options
+    #################################################################################
+
+    my $min_coverage=0;
+    my $max_alternative=9**9**9; ##pseudo +inf
+    my $max_propalt=1;
+
+    print("DEBUG: covN filtering options $covNfiltering_options\n");    
+
+    my @covNfiltering_params=split($sep_param,$covNfiltering_options);
+    foreach my $covNoption (@covNfiltering_params)
+    {
+        my ($param, $value)= split($sep_value,$covNoption);
+        $value=~s/0_//; ##They start with 0_ for backwards compatiblity
+
+        print("DEBUG: covN option $covNoption, param: $param, value: $value\n");
+        
+        if ($param =~ /--min_coverage/i || $param =~ /--max_coverage/i) ##The second term is included for backwards compatibility and it is misleading
+        {
+           $min_coverage=$value;
+        }
+        elsif ($param =~ /--max_alternative/i || $param =~ /--min_reads_alternate/i)
+        {
+           $max_alternative=$value;
+        }
+        elsif ($param =~ /--max_propalt/i || $param =~ /--min_freq_alt/i)
+        {
+           $max_propalt=$value;
+        }
+        else
+        {
+            die "The param $param has not been recognized properly in the covN filtering step\n";
+        }
+    }
+    print("DEBUG:Final filtering options, minimum coverage in B: $min_coverage, maximum number of reads supporting the alternative allele in B: $max_alternative, maximum proportion of alternative alleles in B: $max_propalt, variants with data in covN" . scalar (keys %variants) . "\n");
+    
+    ##Filtering loop
+    ###############
+
+    foreach my $variant (keys %variants)
+    {
+
+        $totalreads=0;
+        $totalaltreads=0;
+        $totalaltreads+=$_ for split(",",${$variants{$variant}}[3]); ##Oneline for loop
+        $totalreads=$totalaltreads+${$variants{$variant}}[2];
+        $prop_alts=$totalreads != 0 ? ($totalaltreads+0.0)/$totalreads : 0 ;
+
+        print("DEBUG: Variant $variant\n");
+        print("DEBUG: totalreads $totalreads, totalalternative $totalaltreads, proportion alternative $prop_alts\n");
+
+        if($totalreads < $min_coverage || $totalaltreads>$max_alternative || $prop_alts>$max_propalt)
+        #if($totalreads < $min_coverage || ($totalaltreads>$max_alternative && $prop_alts>$max_propalt)) ##OR between the second two for backwards compatibility
+        {
+            print("\tDEBUG: covN variant will be kept, to be removed from A or B if present\n");
+        }
+        else
+        { 
+            print("\tDEBUG: good N variant, removed from the list\n");
+            delete($variants{$variant}); 
+        }
+    }
+    return(\%variants);
 }
 
 #Filter out variants in one hash from another
