@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH -t 4-00:00
-#SBATCH --mem 64000
+#Removed to make it quicker SBATCH --mem 64000
 
 module load perl/5.22.1
 module load parallel/20140822
