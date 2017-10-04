@@ -22,15 +22,16 @@ legend('topright', legend = colnames(gcstats$raw), pch = c(1, 19, 1))
 hist2(mydataplotgc$depth.ratio, mydataplotgc$adjusted.ratio, breaks = prettyLog, key = vkey, panel.first = abline(0, 1, lty = 2), xlab = 'Uncorrected depth ratio', ylab = 'GC-adjusted depth ratio')
 dev.off()
 
-chromosomes=c(seq(1,23),"X","Y")
-mydata=sequenza.extract(file=name,chromosome.list=chromosomes) ##I am excluding the GL "chromosomes" and the mitocondria since they generate an error in sequenza
+chromosomes=c(seq(1,22),"X")
+mydata=sequenza.extract(file=name,chromosome.list=chromosomes) ##I am excluding the GL "chromosomes" and the mitocondria since they generate an error in sequenza, and the Y, since these samples are all from females
 
 for (chr in 1:length(chromosomes)) {
+print(chromosomes[chr])
 chromosome=chromosomes[chr]
-pdf(paste0(outdir,"/chromosome",chromosomes[chromosome],"_view.pdf"))
+pdf(paste0(outdir,"/chromosome",chromosomes[chr],"_view.pdf"))
 try(chromosome.view(mut.tab = mydata$mutations[[chromosome]], baf.windows = mydata$BAF[[chromosome]], ratio.windows = mydata$ratio[[chromosome]], min.N.ratio = 1, segments = mydata$segments[[chromosome]], main = mydata$chromosomes[chromosome]))
 dev.off()
 }
 
-cp <- sequenza.fit(mydata,mc.cores=ncores,chromosome.list=chromosomes)
-sequenza.results(mydata,cp.table=cp,female=FALSE,sample.id=id,out.dir=outdir,chromosome.list=chromosomes)
+cp <- sequenza.fit(mydata,mc.cores=ncores,chromosome.list=chromosomes,female=TRUE,XY=c("X","Y"))
+sequenza.results(mydata,cp.table=cp,sample.id=id,out.dir=outdir,chromosome.list=chromosomes,female=TRUE,XY=c("X","Y"))
