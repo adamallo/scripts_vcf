@@ -1134,8 +1134,7 @@ sub vcf_covN_filter
        # print("DEBUG: Variant $variant\n");
        # print("DEBUG: totalreads $totalreads, totalalternative $totalaltreads, proportion alternative $prop_alts\n");
 
-        if($totalreads < $min_coverage || $totalaltreads>$max_alternative || $prop_alts>$max_propalt)
-        #if($totalreads < $min_coverage || ($totalaltreads>$max_alternative && $prop_alts>$max_propalt)) ##OR between the second two for backwards compatibility
+        if($totalreads < $min_coverage || ($totalaltreads>$max_alternative && $prop_alts>$max_propalt))
         {
            # print("\tDEBUG: covN variant will be kept, to be removed from A or B if present\n");
         }
