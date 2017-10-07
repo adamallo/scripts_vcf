@@ -1,4 +1,4 @@
 --qual,240
 --min_coverage,0
---min_reads_strand,0
---min_reads_alternate,10
+--min_reads_strand,8
+--min_reads_alternate,0
