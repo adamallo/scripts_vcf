@@ -95,13 +95,13 @@ find.breaks.multi= function (seqz.baf1, seqz.baf2, gamma= 80, penalty=25, verbos
                        selectAlg="exact",refine=TRUE)
         
         thisdataASCAT$sexchromosomes=sexchromosomes
-        thisdataASCAT$allele.seg$gender=gender
+        thisdataASCAT$gender=gender
         thisdataASCAT$chrs=c("p","q")
         thisdataASCAT$SNPpos=data.frame(chrs=arms,pos=BAF$pos)
-        resASCAT=ascat.runAscat(allele.seg)
+        resASCAT=ascat.runAscat(thisdataASCAT)
         allele.seg=resASCAT$segments
         colnames(allele.seg)=c("sample","arm", "start.pos", "end.pos", "nMajor", "nMinor")
-        allele.seg$chr=ichrom
+        allele.seg$chrom=ichrom
         allele.seg1=allele.seg[allele.seg$sample=="s1",] 
         allele.seg2=allele.seg[allele.seg$sample=="s2",]
 
@@ -130,18 +130,18 @@ find.breaks.multi= function (seqz.baf1, seqz.baf2, gamma= 80, penalty=25, verbos
     }
 
     if (length(grep("chr", seqz.baf1$chromosome)) > 0) {
-        allele1.seg$chrom <- paste("chr", allele1.seg$chrom, sep = "")
+        allele.seg1$chrom <- paste("chr", allele.seg1$chrom, sep = "")
     }
-    breaks1 <- allele1.seg[, c("chrom", "start.pos", "end.pos", 
+    breaks1 <- allele.seg1[, c("chrom", "start.pos", "end.pos", 
         "arm")]
     not.uniq <- which(breaks1$end.pos == c(breaks1$start.pos[-1], 
         0))
     breaks1$end.pos[not.uniq] <- breaks1$end.pos[not.uniq] - 1
 
     if (length(grep("chr", seqz.baf2$chromosome)) > 0) {
-        allele2.seg$chrom <- paste("chr", allele2.seg$chrom, sep = "")
+        allele.seg2$chrom <- paste("chr", allele.seg2$chrom, sep = "")
     }
-    breaks2 <- allele2.seg[, c("chrom", "start.pos", "end.pos", 
+    breaks2 <- allele.seg2[, c("chrom", "start.pos", "end.pos", 
         "arm")]
     not.uniq <- which(breaks2$end.pos == c(breaks2$start.pos[-1], 
         0))
@@ -258,7 +258,7 @@ my.sequenza.extract.paired=function (file1, file2, gz = TRUE, window = 1e+06, ov
 ##TODO: Indicate that here we are not applyting kmin for anything, gamma only for multipcf, and are applying a penalty for asmultipcf
                 if (breaks.method.i == "full") { #Uses both homozygous and heterozygous positions. The first using pcf on the depth, the second aspcf.
                     multibreaks <- find.breaks.multi(data1$seqz.data, data2$seqz.data, penalty = penalty, assembly = assembly, seg.algo = "multipcf") #multipcf
-                    multibreaks.het <- try(find.breaks.multi.(data1$seqz.het, data2$seqz.het, penalty = penalty, gamma = gamma, assembly = assembly ,seg.algo = "asmultipcf"), silent = FALSE) #asmultipcf
+                    multibreaks.het <- try(find.breaks.multi(data1$seqz.het, data2$seqz.het, penalty = penalty, gamma = gamma, assembly = assembly ,seg.algo = "asmultipcf"), silent = FALSE) #asmultipcf
                 
                     if (!is.null(breaks.het)) {# merge homozygous and heterozygous breaks if the second worked
                         multibreaks=merge.multibreaks(multibreaks,multibreaks.het)                    
