@@ -50,7 +50,9 @@ find.breaks.multi= function (seqz.baf1, seqz.baf2, gamma= 80, penalty=25, verbos
     require(copynumber)
     require(sequenza)
     require(ASCAT)
-
+	
+	dummyarm=""
+	
     chromosome1 <- gsub(x = seqz.baf1$chromosome, pattern = "chr", replacement = "")
     chromosome2 <- gsub(x = seqz.baf2$chromosome, pattern = "chr", replacement = "")
 
@@ -80,13 +82,32 @@ find.breaks.multi= function (seqz.baf1, seqz.baf2, gamma= 80, penalty=25, verbos
         BAF=BAF[,c(2,1,3,4)]
 
         #Get arms
-        arms=copynumber:::getArms(BAF$chrom,BAF$pos,cyto.data=getAnywhere(assembly)$objs[[1]])
+        arms=copynumber:::getArms(BAF$chrom,BAF$pos,cyto.data=getAnywhere(assembly)$objs[[1]]) 
         pints=which(arms=="p")
         qints=which(arms=="q")
+        
+        ####ATTENTION: runAscat does not work properly with only one chromosome arm, to solve this, I am making a dummy arm when we have data only for one
+        if(length(pints)==0 || length(qints)==0)
+        {
+        	dummyarm=if(length(pints)==0) "p" else "q"
+        	maxpos=max(logR$pos)
+        	templogR=logR
+        	templogR$pos=templogR$pos+maxpos
+        	logR=rbind(logR,templogR)
+        	tempBAF=BAF
+        	tempBAF$pos=tempBAF$pos+maxpos
+        	BAF=rbind(BAF,tempBAF)
+        	arms=c(arms,rep(dummyarm,length(arms)))
+        	pints=which(arms=="p")
+        	qints=which(arms=="q")
+        }
+        
+        chrlist=list(pints,qints)
+        chrlist=Filter(length,chrlist)
 
         #ASCAT data format
-        thisdataASCAT=list(chr=list(pints,qints),samples=c("s1","s2"),Tumor_LogR=logR[,c(3,4)],Tumor_BAF=BAF[,c(3,4)])
-        
+        thisdataASCAT=list(chr=chrlist,samples=c("s1","s2"),Tumor_LogR=logR[,c(3,4)],Tumor_BAF=BAF[,c(3,4)],sexchromosomes=sexchromosomes,gender=gender,SNPpos=data.frame(chrs=arms,pos=BAF$pos))
+
         #We are already using only heterozygous loci, so none of them are germline
         gg=list(germlinegenotypes=rep(FALSE,nrow(BAF)))
 
@@ -94,16 +115,14 @@ find.breaks.multi= function (seqz.baf1, seqz.baf2, gamma= 80, penalty=25, verbos
         thisdataASCAT <- ascat.asmultipcf(thisdataASCAT, ascat.gg = gg, penalty = penalty, wsample=NULL,
                        selectAlg="exact",refine=TRUE)
         
-        thisdataASCAT$sexchromosomes=sexchromosomes
-        thisdataASCAT$gender=gender
-        thisdataASCAT$chrs=c("p","q")
-        thisdataASCAT$SNPpos=data.frame(chrs=arms,pos=BAF$pos)
+        thisdataASCAT$chrs=unique(arms)
+
         resASCAT=ascat.runAscat(thisdataASCAT)
         allele.seg=resASCAT$segments
         colnames(allele.seg)=c("sample","arm", "start.pos", "end.pos", "nMajor", "nMinor")
         allele.seg$chrom=ichrom
-        allele.seg1=allele.seg[allele.seg$sample=="s1",] 
-        allele.seg2=allele.seg[allele.seg$sample=="s2",]
+        allele.seg1=allele.seg[allele.seg$sample=="s1" & allele.seg$arm!=dummyarm,] 
+        allele.seg2=allele.seg[allele.seg$sample=="s2"& allele.seg$arm!=dummyarm,]
 
     }
     else if (seg.algo == "multipcf") {
@@ -150,13 +169,12 @@ find.breaks.multi= function (seqz.baf1, seqz.baf2, gamma= 80, penalty=25, verbos
     return(list(s1=breaks1,s2=breaks2))
 }
 
-##Function separated from sequenza-extract for clarity 
+##Function separated from sequenza-extract for clarity ##There is some problems here
 merge.breaks <- function(breaks, breaks.het) {
     merged.breaks <- unique(sort(c(breaks$start.pos, 
                          breaks$end.pos, breaks.het$start.pos, 
                          breaks.het$end.pos)))
-    merged.breaks <- merged.breaks[diff(merged.breaks) > 
-                           1]
+    merged.breaks <- merged.breaks[diff(merged.breaks) > 1]
     merged.start <- merged.breaks
     merged.start[-1] <- merged.start[-1] + 1
     breaks <- data.frame(chrom = unique(breaks$chrom), 
@@ -164,7 +182,7 @@ merge.breaks <- function(breaks, breaks.het) {
                end.pos = merged.breaks[-1])
 }
 
-merge.breaks.byarm = function(breaks, braks.het) {
+merge.breaks.byarm = function(breaks, breaks.het) {
     chr.p <- merge.breaks(breaks[breaks$arm == "p", ], breaks.het[breaks.het$arm == "p", ])
     chr.q <- merge.breaks(breaks[breaks$arm == "q", ], breaks.het[breaks.het$arm == "q", ])
     breaks <- rbind(chr.p, chr.q)
@@ -187,7 +205,7 @@ my.sequenza.extract.paired=function (file1, file2, gz = TRUE, window = 1e+06, ov
 
     ####TODO:
     ###### I should take into consideration the fact that we may not have data for a specific DNA stretch for one sample while we do for the other. So far I am not considering this. Doing it at a nucletoid level makes no sense either
-. 
+     
     require(sequenza)
     require(ASCAT)
  
@@ -223,16 +241,16 @@ my.sequenza.extract.paired=function (file1, file2, gz = TRUE, window = 1e+06, ov
     }
    
     ##Initiate variables 
-    windows1.baf <- list()
-    windows1.ratio <- list()
-    mutation1.list <- list()
-    segments1.list <- list()
-    coverage1.list <- list()
-    windows2.baf <- list()
-    windows2.ratio <- list()
-    mutation2.list <- list()
-    segments2.list <- list()
-    coverage2.list <- list()
+    windows.baf1 <- list()
+    windows.ratio1 <- list()
+    mutation.list1 <- list()
+    segments.list1 <- list()
+    coverage.list1 <- list()
+    windows.baf2 <- list()
+    windows.ratio2 <- list()
+    mutation.list2 <- list()
+    segments.list2 <- list()
+    coverage.list2 <- list()
 
     ##This is common
     if (is.null(chromosome.list)) { ##Final list of chromosomes
