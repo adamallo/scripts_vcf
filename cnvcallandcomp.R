@@ -15,7 +15,7 @@ printsegmentation = function (datai,outdir='segmentation_chromosomes',chromosome
 }
 
 ##Function to get the data for a chromosome
-prepDataChr = function (gc.stats,file,chr,chr.vect,gc.vect,min.reads.baf,window,overlap) {
+prepDataChr = function (gc.stats,file,chr,chr.vect,gc.vect,min.reads.baf,window,overlap,gz= TRUE) {
 
     file.lines <- gc.stats$file.metrics[which(chr.vect == 
                                                 chr), ] ##get the lines from the gc stats
@@ -268,8 +268,8 @@ my.sequenza.extract.paired=function (file1, file2, gz = TRUE, window = 1e+06, ov
             message("Processing ", chr, ": ", appendLF = FALSE)
         }
     
-        data1=prepDataChr(gc.stats1,file1,chr,chr.vect1,gc.vect1,min.reads.baf,window,overlap)
-        data2=prepDataChr(gc.stats2,file2,chr,chr.vect2,gc.vect2,min.reads.baf,window,overlap)
+        data1=prepDataChr(gc.stats1,file1,chr,chr.vect1,gc.vect1,min.reads.baf,window,overlap,gz)
+        data2=prepDataChr(gc.stats2,file2,chr,chr.vect2,gc.vect2,min.reads.baf,window,overla,gz)
   
         if (nrow(data1$seqz.het) > 0 && nrow(data2$seqz.het) > 0) ##Het post for the two, we can use asmultipcf in het and/or multipcf in hom/all
         {
@@ -491,7 +491,7 @@ chromosomes=c(seq(1,22),"X")
  
 ##TODO: ADD filtering parameters. I gotta think better about them
 
-datacomp=my.sequenza.extract.paired(file1=name1, file2=name2, chromosome.list=chromosomes,mufreq.treshold=0.10, min.reads=20,min.reads.normal=10, max.mut.types =3,) #gamma and kmin not being used, penalty not being changed.
+datacomp=my.sequenza.extract.paired(file1=name1, file2=name2, chromosome.list=chromosomes,mufreq.treshold=0.10, min.reads=20,min.reads.normal=10, max.mut.types =3) #gamma and kmin not being used, penalty not being changed.
 ##mufreq.treshold default
 ##minreads lowered to 20, we don't have so much coverage to put 40
 ##minreads normal default

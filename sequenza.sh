@@ -9,4 +9,4 @@ then
 fi
 
 
-Rscript $BLADDER_SCRIPTS/sequenza.R $1 $2 $SLURM_CPUS_PER_TASK
+Rscript $SCRIPTSVCF_DIR/sequenza.R $1 $2 $SLURM_CPUS_PER_TASK

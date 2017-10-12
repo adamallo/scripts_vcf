@@ -17,4 +17,4 @@ gcfile="$(dirname $HUMAN_GENOME)/b37.gc50Base.txt.gz"
 pypy `which sequenza-utils.py` pileup2seqz -gc $gcfile -t $1 -n $2 | gzip > $3/$4_temp.seqz.gz
 #pypy `which sequenza-utils.py` bam2seqz -gc $gcfile --fasta $HUMAN_GENOME -t $1 -n $2 | gzip > $3/$4_temp.seqz.gz
 pypy `which sequenza-utils.py` seqz-binning -w 50 -s $3/$4_temp.seqz.gz | gzip > $3/$4.seqz.gz
-#rm -f $3/$4_temp.seqz.gz
+rm -f $3/$4_temp.seqz.gz

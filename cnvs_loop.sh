@@ -33,14 +33,13 @@ do
     idb=$(sbatch -p private --job-name=${output}_pileupB $EXE_DIR/generatepileups.sh $outdir/b.pileup.gz $b | sed "s/Submitted batch job \(.*\)/\1/")
     idb=$(sbatch -p private --job-name=${output}_prepSequenzaB --dependency=afterok:${Nid}:${idb} $EXE_DIR/preprocess_sequenza.sh $outdir/b.pileup.gz $outdir/n.pileup.gz $outdir bn | sed "s/Submitted batch job \(.*\)/\1/")
     privdependency="${privdependency}:${idb}"
-   
-    ida=$(sbatch -p private -c $n_cores --job-name=${output}_SequenzaA --dependency=afterok:${ida} $EXE_DIR/sequenza.sh $outdir/an.seqz.gz $outdir | sed "s/Submitted batch job \(.*\)/\1/")
-    dependency="${dependency}:${ida}" 
-    idb=$(sbatch -p private -c $n_cores --job-name=${output}_SequenzaB --dependency=afterok:${idb} $EXE_DIR/sequenza.sh $outdir/bn.seqz.gz $outdir | sed "s/Submitted batch job \(.*\)/\1/")
-    dependency="${dependency}:${idb}"
+  
+    #seqzfileA seqzfileB outdir patient
+ 
+    id=$(sbatch -p private -c $n_cores --job-name=${output}_Sequenza --dependency=afterok:${privdependency} $EXE_DIR/cnvcall.sh $outdir/an.seqz.gz $outdir/bn.seqz.gz $outdir $output | sed "s/Submitted batch job \(.*\)/\1/")
+    dependency="${dependency}:${id}" 
 
-    #id=$(sbatch -p private --job-name=${output}_HetAn <( echo -e '#!/bin/bash'"\n $EXE_DIR/HeterAnalyzer_control.pl -e $exe_params -f $filtering_params --NABfilt_cond_inputfile $NAB_params --NABfilt_cond_inputfile2 $NAB2_params --covaltB_cond_inputfile $covB_params -o $dir/${output}.csv --normal_bamfile $normal --sample_A_bamfile $a --sample_B_bamfile $b --output_dir $dir/$output --n_cores $n_cores > $dir/${output}.out") | sed "s/Submitted batch job \(.*\)/\1/")
-    #dependency="${dependency}:${id}"
 done < $torun
 
+##I will need to add here something to summarize, if necessary
 #sbatch -p private --job-name=getdependencies --dependency=afterok$dependency <(echo -e '#!/bin/bash' "\ndependency=\"\";while read -r output normal a b;do id=\$(tail -n 1 $dir/\${output}.out);dependency=\"\$dependency:\$id\";done < $torun;sbatch -p private --dependency=afterok\$dependency $EXE_DIR/postHeterAnalyzer.sh $dir $torun $exe_params $filtering_params $NAB_params $NAB2_params $covB_params $n_cores")
