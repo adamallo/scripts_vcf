@@ -269,7 +269,7 @@ my.sequenza.extract.paired=function (file1, file2, gz = TRUE, window = 1e+06, ov
         }
     
         data1=prepDataChr(gc.stats1,file1,chr,chr.vect1,gc.vect1,min.reads.baf,window,overlap,gz)
-        data2=prepDataChr(gc.stats2,file2,chr,chr.vect2,gc.vect2,min.reads.baf,window,overla,gz)
+        data2=prepDataChr(gc.stats2,file2,chr,chr.vect2,gc.vect2,min.reads.baf,window,overlap,gz)
   
         if (nrow(data1$seqz.het) > 0 && nrow(data2$seqz.het) > 0) ##Het post for the two, we can use asmultipcf in het and/or multipcf in hom/all
         {
