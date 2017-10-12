@@ -5,7 +5,7 @@ library(ASCAT)
 ######################MY FUNCTIONS##############
 
 printsegmentation = function (datai,outdir='segmentation_chromosomes',chromosomes) {
-
+	dir.create(outdir)
     for (chr in 1:length(chromosomes)) {
         chromosome=chromosomes[chr]
         pdf(paste0(outdir,"/chr",chromosomes[chr],"_view.pdf"))
@@ -39,13 +39,13 @@ prepDataChr = function (gc.stats,file,chr,chr.vect,gc.vect,min.reads.baf,window,
         seqz.b.win[[1]] <- data.frame(start = min(seqz.data$position, na.rm = TRUE), end = max(seqz.data$position, 
                                 na.rm = TRUE), mean = 0.5, q0 = 0.5, q1 = 0.5, N = 1)
     }
-    return(list(file.lines=file.lines,seqz.data=seqz.data,seqz.hom=seqz.hom,seqz.het=seqz.het,het.filt=het.filt,seqz.r.win=seqz.r.win))
+    return(list(file.lines=file.lines,seqz.data=seqz.data,seqz.hom=seqz.hom,seqz.het=seqz.het,het.filt=het.filt,seqz.r.win=seqz.r.win,seqz.b.win=seqz.b.win))
 }
 
 ##Function to segment multiple samples at once
 
 find.breaks.multi= function (seqz.baf1, seqz.baf2, gamma= 80, penalty=25, verbose = FALSE, seg.algo = "asmultipcf", 
-                            assembly= "hg19", gender=c("XX","XX"), sexchromosomes=c("X","Y"), ...) 
+                            assembly= "hg19", gender=c("XX","XX"), sexchromosomes=c("X","Y"), refine=FALSE, ...) 
 {
     require(copynumber)
     require(sequenza)
@@ -113,7 +113,7 @@ find.breaks.multi= function (seqz.baf1, seqz.baf2, gamma= 80, penalty=25, verbos
 
         ##We use a full run of ascat to get the combined segmentation from asmultipcf (this may not be ideal)
         thisdataASCAT <- ascat.asmultipcf(thisdataASCAT, ascat.gg = gg, penalty = penalty, wsample=NULL,
-                       selectAlg="exact",refine=TRUE)
+                       selectAlg="exact",refine=refine)
         
         thisdataASCAT$chrs=unique(arms)
 
@@ -123,6 +123,11 @@ find.breaks.multi= function (seqz.baf1, seqz.baf2, gamma= 80, penalty=25, verbos
         allele.seg$chrom=ichrom
         allele.seg1=allele.seg[allele.seg$sample=="s1" & allele.seg$arm!=dummyarm,] 
         allele.seg2=allele.seg[allele.seg$sample=="s2"& allele.seg$arm!=dummyarm,]
+        
+        ##DEBUG
+        write.table(x=allele.seg1,file=paste0("s1ASCAT_",ichrom,".txt"))
+        write.table(x=allele.seg2,file=paste0("s2ASCAT_",ichrom,".txt"))
+
 
     }
     else if (seg.algo == "multipcf") {
@@ -225,8 +230,7 @@ my.sequenza.extract.paired=function (file1, file2, gz = TRUE, window = 1e+06, ov
     ##Use given breaks if given 
     if (is.null(dim(breaks))) {
         breaks.all <- NULL
-    }
-    else {
+    } else {
         breaks.all <- breaks
     }
  
@@ -234,8 +238,7 @@ my.sequenza.extract.paired=function (file1, file2, gz = TRUE, window = 1e+06, ov
     if (normalization.method != "mean") {
         gc.vect1 <- setNames(gc.stats1$raw.median, gc.stats1$gc.values) ##gc normalization values
         gc.vect2 <- setNames(gc.stats2$raw.median, gc.stats2$gc.values) ##gc normalization values
-    }
-    else {
+    } else {
         gc.vect1 <- setNames(gc.stats1$raw.mean, gc.stats1$gc.values)
         gc.vect2 <- setNames(gc.stats2$raw.mean, gc.stats2$gc.values)
     }
@@ -325,8 +328,7 @@ my.sequenza.extract.paired=function (file1, file2, gz = TRUE, window = 1e+06, ov
                     seg.s1 <- segment.breaks(seqz.tab = data1$seqz.data, 
                                      breaks = multibreaks$s1, min.reads.baf = min.reads.baf, 
                                      weighted.mean = weighted.mean)
-                }
-                else { #No breaks, segments=full chromosomes
+                } else { #No breaks, segments=full chromosomes
                     seg.s1 <- segment.breaks(data1$seqz.data, breaks = data.frame(chrom = chr, 
                                                                     start.pos = min(data1$seqz.data$position, na.rm = TRUE), 
                                                                     end.pos = max(data1$seqz.data$position, na.rm = TRUE)), 
@@ -338,8 +340,7 @@ my.sequenza.extract.paired=function (file1, file2, gz = TRUE, window = 1e+06, ov
                     seg.s2 <- segment.breaks(seqz.tab = data2$seqz.data, 
                                      breaks = multibreaks$s2, min.reads.baf = min.reads.baf, 
                                      weighted.mean = weighted.mean)
-                }
-                else { #No breaks, segments=full chromosomes
+                } else { #No breaks, segments=full chromosomes
                     seg.s2 <- segment.breaks(data2$seqz.data, breaks = data.frame(chrom = chr, 
                                                                     start.pos = min(data2$seqz.data$position, na.rm = TRUE), 
                                                                     end.pos = max(data2$seqz.data$position, na.rm = TRUE)), 
@@ -374,7 +375,7 @@ my.sequenza.extract.paired=function (file1, file2, gz = TRUE, window = 1e+06, ov
                                   min.fw.freq = min.fw.freq, segments = seg.s1)
         windows.baf1[[which(chromosome.list == chr)]] <- data1$seqz.b.win[[1]]
         windows.ratio1[[which(chromosome.list == chr)]] <- data1$seqz.r.win[[1]]
-        mutation.list1[[which(chromosome.list == chr)]] <- data1$mut.tab
+        mutation.list1[[which(chromosome.list == chr)]] <- mut.tab1
         segments.list1[[which(chromosome.list == chr)]] <- seg.s1
         coverage.list1[[which(chromosome.list == chr)]] <- data.frame(sum = sum(as.numeric(data1$seqz.data$depth.tumor), 
                                                                                na.rm = TRUE), N = length(data1$seqz.data$depth.tumor))
@@ -385,7 +386,7 @@ my.sequenza.extract.paired=function (file1, file2, gz = TRUE, window = 1e+06, ov
                                   min.fw.freq = min.fw.freq, segments = seg.s2)
         windows.baf2[[which(chromosome.list == chr)]] <- data2$seqz.b.win[[1]]
         windows.ratio2[[which(chromosome.list == chr)]] <- data2$seqz.r.win[[1]]
-        mutation.list2[[which(chromosome.list == chr)]] <- data2$mut.tab
+        mutation.list2[[which(chromosome.list == chr)]] <- mut.tab2
         segments.list2[[which(chromosome.list == chr)]] <- seg.s2
         coverage.list2[[which(chromosome.list == chr)]] <- data.frame(sum = sum(as.numeric(data2$seqz.data$depth.tumor), 
                                                                                na.rm = TRUE), N = length(data2$seqz.data$depth.tumor))
@@ -420,6 +421,50 @@ my.sequenza.extract.paired=function (file1, file2, gz = TRUE, window = 1e+06, ov
               gc = gc.stats2, avg.depth = round(coverage2, 0))))
 }
 
+##WARNING: STATISTICS ARE JUST COPIED WHEN WE SPLIT FRAGMENTS, ONLY GENOTYPES AND BREAKPOINTS SHOULD BE USED
+syncsegments= function(segs1,segs2) {
+
+	chrs=unique(c(as.character(segs1$chromosome),as.character(segs2$chromosome)))
+	breakpoints=sort(unique(c(segs1$start.pos,segs1$end.pos,segs2$start.pos,segs2$end.pos)))
+	maxnsegments=length(breakpoints)-1-(length(chrs)-1)
+	outsegments1=data.frame(chromosome=character(maxnsegments),start.pos=numeric(maxnsegments),end.pos=numeric(maxnsegments),Bf=numeric(maxnsegments),N.BAF=numeric(maxnsegments),sd.BAF=numeric(maxnsegments),depth.ratio=numeric(maxnsegments),N.ratio=numeric(maxnsegments),sd.ratio=numeric(maxnsegments),CNt=numeric(maxnsegments),A=numeric(maxnsegments),B=numeric(maxnsegments),LPP=numeric(maxnsegments),stringsAsFactors=FALSE)
+	outsegments2=data.frame(chromosome=character(maxnsegments),start.pos=numeric(maxnsegments),end.pos=numeric(maxnsegments),Bf=numeric(maxnsegments),N.BAF=numeric(maxnsegments),sd.BAF=numeric(maxnsegments),depth.ratio=numeric(maxnsegments),N.ratio=numeric(maxnsegments),sd.ratio=numeric(maxnsegments),CNt=numeric(maxnsegments),A=numeric(maxnsegments),B=numeric(maxnsegments),LPP=numeric(maxnsegments),stringsAsFactors=FALSE)
+	
+	iseg=1
+	
+	for (nchr in 1:length(chrs)) {
+		chr=chrs[nchr]
+		segs1i=segs1[segs1$chromosome==chr,]
+		segs2i=segs2[segs2$chromosome==chr,]
+		breakpoints=sort(unique(c(segs1i$start.pos,segs1i$end.pos,segs2i$start.pos,segs2i$end.pos)))
+				
+		for (nbr in 2:length(breakpoints)) {	
+			b1=breakpoints[nbr-1]
+			b2=breakpoints[nbr]
+			
+			#print(paste0("Breakpoints ",b1," and",b2))
+			nseg1=which(segs1i$start.pos<=b1 & segs1i$end.pos>=b2)
+			nseg2=which(segs2i$start.pos<=b1 & segs2i$end.pos>=b2)
+			
+			if (length(nseg1)==1 & length(nseg2)==1) {
+				#chromosome start.pos   end.pos        Bf N.BAF     sd.BAF depth.ratio N.ratio  sd.ratio CNt A B       LPP
+				outsegments1[iseg,]=c(chr,b1,b2,segs1i[nseg1,4:ncol(outsegments1)])
+				outsegments2[iseg,]=c(chr,b1,b2,segs2i[nseg2,4:ncol(outsegments2)])
+				iseg=iseg+1
+			} else if (length(nseg1)>1 | length(nseg2)>1) {
+				stop(paste0("More than one compatible breakpoint for ",b1," and ",b2))
+			}
+		}
+	}
+	return(list(segmentsA=outsegments1[1:iseg-1,],segmentsB=outsegments2[1:iseg-1,]))
+}
+
+getgenotypesimilarity= function(segments) {
+	segsA=segments$segmentsA[,c("A","B")]
+	segsB=segments$segmentsB[,c("A","B")]
+	##The comparison retuns a allele by allele comparison, the apply allows me to see if both are true, then divide by the number of rows
+	sum(apply(MARGIN=1,X=(segsA==segsB),FUN=function(x){sum(x)==length(x)}))/nrow(segsA)
+}
 
 ################################################
 
@@ -436,40 +481,49 @@ id1=basename(id1)
 id2=sub(pattern=".seqz.gz",replacement="",x=name2)
 id2=basename(id2)
 
-#dir.create(outdir)
+dir.create(outdir)
 ncores=as.numeric(options[4])
+patient=options[5]
 
-
-##I don't really need this and it is now outdated
-#mydataplotgc=read.seqz(name) ##This takes like 3 min
-#gcstats=gc.norm(x = mydataplotgc$depth.ratio, gc = mydataplotgc$GC.percent)
-#gc.vect <- setNames(gcstats$raw.mean, gcstats$gc.values)
-#mydataplotgc$adjusted.ratio <- mydataplotgc$depth.ratio / gc.vect[as.character(mydataplotgc$GC.percent)]
-#pdf(paste0(outdir,"/GCnormalization.pdf"))
-#par(mfrow = c(1,2), cex = 1, las = 1, bty = 'l')
-#matplot(gcstats$gc.values, gcstats$raw, type = 'b', col = 1, pch = c(1, 19, 1), lty = c(2, 1, 2), xlab = 'GC content (%)', ylab = 'Uncorrected depth ratio')
-#legend('topright', legend = colnames(gcstats$raw), pch = c(1, 19, 1))
-#hist2(mydataplotgc$depth.ratio, mydataplotgc$adjusted.ratio, breaks = prettyLog, key = vkey, panel.first = abline(0, 1, lty = 2), xlab = 'Uncorrected depth ratio', ylab = 'GC-adjusted depth ratio')
-#dev.off()
-####
-
-chromosomes=c(seq(1,22),"X") ##I may need to add the rest of the chromosomes or understand why they were not working
-
+chromosomes=c(seq(1,22),"X")
 
 #min.reads=20,min.reads.normal=10,min.reads.baf=20,mufreq.treshold=0.25,max.mut.types=3
  
 ##TODO: ADD filtering parameters. I gotta think better about them
 
-datacomp=my.sequenza.extract.paired(file1=name1, file2=name2, chromosome.list=chromosomes)
+datacomp=my.sequenza.extract.paired(file1=name1, file2=name2, chromosome.list=chromosomes,mufreq.treshold=0.10, min.reads=20,min.reads.normal=10, max.mut.types =3,) #gamma and kmin not being used, penalty not being changed.
+##mufreq.treshold default
+##minreads lowered to 20, we don't have so much coverage to put 40
+##minreads normal default
+##minreads baf default (1, all reads are used for the segment average, this is not the BAF per site)
+##method default (baf)
+##max mut types relaxed to 3
+##min.type.freq default, I do not fully understand it
+##min.fw.freq default. We are not considering differences between strands
+
 
 ##Pending, new funtion to print them using a par to compare chr by chr the two samples
-printsegmentation(datacomp$A,outdir=paste0(outdir,"_A_chr"),chromosomes=chromosomes)
-printsegmentation(datacomp$B,outdir=paste0(outdir,"_B_chr"),chromosomes=chromosomes)
+printsegmentation(datacomp$A,outdir=paste0(outdir,"/A_chr"),chromosomes=chromosomes)
+printsegmentation(datacomp$B,outdir=paste0(outdir,"/B_chr"),chromosomes=chromosomes)
 
-cpA <- sequenza.fit(datacomp$A,mc.cores=ncores,chromosome.list=chromosomes,female=TRUE)
-cpB <- sequenza.fit(datacomp$B,mc.cores=ncores,chromosome.list=chromosomes,female=TRUE)
+cpA <- sequenza.fit(datacomp$A,mc.cores=ncores,chromosome.list=chromosomes,female=TRUE,N.BAF.filter=5)
+cpB <- sequenza.fit(datacomp$B,mc.cores=ncores,chromosome.list=chromosomes,female=TRUE,N.BAF.filter=5)
+##CNt max, 20 copies in a segment
+##N.ratio.filter default, a segment needs 10 positions to be included in the ratio
+##N.BAF.filter  positions in the segment to be used for BAF. Since just one read is enough, I will use 5 
+##segment.filter 1e6bp, default
+##ratio.priority false. The ratio does not have priority over BAF (with priority, CNt is determined using ratio, then with BAF the different alleles)
 
 sequenza.results(datacomp$A,cp.table=cpA,sample.id=id1,out.dir=outdir,chromosome.list=chromosomes,female=TRUE)
 sequenza.results(datacomp$B,cp.table=cpB,sample.id=id2,out.dir=outdir,chromosome.list=chromosomes,female=TRUE)
 
-##I may add a comparison of the CNVs here
+segmentsA=read.table(paste0(outdir,"/",id1,"_segments.txt"),header=TRUE)
+segmentsB=read.table(paste0(outdir,"/",id2,"_segments.txt"),header=TRUE)
+
+finalsegments=syncsegments(segmentsA,segmentsB)
+
+propgenotypes=getgenotypesimilarity(finalsegments)
+
+results=data.frame(patient=patient,prop=propgenotypes,nseg=nrow(finalsegments$segmentsA),cellA=get.ci(cpA)$max.cellularity,cellB=get.ci(cpB)$max.cellularity,ploidyA=get.ci(cpA)$max.ploidy,ploidyB=get.ci(cpB)$max.ploidy)
+
+write.csv(x=results,file="results.csv",quote = FALSE,row.names = FALSE)
