@@ -482,6 +482,8 @@ id2=sub(pattern=".seqz.gz",replacement="",x=name2)
 id2=basename(id2)
 
 dir.create(outdir)
+setwd(outdir)
+
 ncores=as.numeric(options[4])
 patient=options[5]
 
@@ -503,8 +505,8 @@ datacomp=my.sequenza.extract.paired(file1=name1, file2=name2, chromosome.list=ch
 
 
 ##Pending, new funtion to print them using a par to compare chr by chr the two samples
-printsegmentation(datacomp$A,outdir=paste0(outdir,"/A_chr"),chromosomes=chromosomes)
-printsegmentation(datacomp$B,outdir=paste0(outdir,"/B_chr"),chromosomes=chromosomes)
+printsegmentation(datacomp$A,outdir="A_chr",chromosomes=chromosomes)
+printsegmentation(datacomp$B,outdir="B_chr",chromosomes=chromosomes)
 
 cpA <- sequenza.fit(datacomp$A,mc.cores=ncores,chromosome.list=chromosomes,female=TRUE,N.BAF.filter=5)
 cpB <- sequenza.fit(datacomp$B,mc.cores=ncores,chromosome.list=chromosomes,female=TRUE,N.BAF.filter=5)
@@ -514,11 +516,11 @@ cpB <- sequenza.fit(datacomp$B,mc.cores=ncores,chromosome.list=chromosomes,femal
 ##segment.filter 1e6bp, default
 ##ratio.priority false. The ratio does not have priority over BAF (with priority, CNt is determined using ratio, then with BAF the different alleles)
 
-sequenza.results(datacomp$A,cp.table=cpA,sample.id=id1,out.dir=outdir,chromosome.list=chromosomes,female=TRUE)
-sequenza.results(datacomp$B,cp.table=cpB,sample.id=id2,out.dir=outdir,chromosome.list=chromosomes,female=TRUE)
+sequenza.results(datacomp$A,cp.table=cpA,sample.id=id1,out.dir=".",chromosome.list=chromosomes,female=TRUE)
+sequenza.results(datacomp$B,cp.table=cpB,sample.id=id2,out.dir=".",chromosome.list=chromosomes,female=TRUE)
 
-segmentsA=read.table(paste0(outdir,"/",id1,"_segments.txt"),header=TRUE)
-segmentsB=read.table(paste0(outdir,"/",id2,"_segments.txt"),header=TRUE)
+segmentsA=read.table(paste0(id1,"_segments.txt"),header=TRUE)
+segmentsB=read.table(paste0(id2,"_segments.txt"),header=TRUE)
 
 finalsegments=syncsegments(segmentsA,segmentsB)
 

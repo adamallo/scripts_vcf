@@ -9,4 +9,4 @@ then
 fi
 
 
-Rscript $SCRIPTSVCF_DIR/cnvcallandcomp.R $1 $2 $3 $SLURM_CPUS_PER_TASK $4
+Rscript $SCRIPTSVCF_DIR/cnvcallandcomp.R $(readlink -f $1) $(readlink -f $2) $3 $SLURM_CPUS_PER_TASK $4

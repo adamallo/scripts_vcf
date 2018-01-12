@@ -27,7 +27,7 @@ do
     Nid=$(sbatch -p private --job-name=${output}_pileupN $EXE_DIR/generatepileups.sh $outdir/n.pileup.gz $normal | sed "s/Submitted batch job \(.*\)/\1/")
    
     ida=$(sbatch -p private --job-name=${output}_pileupA $EXE_DIR/generatepileups.sh $outdir/a.pileup.gz $a | sed "s/Submitted batch job \(.*\)/\1/")
-    ida=$(sbatch -p private --job-name=${output}_prepSequenzaA --dependency=afterok${Nid}:${ida} $EXE_DIR/preprocess_sequenza.sh $outdir/a.pileup.gz $outdir/n.pileup.gz $outdir an | sed "s/Submitted batch job \(.*\)/\1/")
+    ida=$(sbatch -p private --job-name=${output}_prepSequenzaA --dependency=afterok:${Nid}:${ida} $EXE_DIR/preprocess_sequenza.sh $outdir/a.pileup.gz $outdir/n.pileup.gz $outdir an | sed "s/Submitted batch job \(.*\)/\1/")
     privdependency="${privdependency}:${ida}"
     
     idb=$(sbatch -p private --job-name=${output}_pileupB $EXE_DIR/generatepileups.sh $outdir/b.pileup.gz $b | sed "s/Submitted batch job \(.*\)/\1/")
@@ -36,7 +36,7 @@ do
   
     #seqzfileA seqzfileB outdir patient
  
-    id=$(sbatch -p private -c $n_cores --job-name=${output}_Sequenza --dependency=afterok:${privdependency} $EXE_DIR/cnvcall.sh $outdir/an.seqz.gz $outdir/bn.seqz.gz $outdir $output | sed "s/Submitted batch job \(.*\)/\1/")
+    id=$(sbatch -p private -c $n_cores --job-name=${output}_Sequenza --dependency=afterok${privdependency} $EXE_DIR/cnvcall.sh $outdir/an.seqz.gz $outdir/bn.seqz.gz $outdir $output | sed "s/Submitted batch job \(.*\)/\1/")
     dependency="${dependency}:${id}" 
 
 done < $torun
