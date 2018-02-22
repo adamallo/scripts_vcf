@@ -37,3 +37,11 @@ for i in *.md5; do name=$(echo $i | sed "s/.md5//");echo $(cat $i) " $name" | md
 #Fasta dictionary
 module load picard/2.3.0
 picard CreateSequenceDictionary R=~/my_storage/GRCh37-lite.fa O=~/my_storage/GRCh37-lite.dict
+
+###FASTQ origins
+#QC1
+for i in */*R*.fastq.gz; do sbatch -p private <(echo -e '#!/bin/bash'"\nmodule load fastqc/0.11.3\nfastqc $i");done
+#Adaptors
+for i in */*_R1.fastq.gz; do name=$(echo $i | sed 's/_R1.fastq.gz//g');echo sbatch -p private ~/ngcchome/dcis/scripts_vcf/skewer.sh $name;done
+#QC2
+for i in */*pair*.fastq.gz; do sbatch -p private <(echo -e '#!/bin/bash'"\nmodule load fastqc/0.11.3\nfastqc $i");done
