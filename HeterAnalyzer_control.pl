@@ -22,10 +22,10 @@ our $helper_pl="HeterAnalyzer.pl";
 our $tstv_sh="tstv.sbatch";
 #our $annotation_sh="annovar.sh";
 our $n_cores=1;
-our $qsub="sbatch ${private} -N 1 -n 1 -c ";
-our $qsub_noparallel="sbatch ${private} -N 1 -n 1 -c 1";
+our $qsub="submit ${private} -N 1 -n 1 -c ";
+our $qsub_noparallel="submit ${private} -N 1 -n 1 -c 1";
 our $qstat="qstat";
-our $sed='sed "s/Submitted batch job \(.*\)/\1/"';
+our $sed='sed "s/Queued job \(.*\)/\1/"';
 our $sleep=60;
 ######################################################
 
@@ -269,7 +269,6 @@ foreach my $exe_condition (@exe_conditions)
 } 
 
 my $deps=compile_dependencies();
-#wait_for_jobs();
 if ($deps ne "")
 {
     $deps="--dependency=afterok:$deps";
@@ -288,35 +287,12 @@ else
 print("The filtering and analysis of the vcf files is being conducted with the job_id $job_id\n");
 
 $deps=compile_dependencies(); #This can never be ""
-#wait_for_jobs();
 
-#$job_id=submit_job("$qsub_noparallel $tstv_sh $output_dir");
 $job_id=submit_job("$qsub_noparallel --dependency=afterok:$deps $tstv_sh $output_dir");
 
 print("Ts/Tv statistics are being calculated in the job_id $job_id\n");
 
-#wait_for_jobs();
-
-#print("Analysis finished.\n\nAnnotation:\n");
-#opendir(my $DIR, ".");
-#
-#while (my $file = readdir($DIR))
-#{
-#    next unless (-f $file);
-#    if ($file=~/^.filtN.*\.vcf$/)
-#    {
-#        $job_id=`$qsub_noparallel $annotation_sh -F "$file" | sed "s/.master.cm.cluster//"`;
-#         chomp($job_id);
-#        $job_ids{$job_id}=1;
-#        print "Job to annotate the file $file $job_id\n";
-#    }
-#}
-#
-#closedir $DIR;
-#
-
 print("Jobs submitted!\n$job_id");
-#print("Finished!!!\n");
 
 exit;
 

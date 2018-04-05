@@ -227,6 +227,7 @@ foreach my $exe_condition (@exe_conditions) ##Options that require to call varia
     {
         print("Calling variants in the N file for the calculation of covN for the exe_conditions $exe_condition\n");
         `$SCRIPTSVCF_DIR/$covN_sh $Aexecondname $Bexecondname $covNname $Nbam_file`;
+        (! -f $covNname) and die "Error calculating coverage of N";
     }
     else
     {
@@ -263,6 +264,7 @@ foreach my $exe_condition (@exe_conditions) ##Options that require to call varia
     {
        # print("DEBUG: $SCRIPTSVCF_DIR/$covB_sh A$sep_param$exe_condition.vcf B$sep_param$exe_condition.vcf A$sep_param$exe_condition${sep_param}covBfiltering.tsv B$sep_param$exe_condition${sep_param}covBfiltering.tsv $Abam_file $Bbam_file\n");
        `$SCRIPTSVCF_DIR/$covB_sh $Aexecondname $Bexecondname $AcovBname $BcovBname $Abam_file $Bbam_file`;
+        (! -f $AcovBname ) or (! -f $BcovBname) and die "Error calculating coverages of A and B";
     }
 
     if($n_cores>1)
