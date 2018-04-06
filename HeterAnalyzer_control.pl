@@ -287,11 +287,11 @@ if ($deps ne "")
 
 if(-f $onfile2)
 {   
-    $job_id=submit_job("$qsub $deps $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile2 $onfile2 --covaltB_cond_inputfile $ocfile --Nbam $normal_bam --Abam $sample1_bam --Bbam $sample2_bam -o $output_file --n_cores $n_cores --output_vcf $output_vcf --output_list $output_list --comp $comp");
+    $job_id=submit_job("$qsub $deps $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile2 $onfile2 --covaltB_cond_inputfile $ocfile --Nbam $normal_bam --Abam $sample1_bam --Bbam $sample2_bam -o $output_file --output_vcf $output_vcf --output_list $output_list --comp $comp --n_cores $n_cores");
 }
 else
 {
-    $job_id=submit_job("$qsub $deps $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --covaltB_cond_inputfile $ocfile --Nbam $normal_bam --Abam $sample1_bam --Bbam $sample2_bam -o $output_file --n_cores $n_cores --output_vcf $output_vcf --output_list $output_list --comp $comp");
+    $job_id=submit_job("$qsub $deps $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --covaltB_cond_inputfile $ocfile --Nbam $normal_bam --Abam $sample1_bam --Bbam $sample2_bam -o $output_file --output_vcf $output_vcf --output_list $output_list --comp $comp --n_cores $n_cores");
 }
 print("The filtering and analysis of the vcf files is being conducted with the job_id $job_id\n");
 
