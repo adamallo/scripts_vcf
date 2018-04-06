@@ -42,10 +42,13 @@ my $normal_bam="";
 my $sample1_bam="";
 my $sample2_bam="";
 my $SCRIPTSVCF_DIR=$ENV{'SCRIPTSVCF_DIR'};
+my $output_vcf=0;
+my $output_list=0;
+my $comp=0;
 
 #Flags
 my $help;
-my $usage="Usage: $0 [options] -o output_file --normal_bamfile bamfile_normal_sample --sample_A_bamfile bamfile_A_sample --sample_B_bamfile bamfile_B_sample\n\n\nOptions:\n--------\n\t-e/--exec_cond_inputfile : input file for execution parameters and options\n\t-f/--filt_cond_inputfile : input file for execution parameters and options\n\t--NABfilt_cond_inputfile : input file for the filtering options of the NAB sample\n\t--NABfilt_cond_inputfile2 : input file for the secondary filtering options of the NAB sample (OR filter implemented in a dirty way)\n\t--covaltB_cond_inputfile : input file for the filtering taking into account characteristics of the unfiltered in the comparison\n\t--output_dir : output directory for vcf files\n\t--n_cores : number of cores to execute some steps in parallel\n\t\n\n";
+my $usage="Usage: $0 [options] -o output_file --normal_bamfile bamfile_normal_sample --sample_A_bamfile bamfile_A_sample --sample_B_bamfile bamfile_B_sample --output_vcf --output_list --comp\n--output_vcf: (bool) generate resulting vcf files or not\n--output_list: (bool) generate resulting list of variants or not\n--comp: (int) indicating the comprehensiveness of the output, 0=no files, 1=only needed files to call variants, 2= all intermediate variants\nOptions:\n--------\n\t-e/--exec_cond_inputfile : input file for execution parameters and options\n\t-f/--filt_cond_inputfile : input file for execution parameters and options\n\t--NABfilt_cond_inputfile : input file for the filtering options of the NAB sample\n\t--NABfilt_cond_inputfile2 : input file for the secondary filtering options of the NAB sample (OR filter implemented in a dirty way)\n\t--covaltB_cond_inputfile : input file for the filtering taking into account characteristics of the unfiltered in the comparison\n\t--output_dir : output directory for vcf files\n\t--n_cores : number of cores to execute some steps in parallel\n\t\n\n";
 ######################################################
 
 ######################################################
@@ -66,6 +69,9 @@ my $usage="Usage: $0 [options] -o output_file --normal_bamfile bamfile_normal_sa
 	'sample_A_bamfile=s' => \$sample1_bam,
 	'sample_B_bamfile=s' => \$sample2_bam,
     'n_cores=i' => \$n_cores,
+    'output_vcf=i'=>\$output_vcf,
+    'output_list=i' => \$output_list,
+    'comp=i' => \$comp,
     'help|h' => \$help,
                 )) or (($output_file eq "") || ($normal_bam eq "")  || ($sample1_bam eq "") || ($sample2_bam eq "")  || $help) and die $usage;
 
@@ -149,6 +155,11 @@ if (-f "$SCRIPTSVCF_DIR/$tstv_sh")
 else
 {
   die "Error, the sh file to get the TsTv data, $tstv_sh can't be located. Please, make sure that the environment variable SCRIPTSVCF_DIR is indicating the folder with this package of scripts\n"
+}
+
+if($output_vcf==0 || $comp != 2)
+{
+    print "Warning: not generating output vcf files or restricting them (--comp<2) will eliminate the tstv posterior analyses\n"
 }
 
 #
@@ -276,22 +287,25 @@ if ($deps ne "")
 
 if(-f $onfile2)
 {   
-    $job_id=submit_job("$qsub $deps $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile2 $onfile2 --covaltB_cond_inputfile $ocfile --Nbam $normal_bam --Abam $sample1_bam --Bbam $sample2_bam -o $output_file --n_cores $n_cores");
-    #$job_id=submit_job("$qsub $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile3 $onfile2 -o $output_file --n_cores $n_cores");
+    $job_id=submit_job("$qsub $deps $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile2 $onfile2 --covaltB_cond_inputfile $ocfile --Nbam $normal_bam --Abam $sample1_bam --Bbam $sample2_bam -o $output_file --n_cores $n_cores --output_vcf $output_vcf --output_list $output_list --comp $comp");
 }
 else
 {
-    $job_id=submit_job("$qsub $deps $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --covaltB_cond_inputfile $ocfile --Nbam $normal_bam --Abam $sample1_bam --Bbam $sample2_bam -o $output_file --n_cores $n_cores");
-    #$job_id=submit_job("$qsub $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile -o $output_file --n_cores $n_cores");
+    $job_id=submit_job("$qsub $deps $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --covaltB_cond_inputfile $ocfile --Nbam $normal_bam --Abam $sample1_bam --Bbam $sample2_bam -o $output_file --n_cores $n_cores --output_vcf $output_vcf --output_list $output_list --comp $comp");
 }
 print("The filtering and analysis of the vcf files is being conducted with the job_id $job_id\n");
 
 $deps=compile_dependencies(); #This can never be ""
 
-$job_id=submit_job("$qsub_noparallel --dependency=afterok:$deps $tstv_sh $output_dir");
+unless ($output_vcf==0 || $comp != 2)
+{
+    $job_id=submit_job("$qsub_noparallel --dependency=afterok:$deps $tstv_sh $output_dir");
 
-print("Ts/Tv statistics are being calculated in the job_id $job_id\n");
-
+    print("Ts/Tv statistics are being calculated in the job_id $job_id\n");
+} else
+{
+    $job_id=$deps;    
+}
 print("Jobs submitted!\n$job_id");
 
 exit;
