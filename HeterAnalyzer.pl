@@ -254,7 +254,7 @@ foreach my $exe_condition (@exe_conditions)
 }
 
 #Executing them
-if($n_cores>1)
+if($n_cores>1 && scalar @covXcommands > 1)
 {
     $parallel->foreach(\@covXcommands, sub{`$_`});
 }
@@ -267,8 +267,8 @@ else
 }
 
 #Reading them and storing them in memory
-
-if($n_cores>1)
+#TODO:I am not 100% sure this is worth it since the forking process takes quite a lot of time to duble-check if I have time
+if($n_cores>1 && scalar @exe_conditions > 1)
 {
     $parallel->foreach(\@exe_conditions,\&parse_const_execond);
 }
@@ -323,7 +323,7 @@ foreach my $exe_condition (@exe_conditions) ##Options that require to call varia
        }
     }
 
-    if($n_cores>1)
+    if($n_cores>1 && scalar @current_conditions > 1)
     {
         $parallel->foreach(\@current_conditions,\&filter);
     }
@@ -353,6 +353,7 @@ close($OFILE);
 
 write_vcfrefname_dict("vcfdict.csv");
 write_listrefname_dict("listdict.csv");
+print("Done!\n");
 
 ## MAIN BODY AS FUNCTION FOR PARALLELISM
 ########################################
@@ -402,7 +403,7 @@ sub filter
         print("$thisAname has been previously generated and it will be recycled. WARNING: this may generate inconsistencies if the parameters are changed between executions\n");
     }
 
-    print("DEBUG: $Aexecondname generated $thisAname using the filter $filtering_condition\n");
+    #print("DEBUG: $Aexecondname generated $thisAname using the filter $filtering_condition\n");
  
     if (!-f $thisBname)
     {
@@ -416,7 +417,7 @@ sub filter
         print("$thisBname has been previously generated and it will be recycled. WARNING: this may generate inconsistencies if the parameters are changed between executions\n");
     }
     
-    print("DEBUG: $Bexecondname generated $thisBname using the filter $filtering_condition\n");
+    #print("DEBUG: $Bexecondname generated $thisBname using the filter $filtering_condition\n");
 
     my %Afilt=%{parse_vcf($thisAname)};
     my %Bfilt=%{parse_vcf($thisBname)};
@@ -424,14 +425,15 @@ sub filter
     my $refdataBfiltcovB=$constExeCondContentRefs{$BcovBname};
     my $refdatacovN=$constExeCondContentRefs{$covNname};
 
-    print("DEBUG: reference B $refB, reference A $refA, $filtering_condition\n");
+    #print("DEBUG: reference B $refB, reference A $refA, $filtering_condition\n");
 #Compare Afilt with B without filter --> Common variants + %
     my @statsAfilt;
     my ($ref_common_variantsAfilt,$ref_different_variantsAfilt)=vcf_compare_parsed($refB,\%Afilt,\@statsAfilt); ##I have to generate two hashes. One with common variants, the other with non common. Thus, the consecutive filter I can do it towards these new (smallest) hashes.
 #Compare Bfiltered with A without filter --> Common variants + %
     my @statsBfilt;
     my ($ref_common_variantsBfilt,$ref_different_variantsBfilt)=vcf_compare_parsed($refA,\%Bfilt,\@statsBfilt);
-    print("DEBUG: statsA of $filtering_condition @statsAfilt\n");
+    #print("DEBUG: statsA of $filtering_condition @statsAfilt\n");
+
 #Stats filter
     my @statsfiltU;
     my @statsfiltI;
@@ -547,9 +549,7 @@ sub filter
     {
 
         my $NAB_condition=$NABfiltering_conditions[$i];
-        #my $NAB=$NAB_hash_pointers[$i]; ##TODO: I am not using this, but I may want to do it for speed
-        
-        my $NAB=vcf_covN_filter($refdatacovN,$NAB_condition);
+        my $NAB=$constExeCondContentRefs{"${exe_condition}_${NAB_condition}"};
 
 #Substract NAB from AfiltN. Compare the results to B without filter --> Common variants + % ###We want to apply filter to NAB and remove only variants that are Alternative for N
         my @statsAfiltNAB;
@@ -1642,6 +1642,13 @@ sub parse_const_execond
     $constExeCondContentRefs{$AcovBname}=parse_tsv($AcovBname);
     $constExeCondContentRefs{$BcovBname}=parse_tsv($BcovBname);
     $constExeCondContentRefs{$covNname}=parse_tsv($covNname);
+    
+    #TODO: I am not parallelizing this, but I am getting a lot of benefits from reusing it. I think that parallalelizing it would spend more extra time spliting the fork than the actual benefit due to the several processes
+    foreach my $cond (@NABfiltering_conditions)
+    {
+        $constExeCondContentRefs{"${exe_condition}_${cond}"}=vcf_covN_filter($constExeCondContentRefs{$covNname},$cond);
+    }
+    
     $constExeCondContentRefs{$Aexecondname}=parse_vcf($Aexecondname);
     $constExeCondContentRefs{$Bexecondname}=parse_vcf($Bexecondname);
 #    $constExeCondContentRefs{"${Aexecondname}_N"}=vcf_prune_single($constExeCondContentRefs{$Aexecondname},\%N); #Not needed
