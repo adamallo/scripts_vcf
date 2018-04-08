@@ -11,25 +11,27 @@ use Env;
 ##Configuration variables
 ######################################################
 
-our $sep_param="#";
-our $sep_value=":";
-our $OFS=",";
-our $FS=",";
-our $output_vcf=1;
-our $output_list=1;
-our $output_comprehensive=1;
-our $n_cores=1;
-our $covB_sh="covB.sh";
-our $covN_sh="covN.sh";
-#our $covB_sh="covBdoublecheck.sh";
+my $sep_param="#";
+my $sep_value=":";
+my $OFS=",";
+my $FS=",";
+my $output_vcf=1;
+my $output_list=1;
+my $output_comprehensive=1;
+my $n_cores=1;
+my $covB_sh="covB_half.sh";
+my $covN_sh="covN.sh";
+#my $covB_sh="covBdoublecheck.sh";
 
 ######################################################
 
 ##Global Variables
 ######################################################
-our @listfiles;
-our @vcffiles;
-our @namedvcffiles;
+my %dictrealnamelist;
+my @listnames;
+my %dictrealnamevcf;
+my @vcfnames;
+my @namedvcffiles;
 
 ##IO Variables
 ######################################################
@@ -167,14 +169,16 @@ else
 
 my $name_condition;
 my @filtering_conditions;
-our @NABfiltering_conditions1; ##In order to be easily accesed from the filtering functions
-our @NABfiltering_conditions2;
-our @NABfiltering_conditions;
+my @NABfiltering_conditions1; ##In order to be easily accesed from the filtering functions
+my @NABfiltering_conditions2;
+my @NABfiltering_conditions;
 my @covBfiltering_conditions;
 my @exe_conditions;
 my %results;
 my $bamfiles;
 my $parallel;
+my %constExeCondContentRefs;
+my %nofiltResultsRef;
 
 ##Generate all combinations of proposed values for execution and filtering parameters
 combs(0,"",\@exe_parameters,\@exe_param_values,\@exe_conditions);
@@ -201,16 +205,88 @@ for (my $i=0; $i<scalar @NABfiltering_conditions1; ++$i)
 if ($n_cores>1)
 {
     $parallel = Parallel::Loops->new($n_cores);
-    $parallel->share(\%results, \@listfiles, \@vcffiles,\@namedvcffiles);
+    $parallel->share(\%results, \%dictrealnamelist, @listnames, \%dictrealnamevcf, @vcfnames, \@namedvcffiles, \%constExeCondContentRefs, \%nofiltResultsRef);
+}
+
+##Generating covN and covB files in parallel
+my @covXcommands;
+my ($Aexecondname,$Bexecondname,$AcovBname,$BcovBname,$covNname);
+
+#Preparing the commands
+foreach my $exe_condition (@exe_conditions)
+{
+    $Aexecondname="A$sep_param$exe_condition.vcf"; ##So far I am not using numbers for execondnames. If I change this, I will need to get the number names here and in the filter function
+    $Bexecondname="B$sep_param$exe_condition.vcf";
+    $AcovBname="A$sep_param$exe_condition${sep_param}covBfiltering.tsv";
+    $BcovBname="B$sep_param$exe_condition${sep_param}covBfiltering.tsv";
+    $covNname="covN$sep_param$exe_condition.tsv";
+ 
+    if ( ! -f "$covNname")
+    {
+        print("Calling variants in the N file for the calculation of covN for the exe_conditions $exe_condition\n");
+        push(@covXcommands,"$SCRIPTSVCF_DIR/$covN_sh $Aexecondname $Bexecondname $covNname $Nbam_file")
+    }
+    else
+    {
+        print("Reusing previously generated $covNname\n");
+    }
+    
+    if(! -f $AcovBname)
+    {
+        print("Calling variants in the opposite file for the calculation of covB for the exe_conditions $exe_condition\n");
+        push(@covXcommands,"$SCRIPTSVCF_DIR/$covB_sh $Bexecondname $AcovBname $Abam_file");
+    }
+    else
+    {
+        print("Reusing previously generated $AcovBname\n");
+    }
+    
+    if(! -f $BcovBname)
+    {
+        print("Calling variants in the opposite file for the calculation of covB for the exe_conditions $exe_condition\n");
+        push(@covXcommands,"$SCRIPTSVCF_DIR/$covB_sh $Aexecondname $BcovBname $Bbam_file");
+    }
+    else
+    {
+        print("Reusing previously generated $BcovBname\n");
+    }
+
+}
+
+#Executing them
+if($n_cores>1)
+{
+    $parallel->foreach(\@covXcommands, sub{`$_`});
+}
+else
+{
+    foreach my $command (@covXcommands)
+    {
+        `$command`
+    }
+}
+
+#Reading them and storing them in memory
+
+if($n_cores>1)
+{
+    $parallel->foreach(\@exe_conditions,\&parse_const_execond);
+}
+else
+{
+   foreach my $exe_condition (@exe_conditions)
+   {
+       parse_const_execond($exe_condition);
+   }
 }
 
 foreach my $exe_condition (@exe_conditions) ##Options that require to call variants again 
 {
-    my $Aexecondname="A$sep_param$exe_condition.vcf"; ##So far I am not using numbers for execondnames. If I change this, I will need to get the number names here and in the filter function
-    my $Bexecondname="B$sep_param$exe_condition.vcf";
-    my $AcovBname="A$sep_param$exe_condition${sep_param}covBfiltering.tsv"; #Same here, although these are tsvs
-    my $BcovBname="B$sep_param$exe_condition${sep_param}covBfiltering.tsv";
-    my $covNname="covN$sep_param$exe_condition.tsv";
+    $Aexecondname="A$sep_param$exe_condition.vcf"; ##So far I am not using numbers for execondnames. If I change this, I will need to get the number names here and in the filter function
+    $Bexecondname="B$sep_param$exe_condition.vcf";
+    $AcovBname="A$sep_param$exe_condition${sep_param}covBfiltering.tsv"; #Same here, although these are tsvs
+    $BcovBname="B$sep_param$exe_condition${sep_param}covBfiltering.tsv";
+    $covNname="covN$sep_param$exe_condition.tsv";
 
 #print("DEBUG: Exe condition loop $exe_condition\n");
     if ((!-f $Aexecondname) || (!-f $Bexecondname)) ##VCF file we will use for filtering, if it does not exist we have to perform the variant calling
@@ -221,20 +297,6 @@ foreach my $exe_condition (@exe_conditions) ##Options that require to call varia
     {
         push(@namedvcffiles,$Aexecondname); ##Fixed name instead of numbers
         push(@namedvcffiles,$Bexecondname);
-    }
-
-    ## covN filtering and parsing
-    ##########################################################################################
-    
-    if ( ! -f "$covNname")
-    {
-        print("Calling variants in the N file for the calculation of covN for the exe_conditions $exe_condition\n");
-        `$SCRIPTSVCF_DIR/$covN_sh $Aexecondname $Bexecondname $covNname $Nbam_file`;
-        (! -f $covNname) and die "Error calculating coverage of N";
-    }
-    else
-    {
-        print("Reusing previously generated $covNname\n");
     }
 
     my @current_conditions=@filtering_conditions;
@@ -259,15 +321,6 @@ foreach my $exe_condition (@exe_conditions) ##Options that require to call varia
                $icond+=1;
            }
        }
-    }
-
-	#I do not need to paralelize per covBfiltering option, since the different options can be obtained from the same tsv, just considering the variants of interests, if we start with the unfiltered versions (supersets of the others)
-    print("Calling variants in the opposite file for the calculation of covB for the exe_conditions $exe_condition\n");
-    if((! -f $AcovBname) || (! -f $BcovBname))
-    {
-       # print("DEBUG: $SCRIPTSVCF_DIR/$covB_sh A$sep_param$exe_condition.vcf B$sep_param$exe_condition.vcf A$sep_param$exe_condition${sep_param}covBfiltering.tsv B$sep_param$exe_condition${sep_param}covBfiltering.tsv $Abam_file $Bbam_file\n");
-       `$SCRIPTSVCF_DIR/$covB_sh $Aexecondname $Bexecondname $AcovBname $BcovBname $Abam_file $Bbam_file`;
-        (! -f $AcovBname ) or (! -f $BcovBname) and die "Error calculating coverages of A and B";
     }
 
     if($n_cores>1)
@@ -324,29 +377,17 @@ sub filter
     my $filtering_command="$vcf_filt_exe ";
     $filtering_command.=join(" ",split("$sep_value",join(" ",split("$sep_param",$filtering_condition))));
    
-    my(%A,%B);
-    my @nofilt_results;
     my $Aexecondname="A$sep_param$exe_condition.vcf"; ##So far I am not using numbers for execondnames. If I change this I need to obtain the names here from the array (I may make a hash then)
     my $Bexecondname="B$sep_param$exe_condition.vcf";
     my $AcovBname="A$sep_param$exe_condition${sep_param}covBfiltering.tsv"; #Same here, although these are tsvs
     my $BcovBname="B$sep_param$exe_condition${sep_param}covBfiltering.tsv"; 
     my $covNname="covN$sep_param$exe_condition.tsv";
 
-    if ( -f $Aexecondname && -f $Bexecondname)
-    {
-        %A=%{parse_vcf($Aexecondname)};
-        %B=%{parse_vcf($Bexecondname)};
-        my %AN=%{vcf_prune_single(\%A,\%N)};
-        my %BN=%{vcf_prune_single(\%B,\%N)};
-        @nofilt_results=(scalar keys %A, scalar keys %B, scalar keys %N, scalar keys %AN, scalar keys %BN);
-    }
-    else
-    {
-        die "Missing vcf files. Something weird has happend between the execution of the previous script and this one. Check that the variant calling step has finished succesfully and try to execute this script again\n";
-    }
+    ##Reading pre-calculated shared data    
+    my($refA,$refB)=($constExeCondContentRefs{$Aexecondname}, $constExeCondContentRefs{$Bexecondname});
 
-    my $thisAname=vcf_refname("A$sep_param$condition.vcf");
-    my $thisBname=vcf_refname("B$sep_param$condition.vcf");
+    my $thisAname=vcf_refname("A$sep_param$condition.vcf",$NcovBcondition);
+    my $thisBname=vcf_refname("B$sep_param$condition.vcf",$NcovBcondition);
     
     if (!-f $thisAname)
     {
@@ -360,6 +401,8 @@ sub filter
     {
         print("$thisAname has been previously generated and it will be recycled. WARNING: this may generate inconsistencies if the parameters are changed between executions\n");
     }
+
+    print("DEBUG: $Aexecondname generated $thisAname using the filter $filtering_condition\n");
  
     if (!-f $thisBname)
     {
@@ -372,58 +415,23 @@ sub filter
     {
         print("$thisBname has been previously generated and it will be recycled. WARNING: this may generate inconsistencies if the parameters are changed between executions\n");
     }
+    
+    print("DEBUG: $Bexecondname generated $thisBname using the filter $filtering_condition\n");
 
     my %Afilt=%{parse_vcf($thisAname)};
     my %Bfilt=%{parse_vcf($thisBname)};
+    my $refdataAfiltcovB=$constExeCondContentRefs{$AcovBname};
+    my $refdataBfiltcovB=$constExeCondContentRefs{$BcovBname};
+    my $refdatacovN=$constExeCondContentRefs{$covNname};
 
-##Data to filter variants according to covB.
-############################################
-
-##TODO: This could be done outside the parallel section, once per exe_condition and store references to the hashes in another hash,
-#then, in the parallel section I would recover the hash reference with the exe_condition. For this version of the script it is no necessary, but for 
-#the duplicates it may be necessary for speed. I am not doing it right now just because I am in a rush, but it should be very easy.
-
-    my %dataAfiltcovB;
-    my %dataBfiltcovB;
-
-    if ( -f $AcovBname && -f $BcovBname)
-    {
-        %dataAfiltcovB=%{parse_tsv($AcovBname)};
-        %dataBfiltcovB=%{parse_tsv($BcovBname)};
-    }
-    else
-    {
-        die "Missing tsv files. There may be an error in the internal reference to \$covB_sh\n";
-    }
-
-##Data to filter variants according to covN.
-############################################
-
-##TODO: This could be done outside the parallel section, once per exe_condition and store references to the hashes in another hash,
-#then, in the parallel section I would recover the hash reference with the exe_condition. For this version of the script it is no necessary, but for 
-#the duplicates it may be necessary for speed. I am not doing it right now just because I am in a rush, but it should be very easy.
-
-    my %datacovN;
-
-    if ( -f $covNname)
-    {
-        %datacovN=%{parse_tsv($covNname)};
-    }
-    else
-    {
-        die "Missing tsv file. There may be an error in the internal reference to \$covN_sh\n";
-    }
-
-# Right now I'm keeping a lot of hashes in memory instead of reusing variables. I do it just in case I need them in posterior statistics/calculations etc.
-# We could be interested on changing this if the performance were really bad.
-
+    print("DEBUG: reference B $refB, reference A $refA, $filtering_condition\n");
 #Compare Afilt with B without filter --> Common variants + %
     my @statsAfilt;
-    my ($ref_common_variantsAfilt,$ref_different_variantsAfilt)=vcf_compare_parsed(\%B,\%Afilt,\@statsAfilt); ##I have to generate two hashes. One with common variants, the other with non common. Thus, the consecutive filter I can do it towards these new (smallest) hashes.
+    my ($ref_common_variantsAfilt,$ref_different_variantsAfilt)=vcf_compare_parsed($refB,\%Afilt,\@statsAfilt); ##I have to generate two hashes. One with common variants, the other with non common. Thus, the consecutive filter I can do it towards these new (smallest) hashes.
 #Compare Bfiltered with A without filter --> Common variants + %
-        my @statsBfilt;
-    my ($ref_common_variantsBfilt,$ref_different_variantsBfilt)=vcf_compare_parsed(\%A,\%Bfilt,\@statsBfilt);
-
+    my @statsBfilt;
+    my ($ref_common_variantsBfilt,$ref_different_variantsBfilt)=vcf_compare_parsed($refA,\%Bfilt,\@statsBfilt);
+    print("DEBUG: statsA of $filtering_condition @statsAfilt\n");
 #Stats filter
     my @statsfiltU;
     my @statsfiltI;
@@ -453,10 +461,10 @@ sub filter
     my @statsfiltNcovBI;
 
     #AfiltNcovB
-    my ($ref_common_variantsAfiltNcovB,$ref_different_variantsAfiltNcovB)=vcf_prune_covB($ref_common_variantsAfiltN,$ref_different_variantsAfiltN,\%dataBfiltcovB,\@statsAfiltNcovB,$covBfiltering_condition);
+    my ($ref_common_variantsAfiltNcovB,$ref_different_variantsAfiltNcovB)=vcf_prune_covB($ref_common_variantsAfiltN,$ref_different_variantsAfiltN,$refdataBfiltcovB,\@statsAfiltNcovB,$covBfiltering_condition);
 
     #BfiltNcovB
-    my ($ref_common_variantsBfiltNcovB,$ref_different_variantsBfiltNcovB)=vcf_prune_covB($ref_common_variantsBfiltN,$ref_different_variantsBfiltN,\%dataAfiltcovB,\@statsBfiltNcovB,$covBfiltering_condition);
+    my ($ref_common_variantsBfiltNcovB,$ref_different_variantsBfiltNcovB)=vcf_prune_covB($ref_common_variantsBfiltN,$ref_different_variantsBfiltN,$refdataAfiltcovB,\@statsBfiltNcovB,$covBfiltering_condition);
 
     #Union
     my ($ref_common_variantsfiltNcovBU,$ref_different_variantsfiltNcovBU)=vcf_unite_parsed($ref_common_variantsAfiltNcovB,$ref_different_variantsAfiltNcovB,$ref_common_variantsBfiltNcovB,$ref_different_variantsBfiltNcovB,\@statsfiltNcovBU);
@@ -472,65 +480,65 @@ sub filter
     {
         if ($output_list)
         {
-            write_variant_list($ref_common_variantsfiltNcovBU,"filtNcovBU$sep_param${NcovBcondition}_common.list");
-            write_variant_list($ref_different_variantsAfiltNcovB,"AfiltNcovB$sep_param${NcovBcondition}_different.list");
-            write_variant_list($ref_different_variantsBfiltNcovB,"BfiltNcovB$sep_param${NcovBcondition}_different.list");
+            write_variant_list($ref_common_variantsfiltNcovBU,"filtNcovBU$sep_param${NcovBcondition}_common.list",$NcovBcondition);
+            write_variant_list($ref_different_variantsAfiltNcovB,"AfiltNcovB$sep_param${NcovBcondition}_different.list",$NcovBcondition);
+            write_variant_list($ref_different_variantsBfiltNcovB,"BfiltNcovB$sep_param${NcovBcondition}_different.list",$NcovBcondition);
         }
         if ($output_vcf)
         {
-            write_variant_2vcf($ref_common_variantsfiltNcovBU,"filtNcovBU$sep_param${NcovBcondition}_common.vcf","$thisAname","$thisBname","## Somatic U(AB) Filtered with vcfFilterTableV1. Condition ${condition}");
-            write_variant_vcf($ref_different_variantsAfiltNcovB,"AfiltNcovB$sep_param${NcovBcondition}_different.vcf","$thisAname","##Filtered with vcfFilterTableV1. Condition ${condition}");
-            write_variant_vcf($ref_different_variantsBfiltNcovB,"BfiltNcovB$sep_param${NcovBcondition}_different.vcf","$thisBname","##Filtered with vcfFilterTableV1. Condition ${condition}");
+            write_variant_2vcf($ref_common_variantsfiltNcovBU,"filtNcovBU$sep_param${NcovBcondition}_common.vcf","$thisAname","$thisBname","## Somatic U(AB) Filtered with vcfFilterTableV1. Condition ${condition}",$NcovBcondition);
+            write_variant_vcf($ref_different_variantsAfiltNcovB,"AfiltNcovB$sep_param${NcovBcondition}_different.vcf","$thisAname","##Filtered with vcfFilterTableV1. Condition ${condition}",$NcovBcondition);
+            write_variant_vcf($ref_different_variantsBfiltNcovB,"BfiltNcovB$sep_param${NcovBcondition}_different.vcf","$thisBname","##Filtered with vcfFilterTableV1. Condition ${condition}",$NcovBcondition);
         }
         if($output_comprehensive>1)
         {
             if ($output_list)
             {
-                write_variant_list($ref_common_variantsAfilt,"Afilt$sep_param${condition}_common.list");
-                write_variant_list($ref_common_variantsBfilt,"Bfilt$sep_param${condition}_common.list");
-                write_variant_list($ref_common_variantsAfiltN,"AfiltN$sep_param${condition}_common.list");
-                write_variant_list($ref_common_variantsBfiltN,"BfiltN$sep_param${condition}_common.list");
-                write_variant_list($ref_common_variantsAfiltNcovB,"AfiltNcovB$sep_param${NcovBcondition}_common.list");
-                write_variant_list($ref_common_variantsBfiltNcovB,"BfiltNcovB$sep_param${NcovBcondition}_common.list");
-                write_variant_list($ref_different_variantsAfilt,"Afilt$sep_param${condition}_different.list");
-                write_variant_list($ref_different_variantsBfilt,"Bfilt$sep_param${condition}_different.list");
-                write_variant_list($ref_different_variantsAfiltN,"AfiltN$sep_param${condition}_different.list");
-                write_variant_list($ref_different_variantsBfiltN,"BfiltN$sep_param${condition}_different.list");
-                write_variant_list($ref_different_variantsfiltNI,"filtNI$sep_param${condition}_different.list");
-                write_variant_list($ref_different_variantsfiltNcovBI,"filtNcovBI$sep_param${NcovBcondition}_different.list");
-                write_variant_list($ref_different_variantsfiltI,"filtI$sep_param${condition}_different.list");
-                write_variant_list($ref_different_variantsfiltNU,"filtNU$sep_param${condition}_different.list");
-                write_variant_list($ref_different_variantsfiltNcovBU,"filtNcovBU$sep_param${NcovBcondition}_different.list");
-                write_variant_list($ref_different_variantsfiltU,"filtU$sep_param${condition}_different.list");
-                write_variant_list($ref_common_variantsfiltNI,"filtNI$sep_param${condition}_common.list");
-                write_variant_list($ref_common_variantsfiltNcovBI,"filtNcovBI$sep_param${NcovBcondition}_common.list");
-                write_variant_list($ref_common_variantsfiltI,"filtI$sep_param${condition}_common.list");
-                write_variant_list($ref_common_variantsfiltNU,"filtNU$sep_param${condition}_common.list");
-                write_variant_list($ref_common_variantsfiltU,"filtU$sep_param${condition}_common.list");
+                write_variant_list($ref_common_variantsAfilt,"Afilt$sep_param${condition}_common.list",$NcovBcondition);
+                write_variant_list($ref_common_variantsBfilt,"Bfilt$sep_param${condition}_common.list",$NcovBcondition);
+                write_variant_list($ref_common_variantsAfiltN,"AfiltN$sep_param${condition}_common.list",$NcovBcondition);
+                write_variant_list($ref_common_variantsBfiltN,"BfiltN$sep_param${condition}_common.list",$NcovBcondition);
+                write_variant_list($ref_common_variantsAfiltNcovB,"AfiltNcovB$sep_param${NcovBcondition}_common.list",$NcovBcondition);
+                write_variant_list($ref_common_variantsBfiltNcovB,"BfiltNcovB$sep_param${NcovBcondition}_common.list",$NcovBcondition);
+                write_variant_list($ref_different_variantsAfilt,"Afilt$sep_param${condition}_different.list",$NcovBcondition);
+                write_variant_list($ref_different_variantsBfilt,"Bfilt$sep_param${condition}_different.list",$NcovBcondition);
+                write_variant_list($ref_different_variantsAfiltN,"AfiltN$sep_param${condition}_different.list",$NcovBcondition);
+                write_variant_list($ref_different_variantsBfiltN,"BfiltN$sep_param${condition}_different.list",$NcovBcondition);
+                write_variant_list($ref_different_variantsfiltNI,"filtNI$sep_param${condition}_different.list",$NcovBcondition);
+                write_variant_list($ref_different_variantsfiltNcovBI,"filtNcovBI$sep_param${NcovBcondition}_different.list",$NcovBcondition);
+                write_variant_list($ref_different_variantsfiltI,"filtI$sep_param${condition}_different.list",$NcovBcondition);
+                write_variant_list($ref_different_variantsfiltNU,"filtNU$sep_param${condition}_different.list",$NcovBcondition);
+                write_variant_list($ref_different_variantsfiltNcovBU,"filtNcovBU$sep_param${NcovBcondition}_different.list",$NcovBcondition);
+                write_variant_list($ref_different_variantsfiltU,"filtU$sep_param${condition}_different.list",$NcovBcondition);
+                write_variant_list($ref_common_variantsfiltNI,"filtNI$sep_param${condition}_common.list",$NcovBcondition);
+                write_variant_list($ref_common_variantsfiltNcovBI,"filtNcovBI$sep_param${NcovBcondition}_common.list",$NcovBcondition);
+                write_variant_list($ref_common_variantsfiltI,"filtI$sep_param${condition}_common.list",$NcovBcondition);
+                write_variant_list($ref_common_variantsfiltNU,"filtNU$sep_param${condition}_common.list",$NcovBcondition);
+                write_variant_list($ref_common_variantsfiltU,"filtU$sep_param${condition}_common.list",$NcovBcondition);
             }
             if ($output_vcf)
             {
-                write_variant_vcf($ref_common_variantsAfilt,"Afilt$sep_param${condition}_common.vcf","$thisAname","##Filtered with vcfFilterTableV1. Condition ${condition}");
-                write_variant_vcf($ref_common_variantsBfilt,"Bfilt$sep_param${condition}_common.vcf","$thisBname","##Filtered with vcfFilterTableV1. Condition ${condition}");
-                write_variant_vcf($ref_common_variantsAfiltN,"AfiltN$sep_param${condition}_common.vcf","$thisAname","##Filtered with vcfFilterTableV1. Condition ${condition}");
-                write_variant_vcf($ref_common_variantsBfiltN,"BfiltN$sep_param${condition}_common.vcf","$thisBname","##Filtered with vcfFilterTableV1. Condition ${condition}");
-                write_variant_vcf($ref_common_variantsAfiltNcovB,"AfiltNcovB$sep_param${NcovBcondition}_common.vcf","$thisAname","##Filtered with vcfFilterTableV1. Condition ${condition}");
-                write_variant_vcf($ref_common_variantsBfiltNcovB,"BfiltNcovB$sep_param${NcovBcondition}_common.vcf","$thisBname","##Filtered with vcfFilterTableV1. Condition ${condition}");
-                write_variant_vcf($ref_different_variantsAfilt,"Afilt$sep_param${condition}_different.vcf","$thisAname","##Filtered with vcfFilterTableV1. Condition ${condition}");
-                write_variant_vcf($ref_different_variantsBfilt,"Bfilt$sep_param${condition}_different.vcf","$thisBname","##Filtered with vcfFilterTableV1. Condition ${condition}");
-                write_variant_vcf($ref_different_variantsAfiltN,"AfiltN$sep_param${condition}_different.vcf","$thisAname","##Filtered with vcfFilterTableV1. Condition ${condition}");
-                write_variant_vcf($ref_different_variantsBfiltN,"BfiltN$sep_param${condition}_different.vcf","$thisBname","##Filtered with vcfFilterTableV1. Condition ${condition}");
-                write_variant_2vcf($ref_different_variantsfiltU,"filtU$sep_param${condition}_different.vcf","$thisAname","$thisBname","## U(AB) Filtered with vcfFilterTableV1. Condition ${condition}");
-                write_variant_2vcf($ref_different_variantsfiltNU,"filtNU$sep_param${condition}_different.vcf","$thisAname","$thisBname","## Somatic U(AB) Filtered with vcfFilterTableV1. Condition ${condition}");
-                write_variant_2vcf($ref_different_variantsfiltNcovBU,"filtNcovBU$sep_param${NcovBcondition}_different.vcf","$thisAname","$thisBname","## Somatic U(AB) Filtered with vcfFilterTableV1. Condition ${condition}");
-                write_variant_2vcf($ref_different_variantsfiltI,"filtI$sep_param${condition}_different.vcf","$thisAname","$thisBname","## I(AB) Filtered with vcfFilterTableV1. Condition ${condition}");
-                write_variant_2vcf($ref_different_variantsfiltNI,"filtNI$sep_param${condition}_different.vcf","$thisAname","$thisBname","## Somatic I(AB) Filtered with vcfFilterTableV1. Condition ${condition}");
-                write_variant_2vcf($ref_different_variantsfiltNcovBI,"filtNcovBI$sep_param${NcovBcondition}_different.vcf","$thisAname","$thisBname","## Somatic I(AB) Filtered with vcfFilterTableV1. Condition ${condition}");
-                write_variant_2vcf($ref_common_variantsfiltU,"filtU$sep_param${condition}_common.vcf","$thisAname","$thisBname","## U(AB) Filtered with vcfFilterTableV1. Condition ${condition}");
-                write_variant_2vcf($ref_common_variantsfiltNU,"filtNU$sep_param${condition}_common.vcf","$thisAname","$thisBname","## Somatic U(AB) Filtered with vcfFilterTableV1. Condition ${condition}");
-                write_variant_2vcf($ref_common_variantsfiltI,"filtI$sep_param${condition}_common.vcf","$thisAname","$thisBname","## I(AB) Filtered with vcfFilterTableV1. Condition ${condition}");
-                write_variant_2vcf($ref_common_variantsfiltNI,"filtNI$sep_param${condition}_common.vcf","$thisAname","$thisBname","## Somatic I(AB) Filtered with vcfFilterTableV1. Condition ${condition}");
-                write_variant_2vcf($ref_common_variantsfiltNcovBI,"filtNcovBI$sep_param${NcovBcondition}_common.vcf","$thisAname","$thisBname","## Somatic I(AB) Filtered with vcfFilterTableV1. Condition ${condition}");
+                write_variant_vcf($ref_common_variantsAfilt,"Afilt$sep_param${condition}_common.vcf","$thisAname","##Filtered with vcfFilterTableV1. Condition ${condition}",$NcovBcondition);
+                write_variant_vcf($ref_common_variantsBfilt,"Bfilt$sep_param${condition}_common.vcf","$thisBname","##Filtered with vcfFilterTableV1. Condition ${condition}",$NcovBcondition);
+                write_variant_vcf($ref_common_variantsAfiltN,"AfiltN$sep_param${condition}_common.vcf","$thisAname","##Filtered with vcfFilterTableV1. Condition ${condition}",$NcovBcondition);
+                write_variant_vcf($ref_common_variantsBfiltN,"BfiltN$sep_param${condition}_common.vcf","$thisBname","##Filtered with vcfFilterTableV1. Condition ${condition}",$NcovBcondition);
+                write_variant_vcf($ref_common_variantsAfiltNcovB,"AfiltNcovB$sep_param${NcovBcondition}_common.vcf","$thisAname","##Filtered with vcfFilterTableV1. Condition ${condition}",$NcovBcondition);
+                write_variant_vcf($ref_common_variantsBfiltNcovB,"BfiltNcovB$sep_param${NcovBcondition}_common.vcf","$thisBname","##Filtered with vcfFilterTableV1. Condition ${condition}",$NcovBcondition);
+                write_variant_vcf($ref_different_variantsAfilt,"Afilt$sep_param${condition}_different.vcf","$thisAname","##Filtered with vcfFilterTableV1. Condition ${condition}",$NcovBcondition);
+                write_variant_vcf($ref_different_variantsBfilt,"Bfilt$sep_param${condition}_different.vcf","$thisBname","##Filtered with vcfFilterTableV1. Condition ${condition}",$NcovBcondition);
+                write_variant_vcf($ref_different_variantsAfiltN,"AfiltN$sep_param${condition}_different.vcf","$thisAname","##Filtered with vcfFilterTableV1. Condition ${condition}",$NcovBcondition);
+                write_variant_vcf($ref_different_variantsBfiltN,"BfiltN$sep_param${condition}_different.vcf","$thisBname","##Filtered with vcfFilterTableV1. Condition ${condition}",$NcovBcondition);
+                write_variant_2vcf($ref_different_variantsfiltU,"filtU$sep_param${condition}_different.vcf","$thisAname","$thisBname","## U(AB) Filtered with vcfFilterTableV1. Condition ${condition}",$NcovBcondition);
+                write_variant_2vcf($ref_different_variantsfiltNU,"filtNU$sep_param${condition}_different.vcf","$thisAname","$thisBname","## Somatic U(AB) Filtered with vcfFilterTableV1. Condition ${condition}",$NcovBcondition);
+                write_variant_2vcf($ref_different_variantsfiltNcovBU,"filtNcovBU$sep_param${NcovBcondition}_different.vcf","$thisAname","$thisBname","## Somatic U(AB) Filtered with vcfFilterTableV1. Condition ${condition}",$NcovBcondition);
+                write_variant_2vcf($ref_different_variantsfiltI,"filtI$sep_param${condition}_different.vcf","$thisAname","$thisBname","## I(AB) Filtered with vcfFilterTableV1. Condition ${condition}",$NcovBcondition);
+                write_variant_2vcf($ref_different_variantsfiltNI,"filtNI$sep_param${condition}_different.vcf","$thisAname","$thisBname","## Somatic I(AB) Filtered with vcfFilterTableV1. Condition ${condition}",$NcovBcondition);
+                write_variant_2vcf($ref_different_variantsfiltNcovBI,"filtNcovBI$sep_param${NcovBcondition}_different.vcf","$thisAname","$thisBname","## Somatic I(AB) Filtered with vcfFilterTableV1. Condition ${condition}",$NcovBcondition);
+                write_variant_2vcf($ref_common_variantsfiltU,"filtU$sep_param${condition}_common.vcf","$thisAname","$thisBname","## U(AB) Filtered with vcfFilterTableV1. Condition ${condition}",$NcovBcondition);
+                write_variant_2vcf($ref_common_variantsfiltNU,"filtNU$sep_param${condition}_common.vcf","$thisAname","$thisBname","## Somatic U(AB) Filtered with vcfFilterTableV1. Condition ${condition}",$NcovBcondition);
+                write_variant_2vcf($ref_common_variantsfiltI,"filtI$sep_param${condition}_common.vcf","$thisAname","$thisBname","## I(AB) Filtered with vcfFilterTableV1. Condition ${condition}",$NcovBcondition);
+                write_variant_2vcf($ref_common_variantsfiltNI,"filtNI$sep_param${condition}_common.vcf","$thisAname","$thisBname","## Somatic I(AB) Filtered with vcfFilterTableV1. Condition ${condition}",$NcovBcondition);
+                write_variant_2vcf($ref_common_variantsfiltNcovBI,"filtNcovBI$sep_param${NcovBcondition}_common.vcf","$thisAname","$thisBname","## Somatic I(AB) Filtered with vcfFilterTableV1. Condition ${condition}",$NcovBcondition);
             }
         }
     }
@@ -541,7 +549,7 @@ sub filter
         my $NAB_condition=$NABfiltering_conditions[$i];
         #my $NAB=$NAB_hash_pointers[$i]; ##TODO: I am not using this, but I may want to do it for speed
         
-        my $NAB=vcf_covN_filter(\%datacovN,$NAB_condition);
+        my $NAB=vcf_covN_filter($refdatacovN,$NAB_condition);
 
 #Substract NAB from AfiltN. Compare the results to B without filter --> Common variants + % ###We want to apply filter to NAB and remove only variants that are Alternative for N
         my @statsAfiltNAB;
@@ -583,63 +591,62 @@ sub filter
         {
             if($output_list)
             {
-                write_variant_list($ref_common_variantsfiltcovBNABU,"filtcovBNABU$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}_common.list");
-                write_variant_list($ref_different_variantsAfiltcovBNAB,"AfiltcovBNAB$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}_different.list");
-                write_variant_list($ref_different_variantsBfiltcovBNAB,"BfiltcovBNAB$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}_different.list");
+                write_variant_list($ref_common_variantsfiltcovBNABU,"filtcovBNABU$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}_common.list",$NcovBcondition);
+                write_variant_list($ref_different_variantsAfiltcovBNAB,"AfiltcovBNAB$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}_different.list",$NcovBcondition);
+                write_variant_list($ref_different_variantsBfiltcovBNAB,"BfiltcovBNAB$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}_different.list",$NcovBcondition);
             }
             if($output_vcf)
             {
-                write_variant_2vcf($ref_common_variantsfiltcovBNABU,"filtcovBNABU$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}_common.vcf","$thisAname","$thisBname","## Somatic NAB U(AB) Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
-                write_variant_vcf($ref_different_variantsAfiltcovBNAB,"AfiltcovBNAB$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}_different.vcf","$thisAname","##Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
-                write_variant_vcf($ref_different_variantsBfiltcovBNAB,"BfiltcovBNAB$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}_different.vcf","$thisBname","##Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
+                write_variant_2vcf($ref_common_variantsfiltcovBNABU,"filtcovBNABU$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}_common.vcf","$thisAname","$thisBname","## Somatic NAB U(AB) Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition",$NcovBcondition);
+                write_variant_vcf($ref_different_variantsAfiltcovBNAB,"AfiltcovBNAB$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}_different.vcf","$thisAname","##Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition",$NcovBcondition,$NcovBcondition);
+                write_variant_vcf($ref_different_variantsBfiltcovBNAB,"BfiltcovBNAB$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}_different.vcf","$thisBname","##Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition",$NcovBcondition,$NcovBcondition);
             }
         }
         if($output_comprehensive>1)
         {
             if($output_list)
             {
-                write_variant_list($ref_common_variantsAfiltNAB,"AfiltNAB$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_common.list");
-                write_variant_list($ref_common_variantsBfiltNAB,"BfiltNAB$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_common.list");
-                write_variant_list($ref_different_variantsAfiltNAB,"AfiltNAB$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_different.list");
-                write_variant_list($ref_different_variantsBfiltNAB,"BfiltNAB$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_different.list");
-				write_variant_list($ref_common_variantsAfiltcovBNAB,"AfiltcovBNAB$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}_common.list");
-                write_variant_list($ref_common_variantsBfiltcovBNAB,"BfiltcovBNAB$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}_common.list");
-                write_variant_list($ref_different_variantsfiltNABU,"filtNABU$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_different.list");
-                write_variant_list($ref_different_variantsfiltNABI,"filtNABI$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_different.list");
-                write_variant_list($ref_different_variantsfiltcovBNABU,"filtcovBNABU$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}_different.list");
-                write_variant_list($ref_different_variantsfiltcovBNABI,"filtcovBNABI$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}_different.list");
-                write_variant_list($ref_common_variantsfiltNABU,"filtNABU$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_common.list");
-                write_variant_list($ref_common_variantsfiltNABI,"filtNABI$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_common.list");
-                write_variant_list($ref_common_variantsfiltcovBNABI,"filtcovBNABI$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}_common.list");
+                write_variant_list($ref_common_variantsAfiltNAB,"AfiltNAB$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_common.list",$NcovBcondition);
+                write_variant_list($ref_common_variantsBfiltNAB,"BfiltNAB$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_common.list",$NcovBcondition);
+                write_variant_list($ref_different_variantsAfiltNAB,"AfiltNAB$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_different.list",$NcovBcondition);
+                write_variant_list($ref_different_variantsBfiltNAB,"BfiltNAB$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_different.list",$NcovBcondition);
+				write_variant_list($ref_common_variantsAfiltcovBNAB,"AfiltcovBNAB$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}_common.list",$NcovBcondition);
+                write_variant_list($ref_common_variantsBfiltcovBNAB,"BfiltcovBNAB$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}_common.list",$NcovBcondition);
+                write_variant_list($ref_different_variantsfiltNABU,"filtNABU$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_different.list",$NcovBcondition);
+                write_variant_list($ref_different_variantsfiltNABI,"filtNABI$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_different.list",$NcovBcondition);
+                write_variant_list($ref_different_variantsfiltcovBNABU,"filtcovBNABU$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}_different.list",$NcovBcondition);
+                write_variant_list($ref_different_variantsfiltcovBNABI,"filtcovBNABI$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}_different.list",$NcovBcondition);
+                write_variant_list($ref_common_variantsfiltNABU,"filtNABU$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_common.list",$NcovBcondition);
+                write_variant_list($ref_common_variantsfiltNABI,"filtNABI$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_common.list",$NcovBcondition);
+                write_variant_list($ref_common_variantsfiltcovBNABI,"filtcovBNABI$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}_common.list",$NcovBcondition);
             }
             if($output_vcf)
             {
-                write_variant_vcf($ref_common_variantsAfiltNAB,"AfiltNAB$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_common.vcf","$thisAname","##Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
-                write_variant_vcf($ref_common_variantsBfiltNAB,"BfiltNAB$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_common.vcf","$thisBname","##Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
-                write_variant_vcf($ref_different_variantsAfiltNAB,"AfiltNAB$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_different.vcf","$thisAname","##Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
-                write_variant_vcf($ref_different_variantsBfiltNAB,"BfiltNAB$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_different.vcf","$thisBname","##Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
-                write_variant_2vcf($ref_different_variantsfiltNABU,"filtNABU$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_different.vcf","$thisAname","$thisBname","## Somatic NAB U(AB) Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
-                write_variant_2vcf($ref_different_variantsfiltNABI,"filtNABI$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_different.vcf","$thisAname","$thisBname","## Somatic NAB I(AB) Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
+                write_variant_vcf($ref_common_variantsAfiltNAB,"AfiltNAB$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_common.vcf","$thisAname","##Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition",$NcovBcondition);
+                write_variant_vcf($ref_common_variantsBfiltNAB,"BfiltNAB$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_common.vcf","$thisBname","##Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition",$NcovBcondition);
+                write_variant_vcf($ref_different_variantsAfiltNAB,"AfiltNAB$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_different.vcf","$thisAname","##Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition",$NcovBcondition);
+                write_variant_vcf($ref_different_variantsBfiltNAB,"BfiltNAB$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_different.vcf","$thisBname","##Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition",$NcovBcondition);
+                write_variant_2vcf($ref_different_variantsfiltNABU,"filtNABU$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_different.vcf","$thisAname","$thisBname","## Somatic NAB U(AB) Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition",$NcovBcondition);
+                write_variant_2vcf($ref_different_variantsfiltNABI,"filtNABI$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_different.vcf","$thisAname","$thisBname","## Somatic NAB I(AB) Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition",$NcovBcondition);
 
-                write_variant_vcf($ref_common_variantsAfiltcovBNAB,"AfiltcovBNAB$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}_common.vcf","$thisAname","##Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
-                write_variant_vcf($ref_common_variantsBfiltcovBNAB,"BfiltcovBNAB$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}_common.vcf","$thisBname","##Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
-                write_variant_2vcf($ref_different_variantsfiltcovBNABU,"filtcovBNABU$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}_different.vcf","$thisAname","$thisBname","## Somatic NAB U(AB) Filtered with vcfFilterTableV1. Condition ${NcovBcondition}${sep_param}NAB$sep_param$NAB_condition");
-                write_variant_2vcf($ref_different_variantsfiltcovBNABI,"filtcovBNABI$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}_different.vcf","$thisAname","$thisBname","## Somatic NAB I(AB) Filtered with vcfFilterTableV1. Condition ${NcovBcondition}${sep_param}NAB$sep_param$NAB_condition");
-			    write_variant_2vcf($ref_common_variantsfiltNABU,"filtNABU$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_common.vcf","$thisAname","$thisBname","## Somatic NAB U(AB) Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
-                write_variant_2vcf($ref_common_variantsfiltNABI,"filtNABI$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_common.vcf","$thisAname","$thisBname","## Somatic NAB I(AB) Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
-                write_variant_2vcf($ref_common_variantsfiltcovBNABI,"filtcovBNABI$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}_common.vcf","$thisAname","$thisBname","## Somatic NAB I(AB) Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition");
+                write_variant_vcf($ref_common_variantsAfiltcovBNAB,"AfiltcovBNAB$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}_common.vcf","$thisAname","##Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition",$NcovBcondition);
+                write_variant_vcf($ref_common_variantsBfiltcovBNAB,"BfiltcovBNAB$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}_common.vcf","$thisBname","##Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition",$NcovBcondition);
+                write_variant_2vcf($ref_different_variantsfiltcovBNABU,"filtcovBNABU$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}_different.vcf","$thisAname","$thisBname","## Somatic NAB U(AB) Filtered with vcfFilterTableV1. Condition ${NcovBcondition}${sep_param}NAB$sep_param$NAB_condition",$NcovBcondition);
+                write_variant_2vcf($ref_different_variantsfiltcovBNABI,"filtcovBNABI$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}_different.vcf","$thisAname","$thisBname","## Somatic NAB I(AB) Filtered with vcfFilterTableV1. Condition ${NcovBcondition}${sep_param}NAB$sep_param$NAB_condition",$NcovBcondition);
+			    write_variant_2vcf($ref_common_variantsfiltNABU,"filtNABU$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_common.vcf","$thisAname","$thisBname","## Somatic NAB U(AB) Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition",$NcovBcondition);
+                write_variant_2vcf($ref_common_variantsfiltNABI,"filtNABI$sep_param${condition}${sep_param}NAB$sep_param${NAB_condition}_common.vcf","$thisAname","$thisBname","## Somatic NAB I(AB) Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition",$NcovBcondition);
+                write_variant_2vcf($ref_common_variantsfiltcovBNABI,"filtcovBNABI$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}_common.vcf","$thisAname","$thisBname","## Somatic NAB I(AB) Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition",$NcovBcondition);
             }
         }
 
 #Store and/or print
-        my @statistics=(@nofilt_results,@statsAfilt,@statsBfilt,@statsfiltU,@statsfiltI,@statsfiltmean,@statsAfiltN,@statsBfiltN,@statsfiltNU,@statsfiltNI,@statsfiltNmean,@statsAfiltNcovB,@statsBfiltNcovB,@statsfiltNcovBU,@statsfiltNcovBI,@statsfiltNcovBmean,@statsAfiltNAB,@statsBfiltNAB,@statsfiltNABU,@statsfiltNABI,@statsfiltNABmean,@statsAfiltcovBNAB,@statsBfiltcovBNAB,@statsfiltcovBNABU,@statsfiltcovBNABI,@statsfiltcovBNABmean);
+        my @statistics=(@{$nofiltResultsRef{$exe_condition}},@statsAfilt,@statsBfilt,@statsfiltU,@statsfiltI,@statsfiltmean,@statsAfiltN,@statsBfiltN,@statsfiltNU,@statsfiltNI,@statsfiltNmean,@statsAfiltNcovB,@statsBfiltNcovB,@statsfiltNcovBU,@statsfiltNcovBI,@statsfiltNcovBmean,@statsAfiltNAB,@statsBfiltNAB,@statsfiltNABU,@statsfiltNABI,@statsfiltNABmean,@statsAfiltcovBNAB,@statsBfiltcovBNAB,@statsfiltcovBNABU,@statsfiltcovBNABI,@statsfiltcovBNABmean);
 #Condition,#A_#,B_#,N_#,AN_#,BN_#,Afilt_prop,Afilt_N,Afilt_#,Bfilt_prop,Bfilt_N,Bfilt_#,filt_propU,filt_NU,filt_#U,filt_propI,filt_NI,filt_#I,filt_prop_mean,filt_N_mean,filt_#_mean,AfiltN_prop,AfiltN_N,AfiltN_#,BfiltN_prop,BfiltN_N,BfiltN_#,filtN_propU,filtN_NU,filtN_#U,filtN_propI,filtN_NI,filtN_#I,filtN_prop_mean,filtN_N_mean,filtN_#_mean,AfiltNcovB_prop,AfiltNcovB_N,AfiltNcovB_#,BfiltNcovB_prop,BfiltNcovB_N,BfiltNcovB_#,filtNcovB_propU,filtNcovB_NU,filtNcovB_#U,filtNcovB_propI,filtNcovB_NI,filtNcovB_#I,filtNcovB_prop_mean,filtNcovB_N_mean,filtNcovB_#_mean,AfiltNAB_prop,AfiltNAB_N,AfiltNAB_#,BfiltNAB_prop,BfiltNAB_N,BfiltNAB_#,filtNAB_propU,filtNAB_NU,filtNAB_#U,filtNAB_propI,filtNAB_NI,filtNAB_#I,filtNAB_prop_mean,filtNAB_N_mean,filtNAB_#_mean,AfiltNABcovB_prop,AfiltNABcovB_N,AfiltNABcovB_#,BfiltNABcovB_prop,BfiltNABcovB_N,BfiltNABcovB_#,filtNABcovB_propU,filtNABcovB_NU,filtNABcovB_#U,filtNABcovB_propI,filtNABcovB_NI,filtNABcovB_#I,filtNABcovB_prop_mean,filtNABcovB_N_mean,filtNABcovB_#_mean
 
 		$results{"$NcovBcondition${sep_param}NAB$sep_param$NAB_condition"}=\@statistics;
 #print("DEBUG:$condition$OFS",array_to_string(@statistics),"\n");
     }
 }
-
 
 ###################################################################################
 ###FUNCTIONS
@@ -1282,8 +1289,8 @@ sub variants_to_hash
 # ############################################################
 sub write_variant_list
 {
-    my ($ref_hash,$filename)=@_;
-    my $FILE=openwrite_list_refname("$filename");    
+    my ($ref_hash,$filename,$filter)=@_;
+    my $FILE=openwrite_list_refname("$filename",$filter);    
     print($FILE "#CHROM,POS\n");
     foreach my $variant (keys %{$ref_hash})
     {
@@ -1297,8 +1304,8 @@ sub write_variant_list
 
 sub write_variant_vcf
 {
-    my ($ref_hash,$filename,$vcf,$comment)=@_;
-    my $OFILE=openwrite_vcf_refname("$filename");
+    my ($ref_hash,$filename,$vcf,$comment,$filter)=@_;
+    my $OFILE=openwrite_vcf_refname("$filename",$filter);
     open(my $IFILE, "$vcf");
     my @icontent= <$IFILE>;
     close($IFILE);
@@ -1349,8 +1356,8 @@ sub write_variant_vcf
 
 sub write_variant_2vcf
 {
-    my ($ref_hash,$filename,$vcf,$vcf2,$comment)=@_;
-    my $OFILE=openwrite_vcf_refname("$filename");
+    my ($ref_hash,$filename,$vcf,$vcf2,$comment,$filter)=@_;
+    my $OFILE=openwrite_vcf_refname("$filename",$filter);
     open(my $IFILE, $vcf);
     open(my $IFILE2, $vcf2);
     my @icontent= <$IFILE>;
@@ -1524,53 +1531,67 @@ sub filtervalues_changepost
 }
 
 # Opens a vcf file to write, using a number instead of its original name
+# It calculates a tag eliminating all non-numeric characters from the filter name
+# This is necessary for the parallel version since processes cannot share variables (they are only shared at the end)
 # A mapping between numbers and original names is printed by write_vcfrefname_dict
 # ######################################################################
 
 sub openwrite_vcf_refname
 {
-    my ($filename)=@_;
-    my $realfilename=scalar @vcffiles . ".vcf";
+    my ($filename,$filter)=@_;
+    $filter=~s/[^0-9]//g;
+    my $n_name=push (@vcfnames,$filename);
+    my $realfilename=$filter . $n_name . ".vcf";
+    exists $dictrealnamevcf{$filename} and die "Unexpected value. Repeated value in the dictionary of vcf names\n";
+    $dictrealnamevcf{$filename}=$realfilename;
     open (my $FILE, ">$realfilename") or die "Error opening $realfilename, in place of $filename\n";
-    push (@vcffiles,$filename);
     return $FILE;
 }
 
 # Returns the new vcf filename to write, using a number instead of its original name
+# It calculates a tag eliminating all non-numeric characters from the filter name
+# This is necessary for the parallel version since processes cannot share variables (they are only shared at the end)
 # A mapping between numbers and original names has to be then printed using write_vcfrefname_dict
 # ###############################################################################################
 
 sub vcf_refname
 {
-    my ($filename)=@_;
-    my $realfilename=scalar @vcffiles . ".vcf";
-    push (@vcffiles,$filename);
+    my ($filename,$filter)=@_;
+    $filter=~s/[^0-9]//g;
+    my $n_name=push (@vcfnames,$filename);
+    my $realfilename=$filter . $n_name . ".vcf";
+    exists $dictrealnamevcf{$filename} and die "Unexpected value. Repeated value in the dictionary of vcf names\n";
+    $dictrealnamevcf{$filename}=$realfilename; 
     return $realfilename;
 }
 
 # Opens a list file to write, using a number instead of its original name
+# It calculates a tag eliminating all non-numeric characters from the filter name
+# This is necessary for the parallel version since processes cannot share variables (they are only shared at the end)
 # A mapping between numbers and original names is printed by write_listrefname_dict
 # ######################################################################
 sub openwrite_list_refname
 {
-    my ($filename)=@_;
-    my $realfilename=scalar @listfiles . ".list";
+    my ($filename,$filter)=@_;
+    $filter=~s/[^0-9]//g;
+    my $n_name=push(@listnames,$filename);
+    my $realfilename=$filter . $n_name . ".list";
+    exists $dictrealnamelist{$filename} and die "Unexpected value. Repeated value in the dictionary of vcf names\n";
+    $dictrealnamelist{$filename}=$realfilename;
     open (my $FILE, ">$realfilename") or die "Error opening $realfilename, in place of $filename\n";
-    push (@listfiles,$filename);
     return $FILE;
 }
 
 
 # Generates the output file with the mapping of vcf file numbers and ideal names
 # ##############################################################################
-
 sub write_vcfrefname_dict
 {
     my ($filename)=@_;
     open (my $FILE, ">$filename");
-    for (my $i=0; $i<scalar @vcffiles; ++$i)
+    foreach my $filename (keys %dictrealnamevcf)
     {
-        print($FILE "$vcffiles[$i]$OFS$i.vcf\n");
+        print($FILE "$filename$OFS$dictrealnamevcf{$filename}\n");
     }
     foreach my $file (@namedvcffiles)
     {
@@ -1586,9 +1607,44 @@ sub write_listrefname_dict
 {
     my ($filename)=@_;
     open (my $FILE, ">$filename");
-    for (my $i=0; $i<scalar @listfiles; ++$i)
+    foreach my $filename (keys %dictrealnamelist)
     {
-        print($FILE "$listfiles[$i]$OFS$i.list\n");
+        print($FILE "$filename$OFS$dictrealnamelist{$filename}\n");
     }
     close($FILE);
+}
+
+# Parses all const_execond
+# ###################################################################
+
+sub parse_const_execond
+{
+    my $exe_condition;
+    if (defined $_)
+    {
+        $exe_condition=$_;
+    }
+    else
+    {
+        $exe_condition=$_[0];
+    }
+    
+    my $Aexecondname="A$sep_param$exe_condition.vcf";
+    my $Bexecondname="B$sep_param$exe_condition.vcf";
+    my $AcovBname="A$sep_param$exe_condition${sep_param}covBfiltering.tsv";
+    my $BcovBname="B$sep_param$exe_condition${sep_param}covBfiltering.tsv";
+    my $covNname="covN$sep_param$exe_condition.tsv";
+    
+    (! -f $covNname) and die "Error calculating coverage of N";
+    (! -f $AcovBname ) or (! -f $BcovBname) and die "Error calculating coverages of A and B";
+    (! -f $Aexecondname) or  (! -f $Bexecondname) and die "Missing vcf files for constant files. Check the variant calling step";
+
+    $constExeCondContentRefs{$AcovBname}=parse_tsv($AcovBname);
+    $constExeCondContentRefs{$BcovBname}=parse_tsv($BcovBname);
+    $constExeCondContentRefs{$covNname}=parse_tsv($covNname);
+    $constExeCondContentRefs{$Aexecondname}=parse_vcf($Aexecondname);
+    $constExeCondContentRefs{$Bexecondname}=parse_vcf($Bexecondname);
+#    $constExeCondContentRefs{"${Aexecondname}_N"}=vcf_prune_single($constExeCondContentRefs{$Aexecondname},\%N); #Not needed
+#    $constExeCondContentRefs{"${Bexecondname}_N"}=vcf_prune_single($constExeCondContentRefs{$Bexecondname},\%N);
+    $nofiltResultsRef{$exe_condition}=[scalar keys %{$constExeCondContentRefs{$AcovBname}}, scalar keys %{$constExeCondContentRefs{$BcovBname}}, scalar keys %N, scalar keys %{vcf_prune_single($constExeCondContentRefs{$Aexecondname},\%N)}, scalar keys %{vcf_prune_single($constExeCondContentRefs{$Bexecondname},\%N)}];
 }
