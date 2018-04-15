@@ -40,15 +40,12 @@ my $filtercond_inputfile="";
 my $NABfiltercond_inputfile1="";
 my $NABfiltercond_inputfile2="";
 my $covBfiltercond_inputfile="";
-my $Nbam_file="";
-my $Abam_file="";
-my $Bbam_file="";
 my $output_file="";
 my $SCRIPTSVCF_DIR=$ENV{'SCRIPTSVCF_DIR'};
 
 #Flags
 my $help;
-my $usage="Usage: $0 [options] -o output_file \n\nWARNING: This is a secondary script that is not inteded to be executed directly.\n\n\nOptions:\n--------\n\t-e/--exec_cond_inputfile : input file for execution parameters and options\n\t-f/--filt_cond_inputfile : input file for execution parameters and options\n\t--NABfilt_cond_inputfile : input file for the filtering options of the NAB sample\n\t--NABfilt_cond_inputfile2 : secondary input file for a secondary filter (OR filter implemented in a dirty way) of the NAB sample\n\t--covaltB_cond_inputfile : input file for the filtering taking into account characteristics of the unfiltered in the comparison\n\t--output_dir : output directory for vcf files\n\t--Nbam : bamfile of the N sample\n\t--Abam : bamfile of the A sample\n\t--Bbam : bamfile of the B sample\n\t--n_cores : number of cores to execute some steps in parallel (requires the perl package Parallel::Loops)\n\t--output_vcf: (bool) generate resulting vcf files or not\n--output_list: (bool) generate resulting list of variants or not\n--comp: (int) indicating the comprehensiveness of the output, 0=no files, 1=only needed files to call variants, 2= all intermediate variants\n\n";
+my $usage="Usage: $0 [options] -o output_file \n\nWARNING: This is a secondary script that is not inteded to be executed directly.\n\n\nOptions:\n--------\n\t-e/--exec_cond_inputfile : input file for execution parameters and options\n\t-f/--filt_cond_inputfile : input file for execution parameters and options\n\t--NABfilt_cond_inputfile : input file for the filtering options of the NAB sample\n\t--NABfilt_cond_inputfile2 : secondary input file for a secondary filter (OR filter implemented in a dirty way) of the NAB sample\n\t--covaltB_cond_inputfile : input file for the filtering taking into account characteristics of the unfiltered in the comparison\n\t--output_dir : output directory for vcf files\n\t--n_cores : number of cores to execute some steps in parallel (requires the perl package Parallel::Loops)\n\t--output_vcf: (bool) generate resulting vcf files or not\n--output_list: (bool) generate resulting list of variants or not\n--comp: (int) indicating the comprehensiveness of the output, 0=no files, 1=only needed files to call variants, 2= all intermediate variants\n\n";
 ######################################################
 
 ######################################################
@@ -63,9 +60,6 @@ my $usage="Usage: $0 [options] -o output_file \n\nWARNING: This is a secondary s
 	'NABfilt_cond_inputfile=s' => \$NABfiltercond_inputfile1,
     'NABfilt_cond_inputfile2=s' => \$NABfiltercond_inputfile2,
     'covaltB_cond_inputfile=s' => \$covBfiltercond_inputfile,
-    'Nbam=s' => \$Nbam_file,
-    'Abam=s' => \$Abam_file,
-    'Bbam=s' => \$Bbam_file,
 	'output_file|o=s' => \$output_file,
     'n_cores=i' => \$n_cores,
     'output_vcf=i'=>\$output_vcf,
@@ -208,65 +202,7 @@ if ($n_cores>1)
     $parallel->share(\%results, \%dictrealnamelist, @listnames, \%dictrealnamevcf, @vcfnames, \@namedvcffiles, \%constExeCondContentRefs, \%nofiltResultsRef);
 }
 
-##Generating covN and covB files in parallel
-my @covXcommands;
-my ($Aexecondname,$Bexecondname,$AcovBname,$BcovBname,$covNname);
-
-#Preparing the commands
-foreach my $exe_condition (@exe_conditions)
-{
-    $Aexecondname="A$sep_param$exe_condition.vcf"; ##So far I am not using numbers for execondnames. If I change this, I will need to get the number names here and in the filter function
-    $Bexecondname="B$sep_param$exe_condition.vcf";
-    $AcovBname="A$sep_param$exe_condition${sep_param}covBfiltering.tsv";
-    $BcovBname="B$sep_param$exe_condition${sep_param}covBfiltering.tsv";
-    $covNname="covN$sep_param$exe_condition.tsv";
- 
-    if ( ! -f "$covNname")
-    {
-        print("Calling variants in the N file for the calculation of covN for the exe_conditions $exe_condition\n");
-        push(@covXcommands,"$SCRIPTSVCF_DIR/$covN_sh $Aexecondname $Bexecondname $covNname $Nbam_file")
-    }
-    else
-    {
-        print("Reusing previously generated $covNname\n");
-    }
-    
-    if(! -f $AcovBname)
-    {
-        print("Calling variants in the opposite file for the calculation of covB for the exe_conditions $exe_condition\n");
-        push(@covXcommands,"$SCRIPTSVCF_DIR/$covB_sh $Bexecondname $AcovBname $Abam_file");
-    }
-    else
-    {
-        print("Reusing previously generated $AcovBname\n");
-    }
-    
-    if(! -f $BcovBname)
-    {
-        print("Calling variants in the opposite file for the calculation of covB for the exe_conditions $exe_condition\n");
-        push(@covXcommands,"$SCRIPTSVCF_DIR/$covB_sh $Aexecondname $BcovBname $Bbam_file");
-    }
-    else
-    {
-        print("Reusing previously generated $BcovBname\n");
-    }
-
-}
-
-#Executing them
-if($n_cores>1 && scalar @covXcommands > 1)
-{
-    $parallel->foreach(\@covXcommands, sub{`$_`});
-}
-else
-{
-    foreach my $command (@covXcommands)
-    {
-        `$command`
-    }
-}
-
-#Reading them and storing them in memory
+#Parsing covX files
 #TODO:I am not 100% sure this is worth it since the forking process takes quite a lot of time to duble-check if I have time
 if($n_cores>1 && scalar @exe_conditions > 1)
 {
@@ -279,6 +215,8 @@ else
        parse_const_execond($exe_condition);
    }
 }
+
+my ($Aexecondname,$Bexecondname);
 
 foreach my $exe_condition (@exe_conditions) ##Options that require to call variants again 
 {
@@ -328,15 +266,15 @@ print($OFILE "Sample,Condition,A_#,B_#,N_#,AN_#,BN_#,Afilt_prop,Afilt_N,Afilt_#,
 
 my $sample=$output_file;
 $sample=basename($sample);
-$sample=~s/(.*)\..*/$1/;
+$sample=~s/([^.]*)\..*/$1/;
 foreach my $condition (keys %results)
 {
     print($OFILE "$sample$OFS$condition$OFS",array_to_string(@{$results{$condition}}),"\n");
 }
 close($OFILE);
 
-write_vcfrefname_dict("vcfdict.csv");
-write_listrefname_dict("listdict.csv");
+write_vcfrefname_dict("vcfdict.$sample.csv");
+write_listrefname_dict("listdict.$sample.csv");
 print("Done!\n");
 
 ## MAIN BODY AS FUNCTION FOR PARALLELISM

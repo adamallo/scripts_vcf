@@ -10,23 +10,28 @@ use Env;
 
 ##Configuration variables
 ######################################################
-our $private="-p private";
-our $sep_param="#";
-our $sep_value=":";
-our $OFS=",";
-our $FS=",";
-our $variant_caller="platypus";
-our $variant_calling_sh;
-our $helper_sh="vcfFilteringTableV2_analyser_helper.sh";
-our $helper_pl="HeterAnalyzer.pl";
-our $tstv_sh="tstv.sbatch";
-#our $annotation_sh="annovar.sh";
-our $n_cores=1;
-our $qsub="submit ${private} -N 1 -n 1 -c ";
-our $qsub_noparallel="submit ${private} -N 1 -n 1 -c 1";
-our $qstat="qstat";
-our $sed='sed "s/Queued job \(.*\)/\1/"';
-our $sleep=60;
+my $private="-p private";
+my $sep_param="#";
+my $sep_value=":";
+my $OFS=",";
+my $FS=",";
+my $variant_caller="platypus";
+my $variant_calling_sh;
+my $helper_sh="perl.sh";
+my $helper_pl="HeterAnalyzer.pl";
+my $tstv_sh="tstv.sbatch";
+my $annotation_sh="annovar_loop.sh";
+my $covB_sh="covB_half.sh";
+my $covN_sh="covN.sh";
+my $reduce_sh="reduceHeterAnalyzer_control.sh";
+my $n_cores=1;
+my $qsub="submit ${private} -N 1 -n 1 -c ";
+my $qsub_noparallel="submit ${private} -N 1 -n 1 -c 1";
+my $qstat="qstat";
+my $sed='sed "s/Queued job \(.*\)/\1/"';
+my $sep_dep=":";
+my $dep_prefix="--dependency=afterok";
+my $sleep=60;
 ######################################################
 
 ##IO Variables
@@ -94,7 +99,7 @@ if ($execond_inputfile ne "")
 ##BAMs
 if ( ! -f $normal_bam)
 {
-	die "The BAM file $normal_bam is not accesible. Please, check your input options.\n";
+	die "The BAM file $normal_bam is not accesible. Please, check ymy input options.\n";
 }
 else
 {
@@ -103,7 +108,7 @@ else
 
 if ( ! -f $sample1_bam)
 {
-	die "The BAM file $sample1_bam is not accesible. Please, check your input options.\n";
+	die "The BAM file $sample1_bam is not accesible. Please, check ymy input options.\n";
 }
 else
 {
@@ -112,7 +117,7 @@ else
 
 if ( ! -f $sample2_bam)
 {
-	die "The BAM file $sample2_bam is not accesible. Please, check your input options.\n";
+	die "The BAM file $sample2_bam is not accesible. Please, check ymy input options.\n";
 }
 else
 {
@@ -170,12 +175,10 @@ my $name_condition;
 my @exe_conditions;
 my $bamfiles;
 
-
-
 ###Generate all combinations of proposed values for execution
 combs(0,"",\@exe_parameters,\@exe_param_values,\@exe_conditions);
 
-our %job_ids;
+my %job_ids;
 my $exe_condition;
 
 mkdir("e_logs");
@@ -222,89 +225,163 @@ else
 }
 
 ### Calling with filters (Only cancer samples so far)
-
-### Calling with filters (Only cancer samples so far)
 ##############################################################
+
 my $job_id;
 my $actual_exe_conditions;
-print("Filtered variant calling detection/execution:\n");	
+print("Filtered variant calling detection/execution:\n");
+my $AcovBname;
+my $BcovBname;
+my $covNname;
+my $Aexecondname;
+my $Bexecondname;
+my @rep_deps;
+my %exe_deps;
+my $deps;
+my $tempofile;
+my $tag;
+my $EXETOFILE;
+my $exetcontent;
+
 foreach my $exe_condition (@exe_conditions)
 {
-	if (! -f "A$sep_param$exe_condition.vcf")
+    $Aexecondname="A$sep_param$exe_condition.vcf";
+    $Bexecondname="B$sep_param$exe_condition.vcf";
+    $AcovBname="A$sep_param$exe_condition${sep_param}covBfiltering.tsv";
+    $BcovBname="B$sep_param$exe_condition${sep_param}covBfiltering.tsv";
+    $covNname="covN$sep_param$exe_condition.tsv";
+	@rep_deps=();
+    %exe_deps=();
+
+    if (! -f "$Aexecondname")
 	{
 		$bamfiles=$sample1_bam;
-        		if ($exe_condition eq "Default${sep_value}1")
-        		{
-            		$actual_exe_conditions="";
-            		#print("DEBUG: A: Default exe conditions\n");
-       	 	}
-        		else
-        		{
-            		$actual_exe_conditions=join(" ",split("$sep_value",join(" ",split("$sep_param",$exe_condition))));
-            		#print("DEBUG: A: Real exe_conditions\n");
-        		}
-        		#print("DEBUG: qsub -e e_logs/ -o o_logs/ -q shortq $variant_calling_sh -F \"$bamfiles $actual_exe_conditions A$sep_param$exe_condition.vcf A$sep_param${exe_conditions}_platypus.log\" | sed \"s/.master.cm.cluster//\"");
+        if ($exe_condition eq "Default${sep_value}1")
+        {
+            $actual_exe_conditions="";
+            #print("DEBUG: A: Default exe conditions\n");
+       	}
+        else
+   		{
+       		$actual_exe_conditions=join(" ",split("$sep_value",join(" ",split("$sep_param",$exe_condition))));
+       		#print("DEBUG: A: Real exe_conditions\n");
+   		}
+        #print("DEBUG: qsub -e e_logs/ -o o_logs/ -q shortq $variant_calling_sh -F \"$bamfiles $actual_exe_conditions A$sep_param$exe_condition.vcf A$sep_param${exe_conditions}_platypus.log\" | sed \"s/.master.cm.cluster//\"");
 		
-        $job_id=submit_job("$qsub $variant_calling_sh $bamfiles A$sep_param$exe_condition.vcf A$sep_param${exe_condition}_platypus.log $actual_exe_conditions");
+        $job_id=submit_job("$qsub $variant_calling_sh $bamfiles $Aexecondname A$sep_param${exe_condition}_platypus.log $actual_exe_conditions",\%exe_deps);
+        push(@rep_deps,$job_id);
+        $deps="$dep_prefix$sep_dep$job_id";
 		print("\tSample A variant calling for conditions $exe_condition submited with job_id $job_id\n");
 
 	}
 	else
-	{
+    {
+        $deps="";
 		print("\tSample A variant calling for conditions $exe_condition already present, skipping it\n");
 	}
+    
+    if(! -f $BcovBname)
+    {
+        $job_id=submit_job("$qsub".$deps." $covB_sh $Aexecondname $BcovBname $sample2_bam",\%exe_deps);
+        print("Sample B variant calling of variants in sample A for covB calculations for exe_conditions $exe_condition submitted with job_id $job_id\n");
+    }
+    else
+    {
+        print("Reusing previously generated $BcovBname\n");
+    }
 
-	if (! -f "B$sep_param$exe_condition.vcf")
+	if (! -f "$Bexecondname")
 	{
 		$bamfiles=$sample2_bam;
-        		if ($exe_condition eq "Default${sep_value}1")
-        		{
-            		$actual_exe_conditions="";
-            		##print("DEBUG: B: Default exe conditions\n");
-        		}
-        		else
-        		{
-           	 		$actual_exe_conditions=join(" ",split("$sep_value",join(" ",split("$sep_param",$exe_condition))));
-            		#print("DEBUG: B: Real exe_conditions\n");
-        		}
-		$job_id=submit_job("$qsub $variant_calling_sh $bamfiles B$sep_param$exe_condition.vcf B$sep_param${exe_condition}_platypus.log $actual_exe_conditions");
+		if ($exe_condition eq "Default${sep_value}1")
+		{
+    		$actual_exe_conditions="";
+    		##print("DEBUG: B: Default exe conditions\n");
+		}
+		else
+		{
+   	 		$actual_exe_conditions=join(" ",split("$sep_value",join(" ",split("$sep_param",$exe_condition))));
+    		#print("DEBUG: B: Real exe_conditions\n");
+		}
+		$job_id=submit_job("$qsub $variant_calling_sh $bamfiles $Bexecondname B$sep_param${exe_condition}_platypus.log $actual_exe_conditions",\%exe_deps);
+        push(@rep_deps,$job_id);
+        $deps="$dep_prefix$sep_dep$job_id";
 		print("\tSample B variant calling for conditions $exe_condition submited with job_id $job_id\n");
 
 	}
 	else
 	{
+        $deps="";
 		print("\tSample B variant calling for conditions $exe_condition already present, skipping it\n");
 
 	}
+    
+    if(! -f $AcovBname)
+    {
+        $job_id=submit_job("$qsub $deps $covB_sh $Bexecondname $AcovBname $sample1_bam",\%exe_deps);
+        print("Sample A variant calling of variants in sample B for covB calculations for exe_conditions $exe_condition submitted with job_id $job_id\n");
+    }
+    else
+    {
+        print("Reusing previously generated $AcovBname\n");
+    }
+    
+    if ( ! -f "$covNname")
+    {
+        $deps=join($sep_dep,@rep_deps);
+        if ($deps ne "")
+        {
+            $deps="$dep_prefix$sep_dep$deps";
+        }
+        
+        $job_id=submit_job("$qsub $deps $covN_sh $Aexecondname $Bexecondname $covNname $normal_bam",\%exe_deps);
+        print("The variant calling of the variants of A and B in N for exe_conditions $exe_condition submitted with job_id $job_id\n");
+    }
+    else
+    {
+        print("Reusing previously generated $covNname\n");
+    }
+
+    $deps=dependencies_string(\%exe_deps);
+
+    #Generating temprorary file with the exe-params of this exe-condition
+    $tag=$exe_conditions[0];
+    $tag=~s/[^0-9]*//g; #Unique identifier generated with the numbers of the parameter values of this exe-condition
+    open($EXETOFILE,">exeparams.$tag") or die "Problems generating the temp exeparams.$tag file\n";
+    $exetcontent=$exe_condition;
+    $exetcontent=~s/=/=$FS/g;
+    $exetcontent=~s/$sep_param/\n/g;
+    print($EXETOFILE $exetcontent);
+    close($EXETOFILE) or die "Problems closing the temp exeparams.$tag file\n";
+    
+    #Generating name of the temporary output file for this exe-condition 
+    $tempofile=$output_file;
+    $tempofile=~s/(\.[^.]+)$/$tag$1/; 
+    
+    if(-f $onfile2)
+    { 
+        $job_id=submit_job("$qsub $deps $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile2 $onfile2 --covaltB_cond_inputfile $ocfile --Nbam $normal_bam --Abam $sample1_bam --Bbam $sample2_bam -o $tempofile --output_vcf $output_vcf --output_list $output_list --comp $comp --n_cores $n_cores");
+    }
+    else
+    {
+        $job_id=submit_job("$qsub $deps $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --covaltB_cond_inputfile $ocfile --Nbam $normal_bam --Abam $sample1_bam --Bbam $sample2_bam -o $tempofile --output_vcf $output_vcf --output_list $output_list --comp $comp --n_cores $n_cores");
+    }
+    print("The filtering and analysis of the vcf files is being conducted with the job_id $job_id\n");
 
 } 
 
-my $deps=compile_dependencies();
-if ($deps ne "")
-{
-    $deps="--dependency=afterok:$deps";
-}
-
-if(-f $onfile2)
-{   
-    $job_id=submit_job("$qsub $deps $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile2 $onfile2 --covaltB_cond_inputfile $ocfile --Nbam $normal_bam --Abam $sample1_bam --Bbam $sample2_bam -o $output_file --output_vcf $output_vcf --output_list $output_list --comp $comp --n_cores $n_cores");
-}
-else
-{
-    $job_id=submit_job("$qsub $deps $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --covaltB_cond_inputfile $ocfile --Nbam $normal_bam --Abam $sample1_bam --Bbam $sample2_bam -o $output_file --output_vcf $output_vcf --output_list $output_list --comp $comp --n_cores $n_cores");
-}
-print("The filtering and analysis of the vcf files is being conducted with the job_id $job_id\n");
-
-$deps=compile_dependencies(); #This can never be ""
+$deps=dependencies_string();
+$job_id=submit_job("$qsub_noparallel $deps $reduce_sh $output_file");
+print("The reduction of results of parallelized jobs submitted with job_id $job_id\n");
 
 unless ($output_vcf==0 || $comp != 2)
 {
-    $job_id=submit_job("$qsub_noparallel --dependency=afterok:$deps $tstv_sh $output_dir");
-
+    $deps=dependencies_string();
+    $job_id=submit_job("$qsub $deps $annotation_sh $n_cores"); 
+    print("Variant annotation with annovar submitted with job_id $job_id\n");
+    $job_id=submit_job("$qsub $deps $tstv_sh $output_dir");
     print("Ts/Tv statistics are being calculated in the job_id $job_id\n");
-} else
-{
-    $job_id=$deps;    
+
 }
 print("Jobs submitted!\n$job_id");
 
@@ -316,7 +393,18 @@ exit;
 
 sub submit_job
 {
-    my ($command)=@_;
+    my $refhash=\%job_ids;
+    my $command;
+
+    if (scalar @_ == 2)
+    {
+        ($command,$refhash)=@_;
+    }
+    else
+    {
+        ($command)=@_;
+    }
+
     my $job_id="";
     $job_id=`$command | $sed`;
     chomp($job_id);
@@ -327,16 +415,32 @@ sub submit_job
         $job_id=`$command | $sed`;
    		chomp($job_id);
     }
-    $job_ids{$job_id}=1;
+    ${$refhash}{$job_id}=1;
     return $job_id;
+}
+
+sub dependencies_string
+{
+    my $deps=compile_dependencies(@_);
+    if ($deps ne "")
+    {
+        return "$dep_prefix$sep_dep$deps";
+    }
+
+    return $deps;
 }
 
 sub compile_dependencies
 {
     my $option="";
-    if (scalar(@_) ==1)
+    my $refhash=\%job_ids;
+    if (scalar(@_) ==2)
     {
-        ($option)=@_;
+        ($refhash,$option)=@_;
+    }
+    elsif (scalar(@_) ==1)
+    {
+        ($refhash)=@_;
     }
     my $dependencies="";
     my $keep=0;
@@ -344,10 +448,10 @@ sub compile_dependencies
     {
         $keep=1;    
     }
-    for my $key (keys %job_ids)
+    for my $key (keys %{$refhash})
     {
-        $dependencies="$dependencies$key:";
-        $keep == 0 and delete($job_ids{$key});
+        $dependencies="$dependencies$key$sep_dep";
+        $keep == 0 and delete(${$refhash}{$key});
     }
     chop($dependencies);
     return $dependencies;
