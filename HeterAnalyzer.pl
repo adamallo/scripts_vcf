@@ -272,9 +272,10 @@ foreach my $condition (keys %results)
     print($OFILE "$sample$OFS$condition$OFS",array_to_string(@{$results{$condition}}),"\n");
 }
 close($OFILE);
-
-write_vcfrefname_dict("vcfdict.$sample.csv");
-write_listrefname_dict("listdict.$sample.csv");
+my $tag=$exe_conditions[0];
+$tag=~s/[^0-9]+//g;
+write_vcfrefname_dict("vcfdict.$tag.csv");
+write_listrefname_dict("listdict.$tag.csv");
 print("Done!\n");
 
 ## MAIN BODY AS FUNCTION FOR PARALLELISM

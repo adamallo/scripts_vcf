@@ -143,14 +143,17 @@ else
     die "Error, the sh file for the variant caller $variant_caller can't be located. Please, make sure that the environment variable SCRIPTSVCF_DIR is indicating the folder with this package of scripts\n"
 }
 
-if (-f "$SCRIPTSVCF_DIR/$helper_sh" && -f "$SCRIPTSVCF_DIR/$helper_pl")
+if (-f "$SCRIPTSVCF_DIR/$helper_sh" && -f "$SCRIPTSVCF_DIR/$helper_pl" && -f "$SCRIPTSVCF_DIR/$reduce_sh" && -f "$SCRIPTSVCF_DIR/$covB_sh" && -f "$SCRIPTSVCF_DIR/$covN_sh")
 {
     $helper_sh="$SCRIPTSVCF_DIR/$helper_sh";
     $helper_pl="$SCRIPTSVCF_DIR/$helper_pl";
+    $reduce_sh="$SCRIPTSVCF_DIR/$reduce_sh";
+    $covB_sh="$SCRIPTSVCF_DIR/$covB_sh";
+    $covN_sh="$SCRIPTSVCF_DIR/$covN_sh";
 }
 else
 {
-    die "Error, the files for the secondary analysis of the data, $helper_sh and $helper_pl can't be located. Please, make sure that the environment variable SCRIPTSVCF_DIR is indicating the folder with this package of scripts\n"
+    die "Error, the files for the secondary analysis of the data, $helper_sh, $helper_pl, $reduce_sh, $covB_sh, and $covN_sh can't be located. Please, make sure that the environment variable SCRIPTSVCF_DIR is indicating the folder with this package of scripts\n"
 }
 
 if (-f "$SCRIPTSVCF_DIR/$tstv_sh")
@@ -160,6 +163,15 @@ if (-f "$SCRIPTSVCF_DIR/$tstv_sh")
 else
 {
   die "Error, the sh file to get the TsTv data, $tstv_sh can't be located. Please, make sure that the environment variable SCRIPTSVCF_DIR is indicating the folder with this package of scripts\n"
+}
+
+if (-f "$SCRIPTSVCF_DIR/$annotation_sh")
+{
+    $annotation_sh="$SCRIPTSVCF_DIR/$annotation_sh";
+}
+else
+{
+  die "Error, the sh file to annotate variants using annovar, $annotation_sh can't be located. Please, make sure that the environment variable SCRIPTSVCF_DIR is indicating the folder with this package of scripts\n"
 }
 
 if($output_vcf==0 || $comp != 2)
@@ -242,6 +254,7 @@ my $tempofile;
 my $tag;
 my $EXETOFILE;
 my $exetcontent;
+my $samplename=basename($output_dir,(".vcf"));
 
 foreach my $exe_condition (@exe_conditions)
 {
@@ -282,12 +295,12 @@ foreach my $exe_condition (@exe_conditions)
     
     if(! -f $BcovBname)
     {
-        $job_id=submit_job("$qsub".$deps." $covB_sh $Aexecondname $BcovBname $sample2_bam",\%exe_deps);
-        print("Sample B variant calling of variants in sample A for covB calculations for exe_conditions $exe_condition submitted with job_id $job_id\n");
+        $job_id=submit_job("$qsub_noparallel $deps $covB_sh $Aexecondname $BcovBname $sample2_bam",\%exe_deps);
+        print("\tSample B variant calling of variants in sample A for covB calculations for exe_conditions $exe_condition submitted with job_id $job_id\n");
     }
     else
     {
-        print("Reusing previously generated $BcovBname\n");
+        print("\tReusing previously generated $BcovBname\n");
     }
 
 	if (! -f "$Bexecondname")
@@ -318,12 +331,12 @@ foreach my $exe_condition (@exe_conditions)
     
     if(! -f $AcovBname)
     {
-        $job_id=submit_job("$qsub $deps $covB_sh $Bexecondname $AcovBname $sample1_bam",\%exe_deps);
-        print("Sample A variant calling of variants in sample B for covB calculations for exe_conditions $exe_condition submitted with job_id $job_id\n");
+        $job_id=submit_job("$qsub_noparallel $deps $covB_sh $Bexecondname $AcovBname $sample1_bam",\%exe_deps);
+        print("\tSample A variant calling of variants in sample B for covB calculations for exe_conditions $exe_condition submitted with job_id $job_id\n");
     }
     else
     {
-        print("Reusing previously generated $AcovBname\n");
+        print("\tReusing previously generated $AcovBname\n");
     }
     
     if ( ! -f "$covNname")
@@ -334,18 +347,18 @@ foreach my $exe_condition (@exe_conditions)
             $deps="$dep_prefix$sep_dep$deps";
         }
         
-        $job_id=submit_job("$qsub $deps $covN_sh $Aexecondname $Bexecondname $covNname $normal_bam",\%exe_deps);
-        print("The variant calling of the variants of A and B in N for exe_conditions $exe_condition submitted with job_id $job_id\n");
+        $job_id=submit_job("$qsub_noparallel $deps $covN_sh $Aexecondname $Bexecondname $covNname $normal_bam",\%exe_deps);
+        print("\tThe variant calling of the variants of A and B in N for exe_conditions $exe_condition submitted with job_id $job_id\n");
     }
     else
     {
-        print("Reusing previously generated $covNname\n");
+        print("\tReusing previously generated $covNname\n");
     }
 
     $deps=dependencies_string(\%exe_deps);
 
     #Generating temprorary file with the exe-params of this exe-condition
-    $tag=$exe_conditions[0];
+    $tag=$exe_condition;
     $tag=~s/[^0-9]*//g; #Unique identifier generated with the numbers of the parameter values of this exe-condition
     open($EXETOFILE,">exeparams.$tag") or die "Problems generating the temp exeparams.$tag file\n";
     $exetcontent=$exe_condition;
@@ -356,17 +369,17 @@ foreach my $exe_condition (@exe_conditions)
     
     #Generating name of the temporary output file for this exe-condition 
     $tempofile=$output_file;
-    $tempofile=~s/(\.[^.]+)$/$tag$1/; 
+    $tempofile=~s/(\.[^.]+)$/.$tag$1/;
     
     if(-f $onfile2)
     { 
-        $job_id=submit_job("$qsub $deps $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile2 $onfile2 --covaltB_cond_inputfile $ocfile --Nbam $normal_bam --Abam $sample1_bam --Bbam $sample2_bam -o $tempofile --output_vcf $output_vcf --output_list $output_list --comp $comp --n_cores $n_cores");
+        $job_id=submit_job("$qsub $deps -J HeterAnalyzer.$samplename.$tag $helper_sh $helper_pl -e exeparams.$tag -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile2 $onfile2 --covaltB_cond_inputfile $ocfile -o $tempofile --output_vcf $output_vcf --output_list $output_list --comp $comp --n_cores $n_cores");
     }
     else
     {
-        $job_id=submit_job("$qsub $deps $helper_sh $helper_pl -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --covaltB_cond_inputfile $ocfile --Nbam $normal_bam --Abam $sample1_bam --Bbam $sample2_bam -o $tempofile --output_vcf $output_vcf --output_list $output_list --comp $comp --n_cores $n_cores");
+        $job_id=submit_job("$qsub $deps -J HeterAnalyzer.$samplename.$tag $helper_sh $helper_pl -e exeparams.$tag -f $offile --NABfilt_cond_inputfile $onfile --covaltB_cond_inputfile $ocfile -o $tempofile --output_vcf $output_vcf --output_list $output_list --comp $comp --n_cores $n_cores");
     }
-    print("The filtering and analysis of the vcf files is being conducted with the job_id $job_id\n");
+    print("\tThe filtering and analysis of the vcf files is being conducted with the job_id $job_id\n");
 
 } 
 

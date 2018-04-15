@@ -15,7 +15,7 @@ output="$pref$sufix"
 withheader=0
 
 #cat outs
-for i in $pref*
+for i in $pref.*$sufix
 do
     if [[ $withheader -eq 0 ]]
     then
@@ -24,9 +24,12 @@ do
     else
         tail -n+2 $i >> $output
     fi
+    rm -f $i
 done
 
 cd $pref
 
 cat vcfdict* | sort | uniq > vcfdict.csv
 cat listdict* | sort | uniq > listdict.csv
+rm -f vcfdict.*.*
+rm -f listdict.*.*
