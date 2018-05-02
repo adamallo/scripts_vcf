@@ -236,6 +236,8 @@ else
 	print("\tSample B variant calling already present, skipping it\n");
 }
 
+my $cdeps=compile_dependencies();
+
 ### Calling with filters (Only cancer samples so far)
 ##############################################################
 
@@ -356,6 +358,11 @@ foreach my $exe_condition (@exe_conditions)
     }
 
     $deps=dependencies_string(\%exe_deps);
+
+    if($cdeps ne "")
+    {
+        $deps=$deps.$sep_dep.$cdeps;
+    }
 
     #Generating temprorary file with the exe-params of this exe-condition
     $tag=$exe_condition;

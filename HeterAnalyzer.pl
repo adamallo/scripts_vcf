@@ -379,6 +379,21 @@ sub filter
     my ($ref_common_variantsfiltNI,$ref_different_variantsfiltNI)=vcf_prune($ref_common_variantsfiltI,$ref_different_variantsfiltI,\%N,\@statsfiltNI);
 
     my @statsfiltNmean=(($statsAfiltN[0]+$statsBfiltN[0])/2.0,($statsAfiltN[1]+$statsBfiltN[1])/2.0,($statsAfiltN[2]+$statsBfiltN[2])/2.0);
+
+    #print(join(",","DEBUG nofilt:",@{$nofiltResultsRef{$exe_condition}},"\n"));
+    #print(join(",","DEBUG filt and filtN:",@statsAfilt,@statsBfilt,@statsfiltU,@statsfiltI,@statsAfiltN,@statsBfiltN,@statsfiltNU,@statsfiltNI,@statsfiltNmean,"\n")); #DEBUG
+    
+    #Variables that will be used just in the first iteraction of ncovB and reused for all NABs
+    my @statsAfiltNAB;
+    my @statsBfiltNAB;
+    my @statsfiltNABU;
+    my @statsfiltNABI;
+    my ($ref_common_variantsAfiltNAB,$ref_different_variantsAfiltNAB);
+    my ($ref_common_variantsBfiltNAB,$ref_different_variantsBfiltNAB);
+    my ($ref_common_variantsfiltNABU,$ref_different_variantsfiltNABU);
+    my ($ref_common_variantsfiltNABI,$ref_different_variantsfiltNABI);
+    my @statsfiltNABmean;
+    my @statsfiltNABrefs; #NAB is inside the covB loop while they are independent, in order to have just one set of nested loops instead of two single loops and one set of nested loops (since we have, covB, NAB and their interaction, covBNAB). I save here the ref to an array with stats for each NAB condition
  
     for (my $ncovB=0; $ncovB < scalar @covBfiltering_conditions; ++$ncovB)
     {   
@@ -394,17 +409,6 @@ sub filter
         my ($ref_common_variantsfiltNcovBU,$ref_different_variantsfiltNcovBU);
         my ($ref_common_variantsfiltNcovBI,$ref_different_variantsfiltNcovBI);
         my @statsfiltNcovBmean;
-    
-        #Variables that will be used just in the first iteraction of ncovB and reused for al NABs
-        my @statsAfiltNAB;
-        my @statsBfiltNAB;
-        my @statsfiltNABU;
-        my @statsfiltNABI;
-        my ($ref_common_variantsAfiltNAB,$ref_different_variantsAfiltNAB);
-        my ($ref_common_variantsBfiltNAB,$ref_different_variantsBfiltNAB);
-        my ($ref_common_variantsfiltNABU,$ref_different_variantsfiltNABU);
-        my ($ref_common_variantsfiltNABI,$ref_different_variantsfiltNABI);
-        my @statsfiltNABmean;
 
         $covBfiltering_condition=$covBfiltering_conditions[$ncovB];
     	$NcovBcondition="$exe_condition$sep_param$filtering_condition${sep_param}covB$sep_param$covBfiltering_condition";        	
@@ -424,7 +428,9 @@ sub filter
         #Means
         @statsfiltNcovBmean=(($statsAfiltNcovB[0]+$statsBfiltNcovB[0])/2.0,($statsAfiltNcovB[1]+$statsBfiltNcovB[1])/2.0,($statsAfiltNcovB[2]+$statsBfiltNcovB[2])/2.0);
     
-    #Output of list of variants and/or intermediate vcf files
+        #print(join(",","DEBUG filtNcovB:",@statsAfiltNcovB,@statsBfiltNcovB,@statsfiltNcovBU,@statsfiltNcovBI,@statsfiltNcovBmean,"\n")); #DEBUG
+    
+        #Output of list of variants and/or intermediate vcf files
         if($output_comprehensive>0)
         {
             if ($output_list)
@@ -522,6 +528,7 @@ sub filter
                 ($ref_common_variantsfiltNABU,$ref_different_variantsfiltNABU)=vcf_prune($ref_common_variantsfiltNU,$ref_different_variantsfiltNU,$NAB,\@statsfiltNABU);
                 ($ref_common_variantsfiltNABI,$ref_different_variantsfiltNABI)=vcf_prune($ref_common_variantsfiltNI,$ref_different_variantsfiltNI,$NAB,\@statsfiltNABI);
                 @statsfiltNABmean=(($statsAfiltNAB[0]+$statsBfiltNAB[0])/2.0,($statsAfiltNAB[1]+$statsBfiltNAB[1])/2.0,($statsAfiltNAB[2]+$statsBfiltNAB[2])/2.0);
+                $statsfiltNABrefs[$nNAB]=[@statsAfiltNAB,@statsBfiltNAB,@statsfiltNABU,@statsfiltNABI,@statsfiltNABmean];
 
                 if($output_comprehensive>1)
                 {
@@ -550,6 +557,8 @@ sub filter
                 }
             }
 
+            #print(join(",","DEBUG filtNAB:",@{$statsfiltNABrefs[$nNAB]},"\n")); #DEBUG
+            
             #Substract NAB from AfiltNcovB. Compare the results to B without filter --> Common variants + % ###We want to apply filter to NAB and remove only variants that are Alternative for N
             ($ref_common_variantsAfiltcovBNAB,$ref_different_variantsAfiltcovBNAB)=vcf_prune($ref_common_variantsAfiltNcovB,$ref_different_variantsAfiltNcovB,$NAB,\@statsAfiltcovBNAB);
     
@@ -562,7 +571,9 @@ sub filter
     
             @statsfiltcovBNABmean=(($statsAfiltcovBNAB[0]+$statsBfiltcovBNAB[0])/2.0,($statsAfiltcovBNAB[1]+$statsBfiltcovBNAB[1])/2.0,($statsAfiltcovBNAB[2]+$statsBfiltcovBNAB[2])/2.0);
     
-    #Output of list of variants and/or intermediate vcf files
+            #print(join(",","DEBUG filtcovBNAB:",@statsAfiltcovBNAB,@statsBfiltcovBNAB,@statsfiltcovBNABU,@statsfiltcovBNABI,@statsfiltcovBNABmean,"\n")); #DEBUG
+
+            #Output of list of variants and/or intermediate vcf files
             
             if($output_comprehensive>0)
             {
@@ -602,7 +613,7 @@ sub filter
             #Final variables
             my @statistics;
             #Store and/or print
-            @statistics=(@{$nofiltResultsRef{$exe_condition}},@statsAfilt,@statsBfilt,@statsfiltU,@statsfiltI,@statsfiltmean,@statsAfiltN,@statsBfiltN,@statsfiltNU,@statsfiltNI,@statsfiltNmean,@statsAfiltNcovB,@statsBfiltNcovB,@statsfiltNcovBU,@statsfiltNcovBI,@statsfiltNcovBmean,@statsAfiltNAB,@statsBfiltNAB,@statsfiltNABU,@statsfiltNABI,@statsfiltNABmean,@statsAfiltcovBNAB,@statsBfiltcovBNAB,@statsfiltcovBNABU,@statsfiltcovBNABI,@statsfiltcovBNABmean);
+            @statistics=(@{$nofiltResultsRef{$exe_condition}},@statsAfilt,@statsBfilt,@statsfiltU,@statsfiltI,@statsfiltmean,@statsAfiltN,@statsBfiltN,@statsfiltNU,@statsfiltNI,@statsfiltNmean,@statsAfiltNcovB,@statsBfiltNcovB,@statsfiltNcovBU,@statsfiltNcovBI,@statsfiltNcovBmean,@{$statsfiltNABrefs[$nNAB]},@statsAfiltcovBNAB,@statsBfiltcovBNAB,@statsfiltcovBNABU,@statsfiltcovBNABI,@statsfiltcovBNABmean);
     #Condition,#A_#,B_#,N_#,AN_#,BN_#,Afilt_prop,Afilt_N,Afilt_#,Bfilt_prop,Bfilt_N,Bfilt_#,filt_propU,filt_NU,filt_#U,filt_propI,filt_NI,filt_#I,filt_prop_mean,filt_N_mean,filt_#_mean,AfiltN_prop,AfiltN_N,AfiltN_#,BfiltN_prop,BfiltN_N,BfiltN_#,filtN_propU,filtN_NU,filtN_#U,filtN_propI,filtN_NI,filtN_#I,filtN_prop_mean,filtN_N_mean,filtN_#_mean,AfiltNcovB_prop,AfiltNcovB_N,AfiltNcovB_#,BfiltNcovB_prop,BfiltNcovB_N,BfiltNcovB_#,filtNcovB_propU,filtNcovB_NU,filtNcovB_#U,filtNcovB_propI,filtNcovB_NI,filtNcovB_#I,filtNcovB_prop_mean,filtNcovB_N_mean,filtNcovB_#_mean,AfiltNAB_prop,AfiltNAB_N,AfiltNAB_#,BfiltNAB_prop,BfiltNAB_N,BfiltNAB_#,filtNAB_propU,filtNAB_NU,filtNAB_#U,filtNAB_propI,filtNAB_NI,filtNAB_#I,filtNAB_prop_mean,filtNAB_N_mean,filtNAB_#_mean,AfiltNABcovB_prop,AfiltNABcovB_N,AfiltNABcovB_#,BfiltNABcovB_prop,BfiltNABcovB_N,BfiltNABcovB_#,filtNABcovB_propU,filtNABcovB_NU,filtNABcovB_#U,filtNABcovB_propI,filtNABcovB_NI,filtNABcovB_#I,filtNABcovB_prop_mean,filtNABcovB_N_mean,filtNABcovB_#_mean
     
     		$results{"$NcovBcondition${sep_param}NAB$sep_param$NAB_condition"}=\@statistics;
