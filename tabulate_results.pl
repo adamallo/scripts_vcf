@@ -21,12 +21,12 @@ our $FS=",";
 ######################################################
 my $input_file="";
 my $output_file="";
-our ($remove_all_but,$remNAB)=("",0); ##By default we keep all of them
+my ($remove_all_but,$remNAB,$remcovB)=("",0,0); ##By default we keep all of them
 #my $original_dir="";
 
 #Flags
 my $help;
-my $usage="Usage: $0 [options] -i input_file -o output_file \n\nOptions:\n--------\n\t--remove_all_but: List of comma-separated column names to keep\n\t--remove_NAB_collapse: Remove the NAB section and collapse the resulting equivalents filtering conditions\n\n";
+my $usage="Usage: $0 [options] -i input_file -o output_file \n\nOptions:\n--------\n\t--remove_all_but: List of comma-separated column names to keep\n\t--remove_NAB_collapse: Remove the NAB section and collapse the resulting equivalents filtering conditions\n\t--remove_covB_collapse: Remove the covB section and collapse the resulting equivalents filtering conditions\n\n";
 ######################################################
 
 ######################################################
@@ -36,12 +36,13 @@ my $usage="Usage: $0 [options] -i input_file -o output_file \n\nOptions:\n------
 ##Getopt
 ######################################################
 ((! GetOptions(
-        'remove_all_but=s' => \$remove_all_but,
+    'remove_all_but=s' => \$remove_all_but,
 	'input_file|i=s' => \$input_file,
 	'output_file|o=s' => \$output_file,
 	'remove_NAB_collapse=i' => \$remNAB,
-        #'n_cores=i' => \$n_cores,
-        'help|h' => \$help,
+    'remove_covB_collapse=i' => \$remcovB,
+    #'n_cores=i' => \$n_cores,
+    'help|h' => \$help,
                 )) or (($output_file eq "") || ($input_file eq "") || $help)) and die $usage;
 
 ##IO
@@ -123,19 +124,35 @@ sub get_condition_parameters
 	@temp=split(" ",$textheader);
 	#@temp=split($sep_value,join($sep_value,split("=",join($sep_value,split($sep_param,(split($FS,$content[1]))[0])))));
 	my $concat="";
-	
+	my $wait=0;
+
 	for (my $i=0; $i<scalar @temp; $i+=2)
 	{ 
-		if($temp[$i] eq "NAB")
+		if($temp[$i] eq "covB")
+        {
+            --$i;
+            $concat="covB";
+            if($remcovB==1)
+            {
+                $wait=1;
+            }
+            next;
+        }
+		elsif($temp[$i] eq "NAB")
 		{
+            $wait=0;
 			--$i;
 			$concat="NAB";
 			if($remNAB==1)
 			{
-				last;
+				last; ##If I added more of these special conditions (like covB or NAB) I would just need to put them in order modifying the wait. The last can exit earlier with last, like here
 			}
 			next;
 		}
+        elsif($wait == 1)
+        {
+            next;
+        }
 		else
 		{
 			push(@header,"$concat$temp[$i]");
@@ -154,22 +171,38 @@ sub get_condition_values
 	@temp=split(" ",$textheader);
 	#@temp=split($sep_value,join($sep_value,split("=",join($sep_value,split($sep_param,(split($FS,$content[1]))[0])))));
 	##my $concat="";
-	
+	my $wait=0;
+
 	for (my $i=1; $i<scalar @temp; $i+=2)
 	{ 
-		if($temp[$i-1] eq "NAB")
+		if($temp[$i-1] eq "covB")
+        {
+            --$i;
+            #$concat="covB";
+            if($remcovB==1)
+            {
+                $wait=1;
+            }
+            next;
+        }
+		elsif($temp[$i-1] eq "NAB")
 		{
+            $wait=0;
 			--$i;
-			##$concat="NAB";
+            #$concat="NAB";
 			if($remNAB==1)
 			{
-				last;
+				last; ##If I added more of these special conditions (like covB or NAB) I would just need to put them in order modifying the wait. The last can exit earlier with last, like here
 			}
 			next;
 		}
+        elsif($wait == 1)
+        {
+            next;
+        }
 		else
 		{
-			##push(@header,"$concat$temp[$i]");
+            #push(@header,"$concat$temp[$i]");
 			push(@header, $temp[$i]);
 		}
 	}
