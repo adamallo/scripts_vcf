@@ -37,15 +37,18 @@ do
         perl $EXE_DIR/tstv_pretabulate_heter.pl $i/tstv.csv $i/tstv.tomerge
         perl $EXE_DIR/merge_csv.pl $i/csvtomerge.temp $i/tstv.tomerge $i/${output}_withtstv.temp
         rm -f $i/csvtomerge.temp
-        cat $i/${output}_withtstv.temp | awk "BEGIN{OFS=\",\"}{if (NR==1) {print \"Sample\",\$0} else {print \"$output\",\$0}}" > ${dir}/${output}_withtstv.csv
-        rm -f $i/${output}_withtstv.temp
+        perl $SCRIPTSVCF_DIR/tabulate_results.pl -i $i/${output}_withtstv.temp -o $i/${output}_withtstv_tab.temp
+        cat $i/${output}_withtstv_tab.temp | awk "BEGIN{OFS=\",\"}{if (NR==1) {print \"Sample\",\$0} else {print \"$output\",\$0}}" > ${dir}/${output}_withtstv.csv
+        rm -f $i/${output}_withtstv.temp $i/${output}_withtstv_tab.temp
+
         #BasicTsTv postprocessing and general tstv data gathering
         a=$(cat $i/tstv.csv | sed -n "/^A,/p" | sed "s/^A,//")
         b=$(cat $i/tstv.csv | sed -n "/^B,/p" | sed "s/^B,//")
         n=$(cat $i/tstv.csv | sed -n "/^N,/p" | sed "s/^N,//")
     else 
-        cat $i/csvtomerge.temp | awk "BEGIN{OFS=\",\"}{if (NR==1) {print \"Sample\",\$0} else {print \"$output\",\$0}}" > ${dir}/${output}_withtstv.csv
-        rm -f csvtomerge.temp
+        perl $SCRIPTSVCF_DIR/tabulate_results.pl -i $i/csvtomerge.temp -o $i/csvtomerge_tab.temp
+        cat $i/csvtomerge_tab.temp | awk "BEGIN{OFS=\",\"}{if (NR==1) {print \"Sample\",\$0} else {print \"$output\",\$0}}" > ${dir}/${output}_withtstv.csv
+        rm -f $i/csvtomerge.temp $i/csvtomerge_tab.temp
     fi
     if [ $flag -ne 0 ]
     then
