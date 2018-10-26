@@ -21,7 +21,13 @@ chomp($covB);
 #print("DEBUG: $covB\n");
 open(my $OUTPUT,">$ARGV[1]") or die "Impossible to open the output file $ARGV[1]\n";
 
+my $output2name=$ARGV[1];
+$output2name=~s/(\.[^.]+)$/_1col$1/g;
+open(my $OUTPUT2,">$output2name") or die "Impossible to open the output file $output2name\n";
+
 print($OUTPUT "Patient${OFS}Chr${OFS}Start${OFS}End${OFS}Common${OFS}Common_pos${OFS}Common_type${OFS}Chr${OFS}Start${OFS}End${OFS}A${OFS}A_pos${OFS}A_type${OFS}Chr${OFS}Start${OFS}End${OFS}B${OFS}B_pos${OFS}B_type\n");
+
+print($OUTPUT2 "Patient${OFS}Shared${OFS}Chr${OFS}Start${OFS}End${OFS}Name${OFS}Pos${OFS}Type\n");
 
 chdir($ARGV[0]);
 
@@ -155,6 +161,7 @@ foreach my $dir (@dirs)
                 $type="";
             }
             @temp_data=($temp_data[2],$temp_data[3],$temp_data[4],$temp_data[1],$temp_data[0],$type);
+            print($OUTPUT2 print_array(($name,"Common",@temp_data)),"\n");
         }
         #print("DEBUG: @temp_data\n");
         push(@out_line,@temp_data);
@@ -185,6 +192,7 @@ foreach my $dir (@dirs)
             }
 
              @temp_data=($temp_data[2],$temp_data[3],$temp_data[4],$temp_data[1],$temp_data[0],$type);
+            print($OUTPUT2 print_array(($name,"A",@temp_data)),"\n");
         }
         push(@out_line,@temp_data);
         
@@ -214,6 +222,7 @@ foreach my $dir (@dirs)
             }
 
             @temp_data=($temp_data[2],$temp_data[3],$temp_data[4],$temp_data[1],$temp_data[0],$type);
+            print($OUTPUT2 print_array(($name,"B",@temp_data)),"\n");
         }
         #print("DEBUG: @temp_data\n");
         push(@out_line,@temp_data);
@@ -223,6 +232,7 @@ foreach my $dir (@dirs)
 }
 
 close($OUTPUT);
+close($OUTPUT2);
 exit;
 
 sub print_array

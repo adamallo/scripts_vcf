@@ -28,7 +28,7 @@ EXE_DIR=$SCRIPTSVCF_DIR
 dependency=""
 while read -r output normal a b dnac
 do
-    id=$($EXE_DIR/HeterAnalyzer_control.pl -e $exe_params -f $filtering_params --NABfilt_cond_inputfile $NAB_params --NABfilt_cond_inputfile2 $NAB2_params --covaltB_cond_inputfile $covB_params -o $dir/${output}.csv --normal_bamfile $normal --sample_A_bamfile $a --sample_B_bamfile $b --output_dir $dir/$output --n_cores $n_cores --output_vcf ${10} --output_list ${11} --comp $comp | tee $dir/${output}.out | tail -n 1)
+    id=$($EXE_DIR/HeterAnalyzer_control.pl -e $exe_params -f $filtering_params --NABfilt_cond_inputfile $NAB_params --NABfilt_cond_inputfile2 $NAB2_params --covaltB_cond_inputfile $covB_params -o $dir/${output}.csv --normal_bamfile $normal --sample_A_bamfile $a --sample_B_bamfile $b --output_dir $dir/$output --n_cores $n_cores --output_vcf $output_vcf --output_list $output_list --comp $comp | tee $dir/${output}.out | tail -n 1)
     dependency="${dependency}:${id}"
 done < $torun
 
