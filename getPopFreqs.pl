@@ -90,7 +90,7 @@ for ($i=0; $i<scalar @input_data; ++$i)
             while(my $line=$tabix_iter->next)
             {
                 #CHROM  POS ID  REF ALT QUAL    FILTER  INFO    FORMAT  S1 ... SN
-                $line =~ s/^[^\t]+\t([^\t]+)\t[^\t]+\t([^\t]+)\t([^\t]+)\t[^\t]+\t([^\t]+)\t[^\t]+(AF=[^;]+).*$/$1\t$3\t$2\t$4\t$5/;
+                $line =~ s/^[^\t]+\t([^\t]+)\t[^\t]+\t([^\t]+)\t([^\t]+)\t[^\t]+\t([^\t]+)\t[^\t]+AF=([^;]+).*$/$1\t$3\t$2\t$4\t$5/;
                 #print("DEBUG: $line\n");
                 ($tstart,$talt,$tref,$tfilt,$taf)=split($IFS,$line);
                 #print("DEBUG: $tstart, $talt, $tref, $tfilt, $taf\n");
