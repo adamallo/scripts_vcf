@@ -41,6 +41,7 @@ my $filtercond_inputfile="";
 my $NABfiltercond_inputfile1="";
 my $NABfiltercond_inputfile2="";
 my $covBfiltercond_inputfile="";
+my $popAFfiltercond_inputfile="";
 my $output_dir="vcf_outputdir";
 my $output_file="";
 my $normal_bam="";
@@ -53,7 +54,7 @@ my $comp=0;
 
 #Flags
 my $help;
-my $usage="Usage: $0 [options] -o output_file --normal_bamfile bamfile_normal_sample --sample_A_bamfile bamfile_A_sample --sample_B_bamfile bamfile_B_sample --output_vcf --output_list --comp\n--output_vcf: (bool) generate resulting vcf files or not\n--output_list: (bool) generate resulting list of variants or not\n--comp: (int) indicating the comprehensiveness of the output, 0=no files, 1=only needed files to call variants, 2= all intermediate variants\nOptions:\n--------\n\t-e/--exec_cond_inputfile : input file for execution parameters and options\n\t-f/--filt_cond_inputfile : input file for execution parameters and options\n\t--NABfilt_cond_inputfile : input file for the filtering options of the NAB sample\n\t--NABfilt_cond_inputfile2 : input file for the secondary filtering options of the NAB sample (OR filter implemented in a dirty way)\n\t--covaltB_cond_inputfile : input file for the filtering taking into account characteristics of the unfiltered in the comparison\n\t--output_dir : output directory for vcf files\n\t--n_cores : number of cores to execute some steps in parallel\n\t\n\n";
+my $usage="Usage: $0 [options] -o output_file --normal_bamfile bamfile_normal_sample --sample_A_bamfile bamfile_A_sample --sample_B_bamfile bamfile_B_sample --output_vcf --output_list --comp\n--output_vcf: (bool) generate resulting vcf files or not\n--output_list: (bool) generate resulting list of variants or not\n--comp: (int) indicating the comprehensiveness of the output, 0=no files, 1=only needed files to call variants, 2= all intermediate variants\nOptions:\n--------\n\t-e/--exec_cond_inputfile : input file for execution parameters and options\n\t-f/--filt_cond_inputfile : input file for execution parameters and options\n\t--NABfilt_cond_inputfile : input file for the filtering options of the NAB sample\n\t--NABfilt_cond_inputfile2 : input file for the secondary filtering options of the NAB sample (OR filter implemented in a dirty way)\n\t--covaltB_cond_inputfile : input file for the filtering taking into account characteristics of the unfiltered in the comparison\n\t--popAF_cond_inputfile: input file for the filter of population allele frequencies using gnomAD\n\t--output_dir : output directory for vcf files\n\t--n_cores : number of cores to execute some steps in parallel\n\t\n\n";
 ######################################################
 
 ######################################################
@@ -68,6 +69,7 @@ my $usage="Usage: $0 [options] -o output_file --normal_bamfile bamfile_normal_sa
 	'NABfilt_cond_inputfile=s' => \$NABfiltercond_inputfile1,
     'NABfilt_cond_inputfile2=s' => \$NABfiltercond_inputfile2,
     'covaltB_cond_inputfile=s' => \$covBfiltercond_inputfile,
+    'popAF_cond_inputfile=s' => \$popAFfiltercond_inputfile,
     'output_dir=s' => \$output_dir,
 	'output_file|o=s' => \$output_file,
 	'normal_bamfile=s' => \$normal_bam,
@@ -130,6 +132,7 @@ my $offile=Cwd::abs_path($filtercond_inputfile);
 my $onfile=Cwd::abs_path($NABfiltercond_inputfile1);
 my $onfile2=Cwd::abs_path($NABfiltercond_inputfile2);
 my $ocfile=Cwd::abs_path($covBfiltercond_inputfile);
+my $opfile=Cwd::abs_path($popAFfiltercond_inputfile);
 
 chdir $output_dir or die "The output directory $output_dir is not accesible";
 $output_dir=Cwd::abs_path($output_dir);
@@ -380,11 +383,11 @@ foreach my $exe_condition (@exe_conditions)
     
     if(-f $onfile2)
     { 
-        $job_id=submit_job("$qsub $deps -J HeterAnalyzer.$samplename.$tag $helper_sh $helper_pl -e exeparams.$tag -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile2 $onfile2 --covaltB_cond_inputfile $ocfile -o $tempofile --output_vcf $output_vcf --output_list $output_list --comp $comp --n_cores $n_cores");
+        $job_id=submit_job("$qsub $deps -J HeterAnalyzer.$samplename.$tag $helper_sh $helper_pl -e exeparams.$tag -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile2 $onfile2 --covaltB_cond_inputfile $ocfile --popAF_cond_inputfile $opfile -o $tempofile --output_vcf $output_vcf --output_list $output_list --comp $comp --n_cores $n_cores");
     }
     else
     {
-        $job_id=submit_job("$qsub $deps -J HeterAnalyzer.$samplename.$tag $helper_sh $helper_pl -e exeparams.$tag -f $offile --NABfilt_cond_inputfile $onfile --covaltB_cond_inputfile $ocfile -o $tempofile --output_vcf $output_vcf --output_list $output_list --comp $comp --n_cores $n_cores");
+        $job_id=submit_job("$qsub $deps -J HeterAnalyzer.$samplename.$tag $helper_sh $helper_pl -e exeparams.$tag -f $offile --NABfilt_cond_inputfile $onfile --covaltB_cond_inputfile $ocfile --popAF_cond_inputfile $opfile -o $tempofile --output_vcf $output_vcf --output_list $output_list --comp $comp --n_cores $n_cores");
     }
     print("\tThe filtering and analysis of the vcf files is being conducted with the job_id $job_id\n");
 

@@ -107,7 +107,6 @@ sub getPopAFReplicate
 
     my $tabix = Bio::DB::HTS::Tabix->new( filename =>$pop_file );
     
-    ##Do I really need this? it looks sketchy as fuck
     if (defined $_)
     {
         $case=$_;
