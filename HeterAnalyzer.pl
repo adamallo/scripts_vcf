@@ -201,6 +201,21 @@ combs(0,"",\@NABfiltering_parameters2,\@NABfiltering_param_values2,\@NABfilterin
 combs(0,"",\@covBfiltering_parameters,\@covBfiltering_param_values,\@covBfiltering_conditions);
 combs(0,"",\@popAFfiltering_parameters,\@popAFfiltering_param_values,\@popAFfiltering_conditions);
 
+##Generate headers of statistics that change in number and name depending on the input filtering conditions
+my @HeaderStatsfiltNPAF,
+my @HeaderStatsfiltNcovBPAF;
+my @HeaderStatsfiltNABPAF;
+my @HeaderStatsfiltcovBNABPAF;
+my @filtNPAFnames=qw(AfiltN_Priv_PAF_ BfiltN_Priv_PAF_ filtN_U_PAF_);
+my @filtNcovBPAFnames=qw(AfiltNcovB_Priv_PAF_ BfiltNcovB_Priv_PAF_ filtNcovB_U_PAF_);
+my @filtNABPAFnames=qw(AfiltNAB_Priv_PAF_ BfiltNAB_Priv_PAF_ filtNAB_U_PAF_);
+my @filtNABcovBPAFnames=qw(AfiltNABcovB_Priv_PAF_ BfiltNABcovB_Priv_PAF_ filtNABcovB_U_PAF_);
+
+@HeaderStatsfiltNPAF=makeHeaderPAF(\@filtNPAFnames,\@popAFfiltering_conditions);
+@HeaderStatsfiltNcovBPAF=makeHeaderPAF(\@filtNcovBPAFnames,\@popAFfiltering_conditions);
+@HeaderStatsfiltNABPAF=makeHeaderPAF(\@filtNABPAFnames,\@popAFfiltering_conditions);
+@HeaderStatsfiltNABcovBPAF=makeHeaderPAF(\@filtNABcovBPAFnames,\@popAFfiltering_conditions);
+
 #print("DEBUG: @exe_parameters, @exe_param_values");
 #print("DEBUG: @exe_conditions,@filtering_conditions,@NABfiltering_conditions1,@NABfiltering_conditions2\n");
 
@@ -222,7 +237,7 @@ if ($n_cores>1)
     $parallel->share(\%results, \%dictrealnamelist, @listnames, \%dictrealnamevcf, @vcfnames, \@namedvcffiles, \%constExeCondContentRefs, \%nofiltResultsRef);
 }
 
-#Parsing covX files
+#Parsing covX files and population allele frequency data for variants of each exe_condition
 #TODO:I am not 100% sure this is worth it since the forking process takes quite a lot of time to duble-check if I have time
 if($n_cores>1 && scalar @exe_conditions > 1)
 {
@@ -231,7 +246,7 @@ if($n_cores>1 && scalar @exe_conditions > 1)
 else
 {
    foreach my $exe_condition (@exe_conditions)
-   {
+foreach my $cond (@pAF   {
        parse_const_execond($exe_condition);
    }
 }
@@ -281,8 +296,9 @@ foreach my $exe_condition (@exe_conditions) ##Options that require to call varia
 ## Output
 #############################################################
 open(my $OFILE,">$output_file");
-print($OFILE "Sample,Condition,A_#,B_#,N_#,AN_#,BN_#,Afilt_prop,Afilt_N,Afilt_#,Bfilt_prop,Bfilt_N,Bfilt_#,filt_propU,filt_NU,filt_#U,filt_propI,filt_NI,filt_#I,filt_prop_mean,filt_N_mean,filt_#_mean,AfiltN_prop,AfiltN_N,AfiltN_#,BfiltN_prop,BfiltN_N,BfiltN_#,filtN_propU,filtN_NU,filtN_#U,filtN_propI,filtN_NI,filtN_#I,filtN_prop_mean,filtN_N_mean,filtN_#_mean,AfiltNcovB_prop,AfiltNcovB_N,AfiltNcovB_#,BfiltNcovB_prop,BfiltNcovB_N,BfiltNcovB_#,filtNcovB_propU,filtNcovB_NU,filtNcovB_#U,filtNcovB_propI,filtNcovB_NI,filtNcovB_#I,filtNcovB_prop_mean,filtNcovB_N_mean,filtNcovB_#_mean,AfiltNAB_prop,AfiltNAB_N,AfiltNAB_#,BfiltNAB_prop,BfiltNAB_N,BfiltNAB_#,filtNAB_propU,filtNAB_NU,filtNAB_#U,filtNAB_propI,filtNAB_NI,filtNAB_#I,filtNAB_prop_mean,filtNAB_N_mean,filtNAB_#_mean,AfiltNABcovB_prop,AfiltNABcovB_N,AfiltNABcovB_#,BfiltNABcovB_prop,BfiltNABcovB_N,BfiltNABcovB_#,filtNABcovB_propU,filtNABcovB_NU,filtNABcovB_#U,filtNABcovB_propI,filtNABcovB_NI,filtNABcovB_#I,filtNABcovB_prop_mean,filtNABcovB_N_mean,filtNABcovB_#_mean\n");
-#A_#,B_#,N_#,AN_#,BN_#,Afilt_prop,Afilt_N,Afilt_#,Bfilt_prop,Bfilt_N,Bfilt_#,filt_propU,filt_NU,filt_#U,filt_propI,filt_NI,filt_#I,filt_prop_mean,filt_N_mean,filt_#_mean,AfiltN_prop,AfiltN_N,AfiltN_#,BfiltN_prop,BfiltN_N,BfiltN_#,filtN_propU,filtN_NU,filtN_#U,filtN_propI,filtN_NI,filtN_#I,filtN_prop_mean,filtN_N_mean,filtN_#_mean,AfiltNcovB_prop,AfiltNcovB_N,AfiltNcovB_#,BfiltNcovB_prop,BfiltNcovB_N,BfiltNcovB_#,filtNcovB_propU,filtNcovB_NU,filtNcovB_#U,filtNcovB_propI,filtNcovB_NI,filtNcovB_#I,filtNcovB_prop_mean,filtNcovB_N_mean,filtNcovB_#_mean,AfiltNAB_prop,AfiltNAB_N,AfiltNAB_#,BfiltNAB_prop,BfiltNAB_N,BfiltNAB_#,filtNAB_propU,filtNAB_NU,filtNAB_#U,filtNAB_propI,filtNAB_NI,filtNAB_#I,filtNAB_prop_mean,filtNAB_N_mean,filtNAB_#_mean,AfiltNABcovB_prop,AfiltNABcovB_N,AfiltNABcovB_#,BfiltNABcovB_prop,BfiltNABcovB_N,BfiltNABcovB_#,filtNABcovB_propU,filtNABcovB_NU,filtNABcovB_#U,filtNABcovB_propI,filtNABcovB_NI,filtNABcovB_#I,filtNABcovB_prop_mean,filtNABcovB_N_mean,filtNABcovB_#_mean
+print($OFILE join(",",qw(Sample Condition A_# B_# N_# AN_# BN_# Afilt_prop Afilt_N Afilt_# Bfilt_prop Bfilt_N Bfilt_# filt_propU filt_NU filt_#U filt_propI filt_NI filt_#I filt_prop_mean filt_N_mean filt_#_mean AfiltN_prop AfiltN_N AfiltN_# BfiltN_prop BfiltN_N BfiltN_# filtN_propU filtN_NU filtN_#U filtN_propI filtN_NI filtN_#I filtN_prop_mean filtN_N_mean filtN_#_mean),@HeaderStatsfiltNPAF,qw(AfiltNcovB_prop AfiltNcovB_N AfiltNcovB_# BfiltNcovB_prop BfiltNcovB_N BfiltNcovB_# filtNcovB_propU filtNcovB_NU filtNcovB_#U filtNcovB_propI filtNcovB_NI filtNcovB_#I filtNcovB_prop_mean filtNcovB_N_mean filtNcovB_#_mean),@HeaderStartsfiltNcovBPAF,qw(AfiltNAB_prop AfiltNAB_N AfiltNAB_# BfiltNAB_prop BfiltNAB_N BfiltNAB_# filtNAB_propU filtNAB_NU filtNAB_#U filtNAB_propI filtNAB_NI filtNAB_#I filtNAB_prop_mean filtNAB_N_mean filtNAB_#_mean),@HeaderStatsfiltNABPAF,qw(AfiltNABcovB_prop AfiltNABcovB_N AfiltNABcovB_# BfiltNABcovB_prop BfiltNABcovB_N BfiltNABcovB_# filtNABcovB_propU filtNABcovB_NU filtNABcovB_#U filtNABcovB_propI filtNABcovB_NI filtNABcovB_#I filtNABcovB_prop_mean filtNABcovB_N_mean filtNABcovB_#_mean),@HeaderStatsfiltNABcovBPAF,qw(AfiltNABcovBPAF_prop AfiltNABcovBPAF_N AfiltNABcovBPAF_# BfiltNABcovBPAF_prop BfiltNABcovBPAF_N BfiltNABcovBPAF_# filtNABcovBPAF_propU filtNABcovBPAF_NU filtNABcovBPAF_#U filtNABcovBPAF_propI filtNABcovBPAF_NI filtNABcovBPAF_#I filtNABcovBPAF_prop_mean filtNABcovBPAF_N_mean filtNABcovBPAF_#_mean),"\n"));
+
+    #Condition,#A_#,B_#,N_#,AN_#,BN_#,Afilt_prop,Afilt_N,Afilt_#,Bfilt_prop,Bfilt_N,Bfilt_#,filt_propU,filt_NU,filt_#U,filt_propI,filt_NI,filt_#I,filt_prop_mean,filt_N_mean,filt_#_mean,AfiltN_prop,AfiltN_N,AfiltN_#,BfiltN_prop,BfiltN_N,BfiltN_#,filtN_propU,filtN_NU,filtN_#U,filtN_propI,filtN_NI,filtN_#I,filtN_prop_mean,filtN_N_mean,filtN_#_mean,(nPAFfreqs) x (AfiltN_Priv_PAF_XX,BfiltN_Priv_PAF_XX,filtN_U_PAF_XX),AfiltNcovB_prop,AfiltNcovB_N,AfiltNcovB_#,BfiltNcovB_prop,BfiltNcovB_N,BfiltNcovB_#,filtNcovB_propU,filtNcovB_NU,filtNcovB_#U,filtNcovB_propI,filtNcovB_NI,filtNcovB_#I,filtNcovB_prop_mean,filtNcovB_N_mean,filtNcovB_#_mean,(nPAFfreqs) x (AfiltNcovB_Priv_PAF_XX,BfiltNcovB_Priv_PAF_XX,filtNcovB_U_PAF_XX),AfiltNAB_prop,AfiltNAB_N,AfiltNAB_#,BfiltNAB_prop,BfiltNAB_N,BfiltNAB_#,filtNAB_propU,filtNAB_NU,filtNAB_#U,filtNAB_propI,filtNAB_NI,filtNAB_#I,filtNAB_prop_mean,filtNAB_N_mean,filtNAB_#_mean,(nPAFfreqs) x (AfiltNAB_Priv_PAF_XX,BfiltNAB_Priv_PAF_XX,filtNAB_U_PAF_XX),AfiltNABcovB_prop,AfiltNABcovB_N,AfiltNABcovB_#,BfiltNABcovB_prop,BfiltNABcovB_N,BfiltNABcovB_#,filtNABcovB_propU,filtNABcovB_NU,filtNABcovB_#U,filtNABcovB_propI,filtNABcovB_NI,filtNABcovB_#I,filtNABcovB_prop_mean,filtNABcovB_N_mean,filtNABcovB_#_mean,(nPAFfreqs) x (AfiltNABcovB_Priv_PAF_XX,BfiltNABcovB_Priv_PAF_XX,filtNABcovB_U_PAF_XX),AfiltNABcovBPAF_prop,AfiltNABcovBPAF_N,AfiltNABcovBPAF_#,BfiltNABcovBPAF_prop,BfiltNABcovBPAF_N,BfiltNABcovBPAF_#,filtNABcovBPAF_propU,filtNABcovBPAF_NU,filtNABcovBPAF_#U,filtNABcovBPAF_propI,filtNABcovBPAF_NI,filtNABcovBPAF_#I,filtNABcovBPAF_prop_mean,filtNABcovBPAF_N_mean,filtNABcovBPAF_#_mean
 
 my $sample=$output_file;
 $sample=basename($sample);
@@ -305,9 +321,6 @@ sub filter
     my $exe_condition;
     my $filtering_condition;
     
-    my @pAFStats;
-    my %pAFfiltN;
-
     if (defined $_)
     {
         ($exe_condition,$filtering_condition)=@{$_};
@@ -405,22 +418,23 @@ sub filter
 
     #print(join(",","DEBUG nofilt:",@{$nofiltResultsRef{$exe_condition}},"\n"));
     #print(join(",","DEBUG filt and filtN:",@statsAfilt,@statsBfilt,@statsfiltU,@statsfiltI,@statsAfiltN,@statsBfiltN,@statsfiltNU,@statsfiltNI,@statsfiltNmean,"\n")); #DEBUG
-    
-    #Generation of the pAF information for this set of variables. A good proportion of variants that are going to be eliminated have already been removed, so I think this is the best moment to do this.
-    
-    %pAFfiltN=getPAFdata($ref_common_variantsfiltNU,$ref_different_variantsfiltNU);
+
+    #First group of PAF statistics, for filtN
+    my @statsfiltNPAF=getPAFStats(\@popAFfiltering_conditions, $constExeCondContentRefs{"${exe_condition}_PAF"},$ref_different_variantsAfiltN, $ref_different_variantsBfiltN, $ref_common_variantsfiltNU);
     
     #Variables that will be used just in the first iteraction of ncovB and reused for all NABs
     my @statsAfiltNAB;
     my @statsBfiltNAB;
     my @statsfiltNABU;
     my @statsfiltNABI;
+    my @statsfiltNABPAF;
     my ($ref_common_variantsAfiltNAB,$ref_different_variantsAfiltNAB);
     my ($ref_common_variantsBfiltNAB,$ref_different_variantsBfiltNAB);
     my ($ref_common_variantsfiltNABU,$ref_different_variantsfiltNABU);
     my ($ref_common_variantsfiltNABI,$ref_different_variantsfiltNABI);
     my @statsfiltNABmean;
     my @statsfiltNABrefs; #NAB is inside the covB loop while they are independent, in order to have just one set of nested loops instead of two single loops and one set of nested loops (since we have, covB, NAB and their interaction, covBNAB). I save here the ref to an array with stats for each NAB condition
+    my @statsfiltNABPAFrefs; #Like above
  
     for (my $ncovB=0; $ncovB < scalar @covBfiltering_conditions; ++$ncovB)
     {   
@@ -431,6 +445,7 @@ sub filter
         my @statsBfiltNcovB;
         my @statsfiltNcovBU;
         my @statsfiltNcovBI;
+        my @statsfiltNcovBPAF;
         my ($ref_common_variantsAfiltNcovB,$ref_different_variantsAfiltNcovB);
         my ($ref_common_variantsBfiltNcovB,$ref_different_variantsBfiltNcovB);
         my ($ref_common_variantsfiltNcovBU,$ref_different_variantsfiltNcovBU);
@@ -454,7 +469,10 @@ sub filter
     
         #Means
         @statsfiltNcovBmean=(($statsAfiltNcovB[0]+$statsBfiltNcovB[0])/2.0,($statsAfiltNcovB[1]+$statsBfiltNcovB[1])/2.0,($statsAfiltNcovB[2]+$statsBfiltNcovB[2])/2.0);
-    
+        
+        #PAF
+        @statsfiltNcovBPAF=getPAFStats(\@popAFfiltering_conditions, $constExeCondContentRefs{"${exe_condition}_PAF"},$ref_different_variantsAfiltNcovB, $ref_different_variantsBfiltNcovB, $ref_common_variantsfiltNcovBU);
+
         #print(join(",","DEBUG filtNcovB:",@statsAfiltNcovB,@statsBfiltNcovB,@statsfiltNcovBU,@statsfiltNcovBI,@statsfiltNcovBmean,"\n")); #DEBUG
     
         #Output of list of variants and/or intermediate vcf files
@@ -536,6 +554,7 @@ sub filter
             my ($ref_common_variantsBfiltcovBNAB,$ref_different_variantsBfiltcovBNAB);
             my @statsfiltcovBNABU;
             my @statsfiltcovBNABI;
+            my @statsfiltcovBNABPAF;
             my ($ref_common_variantsfiltcovBNABU,$ref_different_variantsfiltcovBNABU);
             my ($ref_common_variantsfiltcovBNABI,$ref_different_variantsfiltcovBNABI);
             my @statsfiltcovBNABmean;
@@ -556,6 +575,9 @@ sub filter
                 ($ref_common_variantsfiltNABI,$ref_different_variantsfiltNABI)=vcf_prune($ref_common_variantsfiltNI,$ref_different_variantsfiltNI,$NAB,\@statsfiltNABI);
                 @statsfiltNABmean=(($statsAfiltNAB[0]+$statsBfiltNAB[0])/2.0,($statsAfiltNAB[1]+$statsBfiltNAB[1])/2.0,($statsAfiltNAB[2]+$statsBfiltNAB[2])/2.0);
                 $statsfiltNABrefs[$nNAB]=[@statsAfiltNAB,@statsBfiltNAB,@statsfiltNABU,@statsfiltNABI,@statsfiltNABmean];
+        
+                @statsfiltNABPAF=getPAFStats(\@popAFfiltering_conditions, $constExeCondContentRefs{"${exe_condition}_PAF"},$ref_different_variantsAfiltNAB, $ref_different_variantsBfiltNAB, $ref_common_variantsfiltNABU);
+                $statsfiltNABPAFrefs[$nNAB]=\@statsfiltNABPAF;
 
                 if($output_comprehensive>1)
                 {
@@ -598,6 +620,8 @@ sub filter
     
             @statsfiltcovBNABmean=(($statsAfiltcovBNAB[0]+$statsBfiltcovBNAB[0])/2.0,($statsAfiltcovBNAB[1]+$statsBfiltcovBNAB[1])/2.0,($statsAfiltcovBNAB[2]+$statsBfiltcovBNAB[2])/2.0);
     
+            @statsfiltcovBNABPAF=getPAFStats(\@popAFfiltering_conditions, $constExeCondContentRefs{"${exe_condition}_PAF"},$ref_different_variantsAfiltcovBNAB, $ref_different_variantsBfiltcovBNAB, $ref_common_variantsfiltcovBNABU);
+
             #print(join(",","DEBUG filtcovBNAB:",@statsAfiltcovBNAB,@statsBfiltcovBNAB,@statsfiltcovBNABU,@statsfiltcovBNABI,@statsfiltcovBNABmean,"\n")); #DEBUG
 
             #Output of list of variants and/or intermediate vcf files
@@ -636,15 +660,85 @@ sub filter
                     write_variant_2vcf($ref_common_variantsfiltcovBNABI,"filtcovBNABI$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}_common.vcf","$thisAname","$thisBname","## Somatic NAB I(AB) Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition",$condition);
                 }
             }
+            
+            for (my $nPAF=0; $nPAF< scalar @popAFfiltering_conditions; ++$nPAF)
+            {
+                my $PAF_condition;
+                
+                my @statsAfiltcovBNABPAF;                
+                my ($ref_common_variantsAfiltcovBNABPAF,$ref_different_variantsAfiltcovBNABPAF);
+                
+                my @statsBfiltcovBNABPAF;
+                my ($ref_common_variantsBfiltcovBNABPAF,$ref_different_variantsBfiltcovBNABPAF);
 
-            #Final variables
-            my @statistics;
-            #Store and/or print
-            @statistics=(@{$nofiltResultsRef{$exe_condition}},@statsAfilt,@statsBfilt,@statsfiltU,@statsfiltI,@statsfiltmean,@statsAfiltN,@statsBfiltN,@statsfiltNU,@statsfiltNI,@statsfiltNmean,@statsAfiltNcovB,@statsBfiltNcovB,@statsfiltNcovBU,@statsfiltNcovBI,@statsfiltNcovBmean,@{$statsfiltNABrefs[$nNAB]},@statsAfiltcovBNAB,@statsBfiltcovBNAB,@statsfiltcovBNABU,@statsfiltcovBNABI,@statsfiltcovBNABmean);
-    #Condition,#A_#,B_#,N_#,AN_#,BN_#,Afilt_prop,Afilt_N,Afilt_#,Bfilt_prop,Bfilt_N,Bfilt_#,filt_propU,filt_NU,filt_#U,filt_propI,filt_NI,filt_#I,filt_prop_mean,filt_N_mean,filt_#_mean,AfiltN_prop,AfiltN_N,AfiltN_#,BfiltN_prop,BfiltN_N,BfiltN_#,filtN_propU,filtN_NU,filtN_#U,filtN_propI,filtN_NI,filtN_#I,filtN_prop_mean,filtN_N_mean,filtN_#_mean,AfiltNcovB_prop,AfiltNcovB_N,AfiltNcovB_#,BfiltNcovB_prop,BfiltNcovB_N,BfiltNcovB_#,filtNcovB_propU,filtNcovB_NU,filtNcovB_#U,filtNcovB_propI,filtNcovB_NI,filtNcovB_#I,filtNcovB_prop_mean,filtNcovB_N_mean,filtNcovB_#_mean,AfiltNAB_prop,AfiltNAB_N,AfiltNAB_#,BfiltNAB_prop,BfiltNAB_N,BfiltNAB_#,filtNAB_propU,filtNAB_NU,filtNAB_#U,filtNAB_propI,filtNAB_NI,filtNAB_#I,filtNAB_prop_mean,filtNAB_N_mean,filtNAB_#_mean,AfiltNABcovB_prop,AfiltNABcovB_N,AfiltNABcovB_#,BfiltNABcovB_prop,BfiltNABcovB_N,BfiltNABcovB_#,filtNABcovB_propU,filtNABcovB_NU,filtNABcovB_#U,filtNABcovB_propI,filtNABcovB_NI,filtNABcovB_#I,filtNABcovB_prop_mean,filtNABcovB_N_mean,filtNABcovB_#_mean
+                my @statsfiltcovBNABUPAF;
+                my @statsfiltcovBNABIPAF;
+                my ($ref_common_variantsfiltcovBNABUPAF,$ref_different_variantsfiltcovBNABUPAF);
+                my ($ref_common_variantsfiltcovBNABIPAF,$ref_different_variantsfiltcovBNABIPAF);
+                my @statsfiltcovBNABmeanPAF;
     
-    		$results{"$NcovBcondition${sep_param}NAB$sep_param$NAB_condition"}=\@statistics;
-    #print("DEBUG:$condition$OFS",array_to_string(@statistics),"\n");
+                $PAF_condition=$popAFfiltering_conditions[$nPAF];
+
+                #Substract PAF from AfiltcovBNAB. Compare the results to B without filter --> Common variants + %
+                ($ref_common_variantsAfiltcovBNABPAF,$ref_different_variantsAfiltcovBNABPAF)=filter_with_PAF($ref_common_variantsAfiltcovBNAB,$ref_different_variantsAfiltcovBNAB,$constExeCondContentRefs{"${exe_condition}_${PAF_condition}"},\@statsAfiltcovBNABPAF);
+
+                #Substract PAF from BfiltcovBNAB. Compare the results to A without filter --> Common variants + %
+                ($ref_common_variantsBfiltcovBNABPAF,$ref_different_variantsBfiltcovBNABPAF)=filter_with_PAF($ref_common_variantsBfiltcovBNAB,$ref_different_variantsBfiltcovBNAB,$constExeCondContentRefs{"${exe_condition}_${PAF_condition}"},\@statsBfiltcovBNABPAF);
+
+        
+                #Mean stats filter covBNAB    
+                ($ref_common_variantsfiltcovBNABUPAF,$ref_different_variantsfiltcovBNABUPAF)=filter_with_PAF($ref_common_variantsfiltcovBNABU,$ref_different_variantsfiltcovBNABU,$constExeCondContentRefs{"${exe_condition}_${PAF_condition}"},\@statsfiltcovBNABUPAF);
+                
+                ($ref_common_variantsfiltcovBNABIPAF,$ref_different_variantsfiltcovBNABIPAF)=filter_with_PAF($ref_common_variantsfiltcovBNABI,$ref_different_variantsfiltcovBNABI,$constExeCondContentRefs{"${exe_condition}_${PAF_condition}"},\@statsfiltcovBNABIPAF);
+        
+                @statsfiltcovBNABmeanPAF=(($statsAfiltcovBNABPAF[0]+$statsBfiltcovBNABPAF[0])/2.0,($statsAfiltcovBNABPAF[1]+$statsBfiltcovBNABPAF[1])/2.0,($statsAfiltcovBNABPAF[2]+$statsBfiltcovBNABPAF[2])/2.0);
+
+#                #Output of list of variants and/or intermediate vcf files
+                
+                if($output_comprehensive>0)
+                {
+                    if($output_list)
+                    {
+                        write_variant_list($ref_common_variantsfiltcovBNABUPAF,"filtcovBNABUPAF$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}${sep_param}PAF$sep_param${PAF_condition}_common.list",$condition);
+                        write_variant_list($ref_different_variantsAfiltcovBNABPAF,"AfiltcovBNABPAF$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}${sep_param}PAF$sep_param${PAF_condition}_different.list",$condition);
+                        write_variant_list($ref_different_variantsBfiltcovBNABPAF,"BfiltcovBNABPAF$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}${sep_param}PAF$sep_param${PAF_condition}_different.list",$condition);
+                    }
+                    if($output_vcf)
+                    {
+                        write_variant_2vcf($ref_common_variantsfiltcovBNABUPAF,"filtcovBNABUPAF$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}${sep_param}PAF$sep_param${PAF_condition}_common.vcf","$thisAname","$thisBname","## Somatic covBNABPAF U(AB) Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition${sep_param}PAF$sep_param${PAF_condition}",$condition);
+                        write_variant_vcf($ref_different_variantsAfiltcovBNABPAF,"AfiltcovBNABPAF$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}${sep_param}PAF$sep_param${PAF_condition}_different.vcf","$thisAname","##Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition${sep_param}PAF$sep_param${PAF_condition}",$condition);
+                        write_variant_vcf($ref_different_variantsBfiltcovBNABPAF,"BfiltcovBNABPAF$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}${sep_param}PAF$sep_param${PAF_condition}_different.vcf","$thisBname","##Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition${sep_param}PAF$sep_param${PAF_condition}",$condition);
+                    }
+                }
+                if($output_comprehensive>1)
+                {
+                    if($output_list)
+                    {
+        				write_variant_list($ref_common_variantsAfiltcovBNABPAF,"AfiltcovBNABPAF$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}${sep_param}PAF$sep_param${PAF_condition}_common.list",$condition);
+                        write_variant_list($ref_common_variantsBfiltcovBNABPAF,"BfiltcovBNABPAF$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}${sep_param}PAF$sep_param${PAF_condition}_common.list",$condition);
+                        write_variant_list($ref_different_variantsfiltcovBNABUPAF,"filtcovBNABUPAF$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}${sep_param}PAF$sep_param${PAF_condition}_different.list",$condition);
+                        write_variant_list($ref_different_variantsfiltcovBNABIPAF,"filtcovBNABIPAF$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}${sep_param}PAF$sep_param${PAF_condition}_different.list",$condition);
+                        write_variant_list($ref_common_variantsfiltcovBNABIPAF,"filtcovBNABIPAF$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}${sep_param}PAF$sep_param${PAF_condition}_common.list",$condition);
+                    }
+                    if($output_vcf)
+                    {
+                        write_variant_vcf($ref_common_variantsAfiltcovBNABPAF,"AfiltcovBNABPAF$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}${sep_param}PAF$sep_param${PAF_condition}_common.vcf","$thisAname","##Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition${sep_param}PAF$sep_param${PAF_condition}",$condition);
+                        write_variant_vcf($ref_common_variantsBfiltcovBNABPAF,"BfiltcovBNABPAF$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}${sep_param}PAF$sep_param${PAF_condition}_common.vcf","$thisBname","##Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition${sep_param}PAF$sep_param${PAF_condition}",$condition);
+                        write_variant_2vcf($ref_different_variantsfiltcovBNABUPAF,"filtcovBNABUPAF$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}${sep_param}PAF$sep_param${PAF_condition}_different.vcf","$thisAname","$thisBname","## Somatic covBNABPAF U(AB) Filtered with vcfFilterTableV1. Condition ${NcovBcondition}${sep_param}NAB$sep_param$NAB_condition${sep_param}PAF$sep_param${PAF_condition}",$condition);
+                        write_variant_2vcf($ref_different_variantsfiltcovBNABIPAF,"filtcovBNABIPAF$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}${sep_param}PAF$sep_param${PAF_condition}_different.vcf","$thisAname","$thisBname","## Somatic covBNABPAF I(AB) Filtered with vcfFilterTableV1. Condition ${NcovBcondition}${sep_param}NAB$sep_param$NAB_condition${sep_param}PAF$sep_param${PAF_condition}",$condition);
+                        write_variant_2vcf($ref_common_variantsfiltcovBNABIPAF,"filtcovBNABIPAF$sep_param${NcovBcondition}${sep_param}NAB$sep_param${NAB_condition}${sep_param}PAF$sep_param${PAF_condition}_common.vcf","$thisAname","$thisBname","## Somatic covBNABPAF I(AB) Filtered with vcfFilterTableV1. Condition ${condition}${sep_param}NAB$sep_param$NAB_condition${sep_param}PAF$sep_param${PAF_condition}",$condition);
+                    }
+                }
+                #Final variables
+                my @statistics;
+                #Store and/or print
+                @statistics=(@{$nofiltResultsRef{$exe_condition}},@statsAfilt,@statsBfilt,@statsfiltU,@statsfiltI,@statsfiltmean,@statsAfiltN,@statsBfiltN,@statsfiltNU,@statsfiltNI,@statsfiltNmean,@statsfiltNPAF,@statsAfiltNcovB,@statsBfiltNcovB,@statsfiltNcovBU,@statsfiltNcovBI,@statsfiltNcovBmean,@statsfiltNcovBPAF,@{$statsfiltNABrefs[$nNAB]},@{$statsfiltNABPAFrefs[$nNAB]},@statsAfiltcovBNAB,@statsBfiltcovBNAB,@statsfiltcovBNABU,@statsfiltcovBNABI,@statsfiltcovBNABmean,@statsfiltcovBNABPAF,@statsAfiltcovBNABPAF, @statsBfiltcovBNABPAF, @statsfiltcovBNABU, @stastfiltcovBNABI, @statsfiltcovBNABmean);
+        #Condition,#A_#,B_#,N_#,AN_#,BN_#,Afilt_prop,Afilt_N,Afilt_#,Bfilt_prop,Bfilt_N,Bfilt_#,filt_propU,filt_NU,filt_#U,filt_propI,filt_NI,filt_#I,filt_prop_mean,filt_N_mean,filt_#_mean,AfiltN_prop,AfiltN_N,AfiltN_#,BfiltN_prop,BfiltN_N,BfiltN_#,filtN_propU,filtN_NU,filtN_#U,filtN_propI,filtN_NI,filtN_#I,filtN_prop_mean,filtN_N_mean,filtN_#_mean,(nPAFfreqs) x (AfiltN_Priv_PAF_XX,BfiltN_Priv_PAF_XX,filtN_U_PAF_XX),AfiltNcovB_prop,AfiltNcovB_N,AfiltNcovB_#,BfiltNcovB_prop,BfiltNcovB_N,BfiltNcovB_#,filtNcovB_propU,filtNcovB_NU,filtNcovB_#U,filtNcovB_propI,filtNcovB_NI,filtNcovB_#I,filtNcovB_prop_mean,filtNcovB_N_mean,filtNcovB_#_mean,(nPAFfreqs) x (AfiltNcovB_Priv_PAF_XX,BfiltNcovB_Priv_PAF_XX,filtNcovB_U_PAF_XX),AfiltNAB_prop,AfiltNAB_N,AfiltNAB_#,BfiltNAB_prop,BfiltNAB_N,BfiltNAB_#,filtNAB_propU,filtNAB_NU,filtNAB_#U,filtNAB_propI,filtNAB_NI,filtNAB_#I,filtNAB_prop_mean,filtNAB_N_mean,filtNAB_#_mean,(nPAFfreqs) x (AfiltNAB_Priv_PAF_XX,BfiltNAB_Priv_PAF_XX,filtNAB_U_PAF_XX),AfiltNABcovB_prop,AfiltNABcovB_N,AfiltNABcovB_#,BfiltNABcovB_prop,BfiltNABcovB_N,BfiltNABcovB_#,filtNABcovB_propU,filtNABcovB_NU,filtNABcovB_#U,filtNABcovB_propI,filtNABcovB_NI,filtNABcovB_#I,filtNABcovB_prop_mean,filtNABcovB_N_mean,filtNABcovB_#_mean,(nPAFfreqs) x (AfiltNABcovB_Priv_PAF_XX,BfiltNABcovB_Priv_PAF_XX,filtNABcovB_U_PAF_XX),AfiltNABcovBPAF_prop,AfiltNABcovBPAF_N,AfiltNABcovBPAF_#,BfiltNABcovBPAF_prop,BfiltNABcovBPAF_N,BfiltNABcovBPAF_#,filtNABcovBPAF_propU,filtNABcovBPAF_NU,filtNABcovBPAF_#U,filtNABcovBPAF_propI,filtNABcovBPAF_NI,filtNABcovBPAF_#I,filtNABcovBPAF_prop_mean,filtNABcovBPAF_N_mean,filtNABcovBPAF_#_mean
+        
+        		$results{"$NcovBcondition${sep_param}NAB$sep_param$NAB_condition"}=\@statistics;
+        #print("DEBUG:$condition$OFS",array_to_string(@statistics),"\n");
+                #HERE
+            }##TODO working here
         }
     }
 }
@@ -2469,18 +2563,28 @@ sub parse_const_execond
     $constExeCondContentRefs{$covNname}=parse_tsv($covNname);
     
     #TODO: I am not parallelizing this, but I am getting a lot of benefits from reusing it. I think that parallalelizing it would spend more extra time spliting the fork than the actual benefit due to the several processes
+    ##NAB constants
     foreach my $cond (@NABfiltering_conditions)
     {
         $constExeCondContentRefs{"${exe_condition}_${cond}"}=vcf_covN_filter($constExeCondContentRefs{$covNname},$cond);
     }
-    
+
     $constExeCondContentRefs{$Aexecondname}=parse_vcf($Aexecondname);
     $constExeCondContentRefs{$Bexecondname}=parse_vcf($Bexecondname);
-#    $constExeCondContentRefs{"${Aexecondname}_N"}=vcf_prune_single($constExeCondContentRefs{$Aexecondname},\%N); #Not needed
-#    $constExeCondContentRefs{"${Bexecondname}_N"}=vcf_prune_single($constExeCondContentRefs{$Bexecondname},\%N);
+    
+    ##PAF constants
+    $constExeCondContentRefs{"${exe_condition}_PAF"}=getPAFdata($constExeCondContentRefs{$Aexecondname},$constExeCondContentRefs{$Bexecondname});
+  
+    ##TODO: Do I want to parallelize this independently? Same question about the benefits and costs of forking
+    foreach my $cond (@popAFfiltering_conditions)
+    {
+        $constExeCondContentRefs{"${exe_condition}_${cond}"}=filt_PAF($constExeCondContentRefs{"${exe_condition}_PAF"},$cond);
+    } 
+    
     $nofiltResultsRef{$exe_condition}=[scalar keys %{$constExeCondContentRefs{$AcovBname}}, scalar keys %{$constExeCondContentRefs{$BcovBname}}, scalar keys %N, scalar keys %{vcf_prune_single($constExeCondContentRefs{$Aexecondname},\%N)}, scalar keys %{vcf_prune_single($constExeCondContentRefs{$Bexecondname},\%N)}];
 }
 
+##Returns a hash ref to the population allele frequency information for all variants present in the input reference hashes 
 sub getPAFdata
 {
     my $tabix = Bio::DB::HTS::Tabix->new( filename =>$GNOMAD );
@@ -2557,4 +2661,200 @@ sub getPAFdata
         }##foreach key
     }##foreach hash
     return \%outdata;
+}
+
+
+##This subrutine gets an array of PAF conditions and generates the frequency of private A, B and common C variants with PAF<=condition for each condition
+sub getPAFStats
+{
+    my ($ref_conditions, $ref_pAFfiltN, $ref_A, $ref_B, $ref_C)=@_;
+    my @output;
+    my @filt_values= map {$_=~s/^--max_pAF://} @{$ref_conditions};
+    my $ngood;
+    my $ntotal;
+    my $pos_key;
+    my $comp_key;
+    my @alts;
+    #ref_pAFfiltN; #key: CHROM${OFS}POS${OFS}ALT value: [$tref,$tfilt,$taf];
+
+    foreach my $value (@filt_values)
+    {
+        #PrivA
+        $ngood=0;
+        $ntotal=0;
+        foreach $pos_key (keys %{$ref_A})
+        {
+            @alts=split($OFS,$ref_A->{$pos_key});
+            shift(@alts);
+            foreach $comp_key (map {$pos_key.$OFS.$_} @alts)
+            {
+                if(exists $ref_pAFfiltN->{$comp_key})
+                {
+                    if($ref_pAFfiltN->{$comp_key}->[2] <= $value)
+                    {
+                        ++$ngood;
+                    }
+                }
+                else
+                {
+                    ++$ngood;
+                    warn "No population data for $comp_key\n";
+                }
+                ++$ntotal;
+            }
+        }
+        push(@output,$ngood*100.0/$ntotal);
+
+        #PrivB
+        $ngood=0;
+        $ntotal=0;
+        foreach $pos_key (keys %{$ref_B})
+        {
+            @alts=split($OFS,$ref_B->{$pos_key});
+            shift(@alts);
+            foreach $comp_key (map {$pos_key.$OFS.$_} @alts)
+            {
+                if(exists $ref_pAFfiltN->{$comp_key})
+                {
+                    if($ref_pAFfiltN->{$comp_key}->[2] <= $value)
+                    {
+                        ++$ngood;
+                    }
+                }
+                else
+                {
+                    ++$ngood;
+                    warn "No population data for $comp_key\n";
+                }
+                ++$ntotal;
+            }
+        }
+        push(@output,$ngood*100.0/$ntotal);
+
+        #Common
+        $ngood=0;
+        $ntotal=0;
+        foreach $pos_key (keys %{$ref_C})
+        {
+            @alts=split($OFS,$ref_C->{$pos_key});
+            shift(@alts);
+            foreach $comp_key (map {$pos_key.$OFS.$_} @alts)
+            {
+                if(exists $ref_pAFfiltN->{$comp_key})
+                {
+                    if($ref_pAFfiltN->{$comp_key}->[2] <= $value)
+                    {
+                        ++$ngood;
+                    }
+                }
+                else
+                {
+                    ++$ngood;
+                    warn "No population data for $comp_key\n";
+                }
+                ++$ntotal;
+            }
+        }
+        push(@output,$ngood*100.0/$ntotal);
+    } ##Foreach filter
+
+    return \@output;
+}
+
+##Subrutine to generate the header of the PAF stats for the output file
+##Inputs: two array references, to a) names of the different output columns
+## b) array of PAF filtering conditions
+## Return: array of column headers that combines the names with the filtering values
+sub makeHeaderPAF
+{
+    my ($ref_names,$ref_conditions)=@_;
+    my @outcolumns
+    foreach my $condition (@{$ref_conditions})
+    {
+        $condition =~s/--[^:]+://;
+        foreach my $name (@{$ref_names})
+        {
+            push(@outcolumns,$name.$condition);
+        }
+    }
+    return @outcolumns;
+}
+
+##Subrutine that generates a list of variants that are valid (<= condition) considering their population allele frequency
+sub filt_PAF
+{
+    my ($ref_data,$condition)=@_;
+    $condition =~s/--[^:]+://; ##Get the maximum population allele frequency
+    my %outdata;
+    foreach my $key (keys %{$ref_data})
+    {
+        if($ref_data->{$key}[2]<=$condition)
+        {
+            $outdata{$key}=$ref_data->{$key};
+        }
+    }
+
+    return \%outdata;
+}
+
+##Filters two hashes of variants using a hash of variants that are valid (this will be a superset of the variants that will be valid)  and generates stats like vcf_prune
+sub filter_with_PAF
+{
+    my ($ref_common, $ref_different, $ref_PAF, $ref_stats)=@_;
+    my (%out_common, %out_different);
+    my $ref;
+    my $ckey;
+    my $alt;
+    my @alts;
+    my @validAlts;
+    
+    ##The number of ref_PAF variants will be much larger than ref_common or ref_different. Thus, I will loop along those two, instead of the first.
+    foreach my $variant (keys %{$ref_common})
+    {
+        @alts=split($OFS,$ref_common->{$variant});
+        $ref=shift(@alts);
+        @validAlts=($ref);
+        foreach $alt (@alts)
+        {
+            $ckey=$variant.$OFS.$alt;
+            if(exists $ref_PAF->{$ckey}) ##I don't need to check the value of this since this list of variants has been pre-made
+            {
+                push(@validAlts,$alt);
+            }
+        }
+        if(scalar @validAlts > 1)
+        {
+            $out_common{$variant}=join($OFS,@validAlts);
+        }
+    }
+    foreach my $variant (keys %{$ref_different})
+    {
+        @alts=split($OFS,$ref_different->{$variant});
+        $ref=shift(@alts);
+        @validAlts=($ref);
+        foreach $alt (@alts)
+        {
+            $ckey=$variant.$OFS.$alt;
+            if(exists $ref_PAF->{$ckey}) ##I don't need to check the value of this since this list of variants has been pre-made
+            {
+                push(@validAlts,$alt);
+            }
+        }
+        if(scalar @validAlts > 1) ##The 1 is the reference, we need at least one valid alternative 
+        {
+            $out_different{$variant}=join($OFS,@validAlts);
+        }
+    }
+    	
+    my $n_selvariants=scalar keys %out_common;
+	my $n_filtvariants=scalar keys %out_different;
+    if($n_selvariants+$n_filtvariants==0)
+    {
+         @{ $ref_stats }=(0,$n_selvariants,$n_selvariants+$n_filtvariants);
+    }
+    else
+    {   	
+	    @{ $ref_stats }=($n_selvariants/($n_selvariants+$n_filtvariants),$n_selvariants,$n_selvariants+$n_filtvariants); ##Stats= proportion of selected reads in the reference, number of selected variants
+	}
+    return (\%out_common, \%out_different);
 }
