@@ -6,8 +6,8 @@ Getopt::Long::Configure qw(gnu_getopt);
 use Cwd;
 use File::Basename;
 use Env;
-use Sort::Key::Natural; 
-use Sort::Key::Maker nat_i_sorter => qw(nat integer); 
+use Sort::Key::Natural;
+use Sort::Key::Maker nat_i_sorter => qw(nat integer);
 use Bio::DB::HTS::Tabix;
 #use Parallel::Loops;
 
@@ -106,7 +106,7 @@ my @filtering_param_values=([("")]);
 my @NABfiltering_param_values1=([("")]);
 my @NABfiltering_param_values2=([("")]);
 my @covBfiltering_param_values=([("")]);
-my @popAFfiltering_parameters=([("")]);
+my @popAFfiltering_param_values=([("")]);
 
 ##Input files
 
@@ -186,6 +186,7 @@ my @NABfiltering_conditions1; ##In order to be easily accesed from the filtering
 my @NABfiltering_conditions2;
 my @NABfiltering_conditions;
 my @covBfiltering_conditions;
+my @popAFfiltering_conditions;
 my @exe_conditions;
 my %results;
 my $bamfiles;
@@ -205,7 +206,7 @@ combs(0,"",\@popAFfiltering_parameters,\@popAFfiltering_param_values,\@popAFfilt
 my @HeaderStatsfiltNPAF,
 my @HeaderStatsfiltNcovBPAF;
 my @HeaderStatsfiltNABPAF;
-my @HeaderStatsfiltcovBNABPAF;
+my @HeaderStatsfiltNABcovBPAF;
 my @filtNPAFnames=qw(AfiltN_Priv_PAF_ BfiltN_Priv_PAF_ filtN_U_PAF_);
 my @filtNcovBPAFnames=qw(AfiltNcovB_Priv_PAF_ BfiltNcovB_Priv_PAF_ filtNcovB_U_PAF_);
 my @filtNABPAFnames=qw(AfiltNAB_Priv_PAF_ BfiltNAB_Priv_PAF_ filtNAB_U_PAF_);
@@ -245,10 +246,10 @@ if($n_cores>1 && scalar @exe_conditions > 1)
 }
 else
 {
-   foreach my $exe_condition (@exe_conditions)
-foreach my $cond (@pAF   {
-       parse_const_execond($exe_condition);
-   }
+    foreach my $exe_condition (@exe_conditions)
+    {
+        parse_const_execond($exe_condition);
+    }
 }
 
 my ($Aexecondname,$Bexecondname);
@@ -296,8 +297,12 @@ foreach my $exe_condition (@exe_conditions) ##Options that require to call varia
 ## Output
 #############################################################
 open(my $OFILE,">$output_file");
-print($OFILE join(",",qw(Sample Condition A_# B_# N_# AN_# BN_# Afilt_prop Afilt_N Afilt_# Bfilt_prop Bfilt_N Bfilt_# filt_propU filt_NU filt_#U filt_propI filt_NI filt_#I filt_prop_mean filt_N_mean filt_#_mean AfiltN_prop AfiltN_N AfiltN_# BfiltN_prop BfiltN_N BfiltN_# filtN_propU filtN_NU filtN_#U filtN_propI filtN_NI filtN_#I filtN_prop_mean filtN_N_mean filtN_#_mean),@HeaderStatsfiltNPAF,qw(AfiltNcovB_prop AfiltNcovB_N AfiltNcovB_# BfiltNcovB_prop BfiltNcovB_N BfiltNcovB_# filtNcovB_propU filtNcovB_NU filtNcovB_#U filtNcovB_propI filtNcovB_NI filtNcovB_#I filtNcovB_prop_mean filtNcovB_N_mean filtNcovB_#_mean),@HeaderStartsfiltNcovBPAF,qw(AfiltNAB_prop AfiltNAB_N AfiltNAB_# BfiltNAB_prop BfiltNAB_N BfiltNAB_# filtNAB_propU filtNAB_NU filtNAB_#U filtNAB_propI filtNAB_NI filtNAB_#I filtNAB_prop_mean filtNAB_N_mean filtNAB_#_mean),@HeaderStatsfiltNABPAF,qw(AfiltNABcovB_prop AfiltNABcovB_N AfiltNABcovB_# BfiltNABcovB_prop BfiltNABcovB_N BfiltNABcovB_# filtNABcovB_propU filtNABcovB_NU filtNABcovB_#U filtNABcovB_propI filtNABcovB_NI filtNABcovB_#I filtNABcovB_prop_mean filtNABcovB_N_mean filtNABcovB_#_mean),@HeaderStatsfiltNABcovBPAF,qw(AfiltNABcovBPAF_prop AfiltNABcovBPAF_N AfiltNABcovBPAF_# BfiltNABcovBPAF_prop BfiltNABcovBPAF_N BfiltNABcovBPAF_# filtNABcovBPAF_propU filtNABcovBPAF_NU filtNABcovBPAF_#U filtNABcovBPAF_propI filtNABcovBPAF_NI filtNABcovBPAF_#I filtNABcovBPAF_prop_mean filtNABcovBPAF_N_mean filtNABcovBPAF_#_mean),"\n"));
 
+##Making a block here to use the no warnings qw. It complains because of the # but they are valid
+{
+    no warnings 'qw';
+    print($OFILE join(",",qw(Sample Condition A_# B_# N_# AN_# BN_# Afilt_prop Afilt_N Afilt_# Bfilt_prop Bfilt_N Bfilt_# filt_propU filt_NU filt_#U filt_propI filt_NI filt_#I filt_prop_mean filt_N_mean filt_#_mean AfiltN_prop AfiltN_N AfiltN_# BfiltN_prop BfiltN_N BfiltN_# filtN_propU filtN_NU filtN_#U filtN_propI filtN_NI filtN_#I filtN_prop_mean filtN_N_mean filtN_#_mean),@HeaderStatsfiltNPAF,qw(AfiltNcovB_prop AfiltNcovB_N AfiltNcovB_# BfiltNcovB_prop BfiltNcovB_N BfiltNcovB_# filtNcovB_propU filtNcovB_NU filtNcovB_#U filtNcovB_propI filtNcovB_NI filtNcovB_#I filtNcovB_prop_mean filtNcovB_N_mean filtNcovB_#_mean),@HeaderStatsfiltNcovBPAF,qw(AfiltNAB_prop AfiltNAB_N AfiltNAB_# BfiltNAB_prop BfiltNAB_N BfiltNAB_# filtNAB_propU filtNAB_NU filtNAB_#U filtNAB_propI filtNAB_NI filtNAB_#I filtNAB_prop_mean filtNAB_N_mean filtNAB_#_mean),@HeaderStatsfiltNABPAF,qw(AfiltNABcovB_prop AfiltNABcovB_N AfiltNABcovB_# BfiltNABcovB_prop BfiltNABcovB_N BfiltNABcovB_# filtNABcovB_propU filtNABcovB_NU filtNABcovB_#U filtNABcovB_propI filtNABcovB_NI filtNABcovB_#I filtNABcovB_prop_mean filtNABcovB_N_mean filtNABcovB_#_mean),@HeaderStatsfiltNABcovBPAF,qw(AfiltNABcovBPAF_prop AfiltNABcovBPAF_N AfiltNABcovBPAF_# BfiltNABcovBPAF_prop BfiltNABcovBPAF_N BfiltNABcovBPAF_# filtNABcovBPAF_propU filtNABcovBPAF_NU filtNABcovBPAF_#U filtNABcovBPAF_propI filtNABcovBPAF_NI filtNABcovBPAF_#I filtNABcovBPAF_prop_mean filtNABcovBPAF_N_mean filtNABcovBPAF_#_mean),"\n"));
+}
     #Condition,#A_#,B_#,N_#,AN_#,BN_#,Afilt_prop,Afilt_N,Afilt_#,Bfilt_prop,Bfilt_N,Bfilt_#,filt_propU,filt_NU,filt_#U,filt_propI,filt_NI,filt_#I,filt_prop_mean,filt_N_mean,filt_#_mean,AfiltN_prop,AfiltN_N,AfiltN_#,BfiltN_prop,BfiltN_N,BfiltN_#,filtN_propU,filtN_NU,filtN_#U,filtN_propI,filtN_NI,filtN_#I,filtN_prop_mean,filtN_N_mean,filtN_#_mean,(nPAFfreqs) x (AfiltN_Priv_PAF_XX,BfiltN_Priv_PAF_XX,filtN_U_PAF_XX),AfiltNcovB_prop,AfiltNcovB_N,AfiltNcovB_#,BfiltNcovB_prop,BfiltNcovB_N,BfiltNcovB_#,filtNcovB_propU,filtNcovB_NU,filtNcovB_#U,filtNcovB_propI,filtNcovB_NI,filtNcovB_#I,filtNcovB_prop_mean,filtNcovB_N_mean,filtNcovB_#_mean,(nPAFfreqs) x (AfiltNcovB_Priv_PAF_XX,BfiltNcovB_Priv_PAF_XX,filtNcovB_U_PAF_XX),AfiltNAB_prop,AfiltNAB_N,AfiltNAB_#,BfiltNAB_prop,BfiltNAB_N,BfiltNAB_#,filtNAB_propU,filtNAB_NU,filtNAB_#U,filtNAB_propI,filtNAB_NI,filtNAB_#I,filtNAB_prop_mean,filtNAB_N_mean,filtNAB_#_mean,(nPAFfreqs) x (AfiltNAB_Priv_PAF_XX,BfiltNAB_Priv_PAF_XX,filtNAB_U_PAF_XX),AfiltNABcovB_prop,AfiltNABcovB_N,AfiltNABcovB_#,BfiltNABcovB_prop,BfiltNABcovB_N,BfiltNABcovB_#,filtNABcovB_propU,filtNABcovB_NU,filtNABcovB_#U,filtNABcovB_propI,filtNABcovB_NI,filtNABcovB_#I,filtNABcovB_prop_mean,filtNABcovB_N_mean,filtNABcovB_#_mean,(nPAFfreqs) x (AfiltNABcovB_Priv_PAF_XX,BfiltNABcovB_Priv_PAF_XX,filtNABcovB_U_PAF_XX),AfiltNABcovBPAF_prop,AfiltNABcovBPAF_N,AfiltNABcovBPAF_#,BfiltNABcovBPAF_prop,BfiltNABcovBPAF_N,BfiltNABcovBPAF_#,filtNABcovBPAF_propU,filtNABcovBPAF_NU,filtNABcovBPAF_#U,filtNABcovBPAF_propI,filtNABcovBPAF_NI,filtNABcovBPAF_#I,filtNABcovBPAF_prop_mean,filtNABcovBPAF_N_mean,filtNABcovBPAF_#_mean
 
 my $sample=$output_file;
@@ -732,7 +737,7 @@ sub filter
                 #Final variables
                 my @statistics;
                 #Store and/or print
-                @statistics=(@{$nofiltResultsRef{$exe_condition}},@statsAfilt,@statsBfilt,@statsfiltU,@statsfiltI,@statsfiltmean,@statsAfiltN,@statsBfiltN,@statsfiltNU,@statsfiltNI,@statsfiltNmean,@statsfiltNPAF,@statsAfiltNcovB,@statsBfiltNcovB,@statsfiltNcovBU,@statsfiltNcovBI,@statsfiltNcovBmean,@statsfiltNcovBPAF,@{$statsfiltNABrefs[$nNAB]},@{$statsfiltNABPAFrefs[$nNAB]},@statsAfiltcovBNAB,@statsBfiltcovBNAB,@statsfiltcovBNABU,@statsfiltcovBNABI,@statsfiltcovBNABmean,@statsfiltcovBNABPAF,@statsAfiltcovBNABPAF, @statsBfiltcovBNABPAF, @statsfiltcovBNABU, @stastfiltcovBNABI, @statsfiltcovBNABmean);
+                @statistics=(@{$nofiltResultsRef{$exe_condition}},@statsAfilt,@statsBfilt,@statsfiltU,@statsfiltI,@statsfiltmean,@statsAfiltN,@statsBfiltN,@statsfiltNU,@statsfiltNI,@statsfiltNmean,@statsfiltNPAF,@statsAfiltNcovB,@statsBfiltNcovB,@statsfiltNcovBU,@statsfiltNcovBI,@statsfiltNcovBmean,@statsfiltNcovBPAF,@{$statsfiltNABrefs[$nNAB]},@{$statsfiltNABPAFrefs[$nNAB]},@statsAfiltcovBNAB,@statsBfiltcovBNAB,@statsfiltcovBNABU,@statsfiltcovBNABI,@statsfiltcovBNABmean,@statsfiltcovBNABPAF,@statsAfiltcovBNABPAF, @statsBfiltcovBNABPAF, @statsfiltcovBNABU, @statsfiltcovBNABI, @statsfiltcovBNABmean);
         #Condition,#A_#,B_#,N_#,AN_#,BN_#,Afilt_prop,Afilt_N,Afilt_#,Bfilt_prop,Bfilt_N,Bfilt_#,filt_propU,filt_NU,filt_#U,filt_propI,filt_NI,filt_#I,filt_prop_mean,filt_N_mean,filt_#_mean,AfiltN_prop,AfiltN_N,AfiltN_#,BfiltN_prop,BfiltN_N,BfiltN_#,filtN_propU,filtN_NU,filtN_#U,filtN_propI,filtN_NI,filtN_#I,filtN_prop_mean,filtN_N_mean,filtN_#_mean,(nPAFfreqs) x (AfiltN_Priv_PAF_XX,BfiltN_Priv_PAF_XX,filtN_U_PAF_XX),AfiltNcovB_prop,AfiltNcovB_N,AfiltNcovB_#,BfiltNcovB_prop,BfiltNcovB_N,BfiltNcovB_#,filtNcovB_propU,filtNcovB_NU,filtNcovB_#U,filtNcovB_propI,filtNcovB_NI,filtNcovB_#I,filtNcovB_prop_mean,filtNcovB_N_mean,filtNcovB_#_mean,(nPAFfreqs) x (AfiltNcovB_Priv_PAF_XX,BfiltNcovB_Priv_PAF_XX,filtNcovB_U_PAF_XX),AfiltNAB_prop,AfiltNAB_N,AfiltNAB_#,BfiltNAB_prop,BfiltNAB_N,BfiltNAB_#,filtNAB_propU,filtNAB_NU,filtNAB_#U,filtNAB_propI,filtNAB_NI,filtNAB_#I,filtNAB_prop_mean,filtNAB_N_mean,filtNAB_#_mean,(nPAFfreqs) x (AfiltNAB_Priv_PAF_XX,BfiltNAB_Priv_PAF_XX,filtNAB_U_PAF_XX),AfiltNABcovB_prop,AfiltNABcovB_N,AfiltNABcovB_#,BfiltNABcovB_prop,BfiltNABcovB_N,BfiltNABcovB_#,filtNABcovB_propU,filtNABcovB_NU,filtNABcovB_#U,filtNABcovB_propI,filtNABcovB_NI,filtNABcovB_#I,filtNABcovB_prop_mean,filtNABcovB_N_mean,filtNABcovB_#_mean,(nPAFfreqs) x (AfiltNABcovB_Priv_PAF_XX,BfiltNABcovB_Priv_PAF_XX,filtNABcovB_U_PAF_XX),AfiltNABcovBPAF_prop,AfiltNABcovBPAF_N,AfiltNABcovBPAF_#,BfiltNABcovBPAF_prop,BfiltNABcovBPAF_N,BfiltNABcovBPAF_#,filtNABcovBPAF_propU,filtNABcovBPAF_NU,filtNABcovBPAF_#U,filtNABcovBPAF_propI,filtNABcovBPAF_NI,filtNABcovBPAF_#I,filtNABcovBPAF_prop_mean,filtNABcovBPAF_N_mean,filtNABcovBPAF_#_mean
         
         		$results{"$NcovBcondition${sep_param}NAB$sep_param$NAB_condition"}=\@statistics;
@@ -1011,13 +1016,14 @@ sub vcf_compare_parsed
     my @probAlts;
     my @diffprobAlts;
     my @cAlts;
+    my $found;
 
-    print("\nDEBUG: vcf_compare_parsed\n\n")
+    print("\nDEBUG: vcf_compare_parsed\n\n");
     foreach my $variant (keys %{$vcf_reference})
     {
         if (exists $variants2{$variant})
         {
-            if ($vcf_reference{$variant} eq $variants2{$variant})
+            if ($vcf_reference->{$variant} eq $variants2{$variant})
             {
                 $commonvariants{$variant}=$variants2{$variant};
                 delete $variants2{$variant}; ###This is the local copy of the original hash that will be returned
@@ -1025,11 +1031,11 @@ sub vcf_compare_parsed
             }
             else ## We need to assess if some alleles are in common or none of them
             {
-                @refAlts=split($OFS,$vcf_reference{$variant});
+                @refAlts=split($OFS,$vcf_reference->{$variant});
                 @probAlts=split($OFS, $variants2{$variant});
                 if(scalar @refAlts == 2 && scalar @probAlts == 2) ##Same variant but different alleles
                 {
-                    print("DEBUG: Same variant but different alleles, $vcf_reference{$variant} vs. $variants2{$variant}\n");
+                    print("DEBUG: Same variant but different alleles, ".$vcf_reference->{$variant}." vs. $variants2{$variant}\n");
                     continue;
                 }
                  
@@ -1117,27 +1123,28 @@ sub vcf_prune
     my @refAlts;
     my @todelAlts;
     my @toKeepAlts;
+    my $found;
 
-    print("\nDEBUG: vcf_prune\n\n")
+    print("\nDEBUG: vcf_prune\n\n");
     foreach my $variant_to_remove (keys %{$vcf_todelete})
     {
         print("DEBUG: Variant $variant_to_remove\n ");
 		if ($tag1==0 and exists($variants1{$variant_to_remove}))
 		{
-            print("DEBUG: Variant to be removed in vcf1\t\n")
-            if ($vcf_todelete{$variant_to_remove} eq $variants1{$variant_to_remove})
+            print("DEBUG: Variant to be removed in vcf1\t\n");
+            if ($vcf_todelete->{$variant_to_remove} eq $variants1{$variant_to_remove})
             {
-                print("\tDEBUG: removing it in vcf1, $vcf_todelete{$variant_to_remove} eq $variants1{$variant_to_remove}\n")
+                print("\tDEBUG: removing it in vcf1, $vcf_todelete->{$variant_to_remove} eq $variants1{$variant_to_remove}\n");
                 delete $variants1{$variant_to_remove};
             }
             else ## We need to assess if some alleles need to be removed or none of them
             {
-                print("\tDEBUG: alleles in vcf1 are not concordant, $variants1{$variant_to_remove} vs. $vcf_reference{$variant}\n")
+                print("\tDEBUG: alleles in vcf1 are not concordant,$vcf_todelete->{$variant_to_remove} vs. $variants1{$variant_to_remove}\n");
                 @refAlts=split($OFS,$variants1{$variant_to_remove});
-                @todelAlts=split($OFS,$vcf_reference{$variant});
+                @todelAlts=split($OFS,$vcf_todelete->{$variant_to_remove});
                 if(scalar @refAlts == 2 && scalar @todelAlts == 2) ##Same variant but different alleles
                 {
-                    print("\t\tDEBUG: different alternative alleles, $variants1{$variant_to_remove} vs. $vcf_reference{$variant}. Nothing will be removed\n");
+                    print("\t\tDEBUG: different alternative alleles, $vcf_todelete->{$variant_to_remove} vs. $variants1{$variant_to_remove}. Nothing will be removed\n");
                 }
                 else
                 {
@@ -1163,7 +1170,7 @@ sub vcf_prune
                     }
                     
                     ##If there are alleles that should not be deleted, we update them in the set
-                    if(scalar @toKeepbAlts >1)
+                    if(scalar @toKeepAlts >1)
                     {
                         $variants1{$variant_to_remove}=join($OFS,@toKeepAlts);
                         print("\t\tDEBUG: there were a number of alleles that should not be eliminated,$variants1{$variant_to_remove}\n");
@@ -1179,20 +1186,20 @@ sub vcf_prune
 		}
 		if ($tag2==0 and exists($variants2{$variant_to_remove}))
 		{
-            print("DEBUG: Variant to be removed in vcf2\t\n")
-            if ($vcf_todelete{$variant_to_remove} eq $variants2{$variant_to_remove})
+            print("DEBUG: Variant to be removed in vcf2\t\n");
+            if ($vcf_todelete->{$variant_to_remove} eq $variants2{$variant_to_remove})
             {
-                print("\tDEBUG: removing it in vcf2, $vcf_todelete{$variant_to_remove} eq $variants2{$variant_to_remove}\n")
+                print("\tDEBUG: removing it in vcf2, $vcf_todelete->{$variant_to_remove} eq $variants2{$variant_to_remove}\n");
                 delete $variants2{$variant_to_remove};
             }
             else ## We need to assess if some alleles need to be removed or none of them
             {
-                print("\tDEBUG: alleles in vcf2 are not concordant, $variants2{$variant_to_remove} vs. $vcf_reference{$variant}\n")
+                print("\tDEBUG: alleles in vcf2 are not concordant, $vcf_todelete->{$variant_to_remove} vs. $variants2{$variant_to_remove}\n");
                 @refAlts=split($OFS,$variants2{$variant_to_remove});
-                @todelAlts=split($OFS,$vcf_reference{$variant});
+                @todelAlts=split($OFS,$vcf_todelete->{$variant_to_remove});
                 if(scalar @refAlts == 2 && scalar @todelAlts == 2) ##Same variant but different alleles
                 {
-                    print("\t\tDEBUG: different alternative alleles, $variants2{$variant_to_remove} vs. $vcf_reference{$variant}. Nothing will be removed\n");
+                    print("\t\tDEBUG: different alternative alleles, $vcf_todelete->{$variant_to_remove} vs. $variants2{$variant_to_remove}. Nothing will be removed\n");
                 }
                 else
                 { 
@@ -1218,7 +1225,7 @@ sub vcf_prune
                     }
                     
                     ##If there are alleles that should not be deleted, we update them in the set
-                    if(scalar @toKeepbAlts >1)
+                    if(scalar @toKeepAlts >1)
                     {
                         $variants2{$variant_to_remove}=join($OFS,@toKeepAlts);
                         print("\t\tDEBUG: there were a number of alleles that should not be eliminated,$variants2{$variant_to_remove}\n");
@@ -1478,27 +1485,28 @@ sub vcf_prune_single
     my @refAlts;
     my @todelAlts;
     my @toKeepAlts;
+    my $found;
 
-    print("\nDEBUG: vcf_prune_single\n\n")
+    print("\nDEBUG: vcf_prune_single\n\n");
     foreach my $variant_to_remove (keys %{$vcf_todelete})
     {
 #print("DEBUG: Variant $variant_to_remove ");
 		if (exists($variants1{$variant_to_remove}))
 		{
-            print("DEBUG: Variant to be removed in vcf1\n")
-            if ($vcf_todelete{$variant_to_remove} eq $variants1{$variant_to_remove})
+            print("DEBUG: Variant to be removed in vcf1\n");
+            if ($vcf_todelete->{$variant_to_remove} eq $variants1{$variant_to_remove})
             {
-                print("\tDEBUG: removing it in vcf1, $vcf_todelete{$variant_to_remove} eq $variants1{$variant_to_remove}\n")
+                print("\tDEBUG: removing it in vcf1, $vcf_todelete->{$variant_to_remove} eq $variants1{$variant_to_remove}\n");
                 delete $variants1{$variant_to_remove};
             }
             else ## We need to assess if some alleles need to be removed or none of them
             {
-                print("\tDEBUG: alleles in vcf1 are not concordant, $variants1{$variant_to_remove} vs. $vcf_reference{$variant}\n")
+                print("\tDEBUG: alleles in vcf1 are not concordant, $vcf_todelete->{$variant_to_remove} vs. $variants1{$variant_to_remove}\n");
                 @refAlts=split($OFS,$variants1{$variant_to_remove});
-                @todelAlts=split($OFS,$vcf_reference{$variant});
+                @todelAlts=split($OFS,$vcf_todelete->{$variant_to_remove});
                 if(scalar @refAlts == 2 && scalar @todelAlts == 2) ##Same variant but different alleles
                 {
-                    print("\t\tDEBUG: different alternative alleles, $variants1{$variant_to_remove} vs. $vcf_reference{$variant}. Nothing will be removed\n");
+                    print("\t\tDEBUG: different alternative alleles, $vcf_todelete->{$variant_to_remove} vs. $variants1{$variant_to_remove}. Nothing will be removed\n");
                 }
                 else
                 {
@@ -1524,7 +1532,7 @@ sub vcf_prune_single
                     }
                     
                     ##If there are alleles that should not be deleted, we update them in the set
-                    if(scalar @toKeepbAlts >1)
+                    if(scalar @toKeepAlts >1)
                     {
                         $variants1{$variant_to_remove}=join($OFS,@toKeepAlts);
                         print("\t\tDEBUG: there were a number of alleles that should not be eliminated,$variants1{$variant_to_remove}\n");
@@ -1565,19 +1573,19 @@ sub vcf_unite_parsed
     print("\nDEBUG: vcf_unite_parsed\n\n");
     foreach my $common_variant (keys %common_variants) ##We have to delete possible variants that are not different any more
     {
-        if(exists $ref_common_variantsA{$common_variant})
+        if(exists $ref_common_variantsA->{$common_variant})
         {
-            if(exists $ref_common_variantsB{$common_variant})
+            if(exists $ref_common_variantsB->{$common_variant})
             {
                 #Allele info exists in both. We need to make sure it is the same, or otherwise combine them
-                if ($ref_common_variantsA{$common_variant} eq $ref_common_variantsB{$common_variant}) #We can get it from either A or B
+                if ($ref_common_variantsA->{$common_variant} eq $ref_common_variantsB->{$common_variant}) #We can get it from either A or B
                 {
-                    $common_variants{$common_variant}=$ref_commonvariantsA{$common_variant};
+                    $common_variants{$common_variant}=$ref_common_variantsA->{$common_variant};
                 }
                 else ##Worst case scenario, we gotta combine them
                 {
-                    @aAs=split($OFS,$ref_common_variantsA{$common_variant});
-                    @bAs=split($OFS,$ref_common_variantsB{$common_variant});
+                    @aAs=split($OFS,$ref_common_variantsA->{$common_variant});
+                    @bAs=split($OFS,$ref_common_variantsB->{$common_variant});
                     $ref=shift(@aAs);
                     shift(@bAs);
                     %tempAs=();
@@ -1587,12 +1595,12 @@ sub vcf_unite_parsed
             }
             else #It does not exist in cB, so we are sure we can get it from cA
             {
-                $common_variants{$common_variant}=$ref_commonvariantsA{$common_variant};
+                $common_variants{$common_variant}=$ref_common_variantsA->{$common_variant};
             }
         }
         else ##If the variant is common but does not exist in cA, we are sure we can get the allele information from cB
         {
-            $common_variants{$common_variant}=$ref_commonvariantsB{$common_variant};
+            $common_variants{$common_variant}=$ref_common_variantsB->{$common_variant};
         }
         
         if(exists $different_variants{$common_variant})
@@ -1605,20 +1613,20 @@ sub vcf_unite_parsed
     
     foreach my $different_variant (keys %different_variants) ##We have to sync the alleles from the two sides since there is a remote possibility of the same location being private with different alleles in the two sides
     {
-        if(exists $ref_different_variantsA{$different_variant})
+        if(exists $ref_different_variantsA->{$different_variant})
         {
-            if(exists $ref_different_variantsB{$different_variant})
+            if(exists $ref_different_variantsB->{$different_variant})
             {
                 #Allele info exists in both. We need to make sure it is the same, or otherwise combine them
-                if ($ref_different_variantsA{$different_variant} eq $ref_different_variantsB{$different_variant}) #We can get it from either A or B
+                if ($ref_different_variantsA->{$different_variant} eq $ref_different_variantsB->{$different_variant}) #We can get it from either A or B
                 {
                     die "This should definetly not happen\n"
                     #$different_variants{$different_variant}=$ref_differentvariantsA{$different_variant};
                 }
                 else ##Worst case scenario, we gotta combine them
                 {
-                    @aAs=split($OFS,$ref_different_variantsA{$different_variant});
-                    @bAs=split($OFS,$ref_different_variantsB{$different_variant});
+                    @aAs=split($OFS,$ref_different_variantsA->{$different_variant});
+                    @bAs=split($OFS,$ref_different_variantsB->{$different_variant});
                     $ref=shift(@aAs);
                     shift(@bAs);
                     %tempAs=();
@@ -1628,12 +1636,12 @@ sub vcf_unite_parsed
             }
             else #It does not exist in cB, so we are sure we can get it from cA
             {
-                $different_variants{$different_variant}=$ref_differentvariantsA{$different_variant};
+                $different_variants{$different_variant}=$ref_different_variantsA->{$different_variant};
             }
         }
         else ##If the variant is different but does not exist in cA, we are sure we can get the allele information from cB
         {
-            $different_variants{$different_variant}=$ref_differentvariantsB{$different_variant};
+            $different_variants{$different_variant}=$ref_different_variantsB->{$different_variant};
         }
        
         ##I will need to make sure that it is not here and if it is work on the alleles 
@@ -1674,19 +1682,19 @@ sub vcf_intersect_parsed
     my $flag;
 
     print("\nDEBUG: vcf_intersect_parsed\n\n");
-    foreach my $key (keys %$ref_common_variantsA)
+    foreach my $key (keys %{$ref_common_variantsA})
     {
-       if(exists $ref_common_variantsB{$key})
+       if(exists $ref_common_variantsB->{$key})
        {
            #Allele info exists in both. We need to make sure it is the same, or otherwise choose the commons. If no commons, is not in the intersection
-           if ($ref_common_variantsA{$key} eq $ref_common_variantsB{$key}) #We can get it from either A or B
+           if ($ref_common_variantsA->{$key} eq $ref_common_variantsB->{$key}) #We can get it from either A or B
            {
-               $common_variants{$key}=$ref_commonvariantsA{$key};
+               $common_variants{$key}=$ref_common_variantsA->{$key};
            }
            else ##Only the commons, if there are commons
            {
-                @aAs=split($OFS,$ref_common_variantsA{$key});
-                @bAs=split($OFS,$ref_common_variantsB{$key});
+                @aAs=split($OFS,$ref_common_variantsA->{$key});
+                @bAs=split($OFS,$ref_common_variantsB->{$key});
                 @cAs=(shift(@aAs)); #We initialize the common array with the reference
                 shift(@bAs);
                 for ($i=0; $i<scalar @aAs; ++$i)
@@ -1702,7 +1710,7 @@ sub vcf_intersect_parsed
                 }
                 if (scalar @cAs > 1)
                 {
-                    $common_variants{$common_variant}=join($OFS,@cAs); 
+                    $common_variants{$key}=join($OFS,@cAs); 
                 }
            }
        }
@@ -1717,24 +1725,24 @@ sub vcf_intersect_parsed
         @adAs=();
         @bdAs=();
 
-        if(exists $ref_different_variantsA{$variant})
+        if(exists $ref_different_variantsA->{$variant})
         {
-            @adAs=split($OFS,$ref_different_variantsA{$variant});
+            @adAs=split($OFS,$ref_different_variantsA->{$variant});
             $ref=shift(@adAs);
         }
-        if(exists $ref_different_variantsB{$variant})
+        if(exists $ref_different_variantsB->{$variant})
         {
-            @bdAs=split($OFS,$ref_different_variantsB{$variant});
+            @bdAs=split($OFS,$ref_different_variantsB->{$variant});
             $ref=shift(@bdAs);
         }
-        if(exists $ref_common_variantsA{$variant})
+        if(exists $ref_common_variantsA->{$variant})
         {
-            @aAs=split($OFS,$ref_common_variantsA{$variant});
+            @aAs=split($OFS,$ref_common_variantsA->{$variant});
             $ref=shift(@aAs);
         }
-        if(exists $ref_common_variantsB{$variant})
+        if(exists $ref_common_variantsB->{$variant})
         {
-            @bAs=split($OFS,$ref_common_variantsB{$variant});
+            @bAs=split($OFS,$ref_common_variantsB->{$variant});
             $ref=shift(@bAs);
         }
 
@@ -1869,6 +1877,7 @@ sub write_variant_vcf
     my @validAs;
     my $i;
     my $j;
+    my $k;
      
     #Copying the header and adding a new line with filtering info
     #Then adding the variants that are present in the hash.
@@ -2043,7 +2052,6 @@ sub write_variant_2vcf
         if ($flag==0 and $icontent[$i]=~/^##/)
         {
             print($OFILE $icontent[$i]);
-            push
         }
         elsif($flag==0)
         {
@@ -2131,7 +2139,7 @@ sub write_variant_2vcf
                     {
                         @contline_vcf2=split("\t",$vcf2_hash{$key});
                         scalar @contline_vcf2 != scalar @contline and die "Error, the number of VCF columns is not the same in the two VCF files\n\n";
-                        @vcfAs2=split(",",$contline2[$4]);
+                        @vcfAs2=split(",",$contline_vcf2[4]);
                         
                         for($j=0; $j<scalar @hashAs; ++$j)
                         {
@@ -2170,13 +2178,13 @@ sub write_variant_2vcf
                         @helper=();
                         for ($j=0; $j< scalar @validAs; ++$j)
                         {
-                            push(@helper,(split(",",$ids_contline[$j]==1?@contline[4]:@contline_vcf2[4]))[$validAs[$j]]);
+                            push(@helper,(split(",",$ids_contline[$j]==1?$contline[4]:$contline_vcf2[4]))[$validAs[$j]]);
                         }
                         push(@newline,join(",",@helper)); #ALT
                         push(@newline,@contline[5,6]); #QUAL    FILTER
                         @helper=split(";", $contline[7]); #INFO
                         @helper2=split(";", $contline_vcf2[7]); #INFO_VCF2
-                        scalar @helper != scalar @helper2 and die "Error in write_variant_2vcf. The number of elements of the INFO field is not the same in the two VCF files\n\n"
+                        scalar @helper != scalar @helper2 and die "Error in write_variant_2vcf. The number of elements of the INFO field is not the same in the two VCF files\n\n";
                         
                         for ($j=0; $j< scalar @helper; ++$j) #We traverse the INFO fields, ;-separated. The ones that have several fields (,-separated) are broken up and only the valid indexes are chosen.
                         {
@@ -2187,7 +2195,7 @@ sub write_variant_2vcf
                                 
                                 $helpstring=~s/^(.+=).+$/$1/; #header of this field
                                 $helpstring2=~s/^(.+=).+$/$1/; #header of this field
-                                $helpstring ne $helpstring2 and die "Error in write_variant_2vcf. The INFO fields of vcf1 and 2 are not the same/in the same order"
+                                $helpstring ne $helpstring2 and die "Error in write_variant_2vcf. The INFO fields of vcf1 and 2 are not the same/in the same order";
                                 $helper[$j]=~s/^.+=(.+)$/$1/; #contents
                                 $helper2[$j]=~s/^.+=(.+)$/$1/; #contents
 
@@ -2310,7 +2318,7 @@ sub write_variant_2vcf
                     push(@newline,join(":",@helper));## Add reconstructed SAMPLE field back
                      
                 }
-                $outcontent{$key}=join("\t",@newline));
+                $outcontent{$key}=join("\t",@newline);
             }
             else
             {
@@ -2601,6 +2609,8 @@ sub getPAFdata
     my $line;
     my $flag;
     my $i;
+    my ($tstart,$talt,$tref,$tfilt,$taf);
+    my @alts;
 
     foreach my $ref_hash (@_)
     {
@@ -2654,7 +2664,7 @@ sub getPAFdata
                     }
                     else
                     {
-                        $outdata{$keyOutPAFs[$i]}=["NA","NA","NA]";
+                        $outdata{$keyOutPAFs[$i]}=["NA","NA","NA"];
                     }
                 }
             }
@@ -2768,7 +2778,7 @@ sub getPAFStats
 sub makeHeaderPAF
 {
     my ($ref_names,$ref_conditions)=@_;
-    my @outcolumns
+    my @outcolumns;
     foreach my $condition (@{$ref_conditions})
     {
         $condition =~s/--[^:]+://;
