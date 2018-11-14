@@ -1036,7 +1036,7 @@ sub vcf_compare_parsed
                 if(scalar @refAlts == 2 && scalar @probAlts == 2) ##Same variant but different alleles
                 {
                     print("DEBUG: Same variant but different alleles, ".$vcf_reference->{$variant}." vs. $variants2{$variant}\n");
-                    continue;
+                    next;
                 }
                  
                 @cAlts=($probAlts[0]); ##Will contain the set of alternatives that are in common
