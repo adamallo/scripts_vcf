@@ -1,6 +1,11 @@
 # scripts_vcf
 Scripts to handle and filter VCF files (intended for personal use)
 
+#Dependencies
+
+- Platypus callable as *
+- javarkit's VcfMultiToOneAllele callable as vcfmulti2oneallele
+
 In order to make these scripts work you need to set the environment variables:
     - SCRIPTSVCF_DIR to indicate the directory where they are located
     - GNOMAD to indicate the tabix VCF file of gnomAD

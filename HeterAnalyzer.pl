@@ -11,6 +11,10 @@ use Sort::Key::Maker nat_i_sorter => qw(nat integer);
 use Bio::DB::HTS::Tabix;
 #use Parallel::Loops;
 
+##Implementation notes:
+#Variants are represented in two styles, genotype-specific: CHROM$OFSPOS$OFSREF$OFSALT and location-specific:CHROM$OFSPOS
+# VCF variants are of the first type, while TSV variants from the second. TSVs are generated after comparing coverage and number of reads of an specific variant, but are not actuall calls. Therefore, a genotype-specific format cannot be used in that context. For the rest, taking into account may be important since we could potentially have a different variant in the same genomic position (real, or due to noisy data).
+
 ##Configuration variables
 ######################################################
 
@@ -818,9 +822,8 @@ sub array_to_string
     return $outstring;
 }
 
-#Parse vcf: Parses CHROM$OFSPOS as key and REF$OFSALT as value
-# Genotype-aware
-###########################################
+# Parse vcf, splitting multi-snv lines in different lines
+#########################################################
 sub parse_vcf
 {
     my ($vcf1_file)=@_;
@@ -831,8 +834,7 @@ sub parse_vcf
     my $i;
     my %hash;
     my $key;
-    my $value; 
-
+    
     for ($i=0;$i<scalar @vcf1;$i++)
     {
         unless($flag==0 and $vcf1[$i]=~/^#/)
@@ -841,51 +843,15 @@ sub parse_vcf
             {
                 $flag=1;
             }
-            chomp($vcf1[$i]);
-            $key=$value=$vcf1[$i];
-            $key=~s/^(.*?)\t(.*?)\t.*/$1$OFS$2/; ####TODO: This may be quicker with a split+join strategy. To check it
-            $value=~s/^[^\t]+\t[^\t]+\t[^\t]\t([^\t]+)\t([^\t]+)\t.*/$1$OFS$2/;
-            $hash{$key}=$value;
+            ##KEY will be CHROM$OFSPOS$OFSREF$OFSALT
+            $key=$vcf1[$i];
+            $key=~s/^([^\t]+)\t([^\t]+)\t[^\t]\t([^\t]+)\t([^\t]+)\t.*/$1$OFS$2$OFS$3$OFS$4/;
+            chomp($key);
+            $hash{$key}=1;
 #print("DEBUG: New variant being hashed $key\n");
         }
     }
     return \%hash;
-
-}
-
-
-#Parse complete vcf: Parses CHROM$OFSPOS as key and the whole entry as value
-# Genotype-aware
-###########################################
-sub parse_vcf_complete
-{
-    my ($vcf1_file)=@_;
-    open(my $VCF1,$vcf1_file) or die "The file $vcf1_file is not located in the output folder. Please, check if the variant caller has successfully finished";
-    my @vcf1=<$VCF1>;
-    close($VCF1);
-    my $flag=0;
-    my $i;
-    my %hash;
-    my $key;
-    my $value; 
-
-    for ($i=0;$i<scalar @vcf1;$i++)
-    {
-        unless($flag==0 and $vcf1[$i]=~/^#/)
-        {
-            if ($flag==0)
-            {
-                $flag=1;
-            }
-            chomp($vcf1[$i]);
-            $key=$value=$vcf1[$i];
-            $key=~s/^(.*?)\t(.*?)\t.*/$1$OFS$2/;
-            $hash{$key}=$value;
-#print("DEBUG: New variant being hashed $key\n");
-        }
-    }
-    return \%hash;
-
 }
 
 #Parse tsv
@@ -916,7 +882,6 @@ sub parse_tsv
 }
 
 #Parse vcf and get name of the sample (for only one sample)
-# Genotype-aware
 ###########################################################
 sub parse_vcf_name
 {
@@ -928,7 +893,6 @@ sub parse_vcf_name
     my $i;
     my %hash;
     my $key;
-    my $value;
     my $name;
 
     for ($i=0;$i<scalar @vcf1;$i++)
@@ -943,10 +907,9 @@ sub parse_vcf_name
                 $flag=1;
             }
             chomp($vcf1[$i]);
-            $key=$value=$vcf1[$i];
-            $key=~s/^(.*?)\t(.*?)\t.*/$1$OFS$2/; ####TODO: This may be quicker with a split+join strategy. To check it
-            $value=~s/^[^\t]+\t[^\t]+\t[^\t]\t([^\t]+)\t([^\t]+)\t.*/$1$OFS$2/;
-            $hash{$key}=$value;
+            $key=$vcf1[$i];
+            $key=~s/^([^\t]+)\t([^\t]+)\t[^\t]\t([^\t]+)\t([^\t]+)\t.*/$1$OFS$2$OFS$3$OFS$4/;
+            $hash{$key}=1;
 #print("DEBUG: New variant being hashed $key\n");
         }
     }
@@ -1004,7 +967,6 @@ sub parse_vcf_name
 
 #Compare two variant hashes, return a hash with commonvariants and another one with variants in the problem
 # that aren't present in the reference and generate statistics
-# Genotype-aware
 ##############################################
 sub vcf_compare_parsed
 {
@@ -1013,76 +975,15 @@ sub vcf_compare_parsed
     my %commonvariants;
     my $n1=scalar(keys %{$vcf_reference});
     my $n2=scalar(keys %variants2);
-    my @refAlts;
-    my @probAlts;
-    my @diffprobAlts;
-    my @cAlts;
-    my $found;
 
-    #print("\nDEBUG: vcf_compare_parsed\n\n");
+
     foreach my $variant (keys %{$vcf_reference})
     {
         if (exists $variants2{$variant})
         {
-            if ($vcf_reference->{$variant} eq $variants2{$variant})
-            {
-                $commonvariants{$variant}=$variants2{$variant};
-                delete $variants2{$variant}; ###This is the local copy of the original hash that will be returned
-                #print("DEBUG: New common variant $variant");
-            }
-            else ## We need to assess if some alleles are in common or none of them
-            {
-                @refAlts=split($OFS,$vcf_reference->{$variant});
-                @probAlts=split($OFS, $variants2{$variant});
-                if(scalar @refAlts == 2 && scalar @probAlts == 2) ##Same variant but different alleles
-                {
-                    #print("DEBUG: Same variant but different alleles, ".$vcf_reference->{$variant}." vs. $variants2{$variant}\n");
-                    next;
-                }
-                 
-                @cAlts=($probAlts[0]); ##Will contain the set of alternatives that are in common
-                @diffprobAlts=($probAlts[0]); ##Will contain the set of alternatives that are only present in the problem (we don't care about the ones only present in the reference, i.e., unfiltered sample
-               
-                ##We compare the alternative alleles 
-                ##These loops start in 1, since the 0 element is the reference allele
-                for (my $i=1; $i<scalar @probAlts; ++$i)
-                {
-                    $found=0;
-                    for (my $j=1; $j<scalar @refAlts; ++$j)
-                    {
-                        if($probAlts[$i] eq $refAlts[$j])##This will generate some extra comparisons if pairs have been already found. However, the number of comparisons is very small, I don't think generating extra hashes will save much time
-                        {
-                            push(@cAlts,$probAlts[$i]);
-                            $found=1;
-                            last;
-                        }
-                        
-                    }
-                    unless($found==1)
-                    {
-                        push(@diffprobAlts,$probAlts[$i]);
-                    }
-                }
-                ##If there are alleles in common, we add this variant to the list of common variants, but only with the relevant allele
-                if(scalar @cAlts >1) ##The element 0 is the reference again
-                {
-                    $commonvariants{$variant}=join($OFS,@cAlts);
-                    #print("DEBUG: there were a number of common alleles, $commonvariants{$variant}\n");
-                }
-                ##If there are alleles that were in the problem set and are not in common, we update them in the problem set
-                if(scalar @diffprobAlts >1)
-                {
-                    $variants2{$variant}=join($OFS,@diffprobAlts);
-                    #print("DEBUG: there were a number of alleles that were not in the reference, $variants2{$variant}\n");
-                }
-                else ##There were extra alleles in the reference, but not in the problem. Thus, we can eliminate this variant from the problem
-                {
-                    #print("DEBUG: there were extra alleles in the reference, but not in the problem\n");
-                    delete $variants2{$variant};
-                }
-                
-            }
-
+            $commonvariants{$variant}=1;
+            delete $variants2{$variant}; ###This is a local copy of the original hash. I cut it down to reduce the number of comparisons.
+#print("DEBUG: New common variant $variant");
         }
 
         if(scalar(keys %variants2)== 0)
@@ -1111,8 +1012,7 @@ sub vcf_compare_parsed
 
 }
 
-#Filter out variants in one hash from two others and generate statistics 
-# Genotype-aware
+#Filter out variants in one hash from two others and generate statistics
 ########################################################################
 sub vcf_prune
 {
@@ -1121,140 +1021,35 @@ sub vcf_prune
     my %variants2=%{$vcf_2};
     my $tag1=0;
     my $tag2=0;
-    my @refAlts;
-    my @todelAlts;
-    my @toKeepAlts;
-    my $found;
 
-    #print("\nDEBUG vcf_prune: vcf_prune\n\n");
     foreach my $variant_to_remove (keys %{$vcf_todelete})
     {
         #print("DEBUG vcf_prune: Variant $variant_to_remove\n ");
 		if ($tag1==0 and exists($variants1{$variant_to_remove}))
 		{
-            #print("DEBUG vcf_prune: Variant to be removed in vcf1\t\n");
-            if ($vcf_todelete->{$variant_to_remove} eq $variants1{$variant_to_remove})
-            {
-                #print("\tDEBUG vcf_prune: removing it in vcf1, $vcf_todelete->{$variant_to_remove} eq $variants1{$variant_to_remove}\n");
-                delete $variants1{$variant_to_remove};
-            }
-            else ## We need to assess if some alleles need to be removed or none of them
-            {
-                #print("\tDEBUG vcf_prune: alleles in vcf1 are not concordant,$vcf_todelete->{$variant_to_remove} vs. $variants1{$variant_to_remove}\n");
-                @refAlts=split($OFS,$variants1{$variant_to_remove});
-                @todelAlts=split($OFS,$vcf_todelete->{$variant_to_remove});
-                if(scalar @refAlts == 2 && scalar @todelAlts == 2) ##Same variant but different alleles
-                {
-                    #print("\t\tDEBUG vcf_prune: different alternative alleles, $vcf_todelete->{$variant_to_remove} vs. $variants1{$variant_to_remove}. Nothing will be removed\n");
-                }
-                else
-                {
-                    @toKeepAlts=($refAlts[0]); ##Will contain the set of alternatives that are not in common (will be kept)
-                   
-                    ##These loops start in 1, since the 0 element is the reference allele
-                    for (my $i=1; $i<scalar @refAlts; ++$i)
-                    {
-                        $found=0;
-                        for (my $j=1; $j<scalar @todelAlts; ++$j)
-                        {
-                            if($refAlts[$i] eq $todelAlts[$j])##This will generate some extra comparisons if pairs have been already found. However, the number of comparisons is very small, I don't think generating extra hashes will save much time
-                            {
-                                $found=1;
-                                last;
-                            }
-                            
-                        }
-                        if($found==0)
-                        {
-                            push(@toKeepAlts,$refAlts[$i]);
-                        }
-                    }
-                    
-                    ##If there are alleles that should not be deleted, we update them in the set
-                    if(scalar @toKeepAlts >1)
-                    {
-                        $variants1{$variant_to_remove}=join($OFS,@toKeepAlts);
-                        #print("\t\tDEBUG vcf_prune: there were a number of alleles that should not be eliminated,$variants1{$variant_to_remove}\n");
-                    }
-                    else ##There were extra alleles in the list to delete. Thus, we have to eliminate this variant from the problem
-                    {
-                        #print("\t\tDEBUG vcf_prune: there were extra alleles in the reference, but not in the problem. Eliminating variant $variant_to_remove;\n");
-                        delete $variants1{$variant_to_remove};
-                    }
-                }
-                
-            }
+			delete($variants1{$variant_to_remove});
+            #print("\tDEBUG vcf_prune: deleted in vcf1");
 		}
 		if ($tag2==0 and exists($variants2{$variant_to_remove}))
 		{
-            #print("DEBUG vcf_prune: Variant to be removed in vcf2\t\n");
-            if ($vcf_todelete->{$variant_to_remove} eq $variants2{$variant_to_remove})
-            {
-                #print("\tDEBUG vcf_prune: removing it in vcf2, $vcf_todelete->{$variant_to_remove} eq $variants2{$variant_to_remove}\n");
-                delete $variants2{$variant_to_remove};
-            }
-            else ## We need to assess if some alleles need to be removed or none of them
-            {
-                #print("\tDEBUG vcf_prune: alleles in vcf2 are not concordant, $vcf_todelete->{$variant_to_remove} vs. $variants2{$variant_to_remove}\n");
-                @refAlts=split($OFS,$variants2{$variant_to_remove});
-                @todelAlts=split($OFS,$vcf_todelete->{$variant_to_remove});
-                if(scalar @refAlts == 2 && scalar @todelAlts == 2) ##Same variant but different alleles
-                {
-                    #print("\t\tDEBUG vcf_prune: different alternative alleles, $vcf_todelete->{$variant_to_remove} vs. $variants2{$variant_to_remove}. Nothing will be removed\n");
-                }
-                else
-                { 
-                    @toKeepAlts=($refAlts[0]); ##Will contain the set of alternatives that are not in common (will be kept)
-                   
-                    ##These loops start in 1, since the 0 element is the reference allele
-                    for (my $i=1; $i<scalar @refAlts; ++$i)
-                    {
-                        $found=0;
-                        for (my $j=1; $j<scalar @todelAlts; ++$j)
-                        {
-                            if($refAlts[$i] eq $todelAlts[$j])##This will generate some extra comparisons if pairs have been already found. However, the number of comparisons is very small, I don't think generating extra hashes will save much time
-                            {
-                                $found=1;
-                                last;
-                            }
-                            
-                        }
-                        if($found==0)
-                        {
-                            push(@toKeepAlts,$refAlts[$i]);
-                        }
-                    }
-                    
-                    ##If there are alleles that should not be deleted, we update them in the set
-                    if(scalar @toKeepAlts >1)
-                    {
-                        $variants2{$variant_to_remove}=join($OFS,@toKeepAlts);
-                        #print("\t\tDEBUG vcf_prune: there were a number of alleles that should not be eliminated,$variants2{$variant_to_remove}\n");
-                    }
-                    else ##There were extra alleles in the list to delete. Thus, we have to eliminate this variant from the problem
-                    {
-                        #print("\t\tDEBUG vcf_prune: there were extra alleles in the reference, but not in the problem. Eliminating variant $variant_to_remove;\n");
-                        delete $variants2{$variant_to_remove};
-                    }
-                }
-                
-            }
+			delete($variants2{$variant_to_remove});
+            #print("deleted in vcf2");
 		}
 		#print("\n");
 		if($tag1==0 and scalar(keys %variants1)==0)
 		{
 			$tag1=1;
-            #print("DEBUG vcf_prune: No more variants in vcf1\n");
+            #print("DEBUG \tvcf_prune: No more variants in vcf1\n");
 		}	
 		if($tag2==0 and scalar(keys %variants2)==0)
 		{
 			$tag2=1;
-            #print("DEBUG vcf_prune: No more variants in vcf2\n");
+            #print("DEBUG \tvcf_prune: No more variants in vcf2\n");
 		}
 		
 		if($tag1==1 and $tag2==1)
 		{
-            #print("DEBUG vcf_prune: No more variants\n");
+            #print("DEBUG \tvcf_prune: No more variants\n");
 			last;
 		}
 		
@@ -1273,18 +1068,21 @@ sub vcf_prune
 }
 
 #Filter out variants in one hash depending on certain filters from two others and generate statistics
-# Not genotype specific
 #####################################################################################################
 sub vcf_prune_covB
 {
     my ($vcf_1,$vcf_2,$tsv_todelete,$ref_statistics,$covBfiltering_options)=@_;
     my %common_variants=%{$vcf_1};
     my %private_variants=%{$vcf_2};
+    my %common_variant_mapping=make_mapping_short_long_key($vcf_1);
+    my %private_variant_mapping=make_mapping_short_long_key($vcf_2);
     my $tag1=0;
     my $tag2=0;
     my $totalreads=0;
     my $totalaltreads=0;
     my $prop_alts=0;
+    my $vcf_variant;
+
 
     #Parser for covBfiltering_options
     #################################################################################
@@ -1360,22 +1158,30 @@ sub vcf_prune_covB
 #            #print("DEBUG: removevar $remove_var, remove_private $remove_private, common $common, private $private, tag1 $tag1, tag2 $tag2, totalreads $totalreads, totalalternative $totalaltreads, proportion alternative $prop_alts,var 1 ${${$tsv_todelete}{$tsv_variant}}[2], var 2 ${${$tsv_todelete}{$tsv_variant}}[3]\n");###$tsv_todelete[2] Number of bases in the reference allele $tsv_todelete[3]
 #        }
 #DEBUG
-        if ($tag1==0 and $remove_var==1 and exists($common_variants{$tsv_variant}))
+        if ($tag1==0 and $remove_var==1 and exists($common_variant_mapping{$tsv_variant}))
         {
-            delete($common_variants{$tsv_variant});
-            #print("\tDEBUG: deleted in common mutation\n");
+            foreach $vcf_variant (@{$common_variant_mapping{$tsv_variant}})
+            {
+                delete($common_variants{$vcf_variant});
+                #print("\tDEBUG: deleted genotype $vcf_variant from common mutation\n");
+            }
+            delete($common_variant_mapping{$tsv_variant});
         }
-        if ($tag2==0 and ($remove_var==1 or $remove_private==1) and exists($private_variants{$tsv_variant}))
+        if ($tag2==0 and ($remove_var==1 or $remove_private==1) and exists($private_variant_mapping{$tsv_variant}))
         {
-            delete($private_variants{$tsv_variant});
-            #print("\tDEBUG: deleted in private mutation\n");
+            foreach $vcf_variant (@{$private_variant_mapping{$tsv_variant}})
+            {
+                delete($private_variants{$vcf_variant});
+                #print("\tDEBUG: deleted genotype $vcf_variant from private mutation\n");
+            }
+            delete($private_variant_mapping{$tsv_variant});
         }
-        if($tag1==0 and scalar(keys %common_variants)==0)
+        if($tag1==0 and scalar(keys %common_variant_mapping)==0)
         {
             $tag1=1;
             #print("\tDEBUG: No more common variants\n");
         }
-        if($tag2==0 and scalar(keys %private_variants)==0)
+        if($tag2==0 and scalar(keys %private_variant_mapping)==0)
         {
             $tag2=1;
             #print("\tDEBUG: No more private variants\n");
@@ -1401,37 +1207,70 @@ sub vcf_prune_covB
     return (\%common_variants,\%private_variants);
 }
 
-#Filter out variants in two hashes based on a hash of variables to delete. There variables are not genotype specific and hash values should not be used
-# Not genotype specific
+#Generates a mapping of tsv keys (variants) and vcf keys (genotypes)
+####################################################################
+sub make_mapping_short_long_key
+{
+    my $ref_variants=$_;
+    my %out_mapping;
+    my $shortkey;
+    foreach my $variant (keys %{$ref_variants})
+    {
+        $shortkey=$variant;
+        $shortkey=~s/$OFS[^$OFS]+$OFS[^$OFS]+$//;
+        if(exists $out_mapping{$shortkey})
+        {
+            push(@{$out_mapping{$shortkey}},$variant);
+        }
+        else
+        {
+            $out_mapping{$shortkey}=[$variant];
+        }
+    }
+    return \%out_mapping;
+}
+
+#Filter out variants in two hashes based on a hash of variables to delete. The variants to eliminate are vcf, but the ones that indicate which to eliminate are tsv
 #####################################################################################################
 sub vcf_prune_tsv_vars
 {
     my ($ref_common,$ref_private,$tsv_todelete,$ref_statistics)=@_;
     my %common=%{$ref_common};
     my %private=%{$ref_private};
+    my %common_map=make_mapping_short_long_key($ref_common);
+    my %private_map=make_mapping_short_long_key($ref_private);
     my $tag1=0;
     my $tag2=0;
+    my $vcf_variant;
 
-    foreach my $variant_to_remove (keys %{$tsv_todelete})
+    foreach my $tsv_variant (keys %{$tsv_todelete})
     {
-        #print("DEBUG: Variant $variant_to_remove ");
-        if ($tag1==0 and exists($common{$variant_to_remove}))
+        #print("DEBUG: Variant $tsv_variant ");
+        if ($tag1==0 and exists($common_map{$tsv_variant}))
         {
-            delete($common{$variant_to_remove});
+            foreach $vcf_variant (@{$common_map{$tsv_variant}})
+            {
+                delete($common{$vcf_variant});
+            }
+            delete($common_map{$tsv_variant});
         #print("deleted in vcf1");
         }
-        if ($tag2==0 and exists($private{$variant_to_remove}))
+        if ($tag2==0 and exists($private_map{$tsv_variant}))
         {
-            delete($private{$variant_to_remove});
+            foreach $vcf_variant (@{$private_map{$tsv_variant}})
+            {
+                delete($private{$vcf_variant});
+            }
+            delete($private{$tsv_variant});
         #print("deleted in vcf2");
         }
         #print("\n");
-        if($tag1==0 and scalar(keys %common)==0)
+        if($tag1==0 and scalar(keys %common_map)==0)
         {
             $tag1=1;
         #print("DEBUG: No more variants in vcf1\n");
         }
-        if($tag2==0 and scalar(keys %private)==0)
+        if($tag2==0 and scalar(keys %private_map)==0)
         {
             $tag2=1;
         #print("DEBUG: No more variants in vcf2\n");
@@ -1541,74 +1380,20 @@ sub vcf_prune_single
 {
     my ($vcf_1,$vcf_todelete)=@_;
     my %variants1=%{$vcf_1};
-    my @refAlts;
-    my @todelAlts;
-    my @toKeepAlts;
-    my $found;
 
-    #print("\nDEBUG vcf_prune_single: vcf_prune_single\n\n");
     foreach my $variant_to_remove (keys %{$vcf_todelete})
     {
-#print("DEBUG vcf_prune_single: Variant $variant_to_remove ");
+#print("DEBUG: Variant $variant_to_remove ");
 		if (exists($variants1{$variant_to_remove}))
 		{
-            #print("DEBUG vcf_prune_single: Variant to be removed in vcf1\n");
-            if ($vcf_todelete->{$variant_to_remove} eq $variants1{$variant_to_remove})
-            {
-                #print("\tDEBUG vcf_prune_single: removing it in vcf1, $vcf_todelete->{$variant_to_remove} eq $variants1{$variant_to_remove}\n");
-                delete $variants1{$variant_to_remove};
-            }
-            else ## We need to assess if some alleles need to be removed or none of them
-            {
-                #print("\tDEBUG vcf_prune_single: alleles in vcf1 are not concordant, $vcf_todelete->{$variant_to_remove} vs. $variants1{$variant_to_remove}\n");
-                @refAlts=split($OFS,$variants1{$variant_to_remove});
-                @todelAlts=split($OFS,$vcf_todelete->{$variant_to_remove});
-                if(scalar @refAlts == 2 && scalar @todelAlts == 2) ##Same variant but different alleles
-                {
-                    #print("\t\tDEBUG vcf_prune_single: different alternative alleles, $vcf_todelete->{$variant_to_remove} vs. $variants1{$variant_to_remove}. Nothing will be removed\n");
-                }
-                else
-                {
-                    @toKeepAlts=($refAlts[0]); ##Will contain the set of alternatives that are not in common (will be kept)
-                   
-                    ##These loops start in 1, since the 0 element is the reference allele
-                    for (my $i=1; $i<scalar @refAlts; ++$i)
-                    {
-                        $found=0;
-                        for (my $j=1; $j<scalar @todelAlts; ++$j)
-                        {
-                            if($refAlts[$i] eq $todelAlts[$j])##This will generate some extra comparisons if pairs have been already found. However, the number of comparisons is very small, I don't think generating extra hashes will save much time
-                            {
-                                $found=1;
-                                last;
-                            }
-                            
-                        }
-                        if($found==0)
-                        {
-                            push(@toKeepAlts,$refAlts[$i]);
-                        }
-                    }
-                    
-                    ##If there are alleles that should not be deleted, we update them in the set
-                    if(scalar @toKeepAlts >1)
-                    {
-                        $variants1{$variant_to_remove}=join($OFS,@toKeepAlts);
-                        #print("\t\tDEBUG vcf_prune_single: there were a number of alleles that should not be eliminated,$variants1{$variant_to_remove}\n");
-                    }
-                    else ##There were extra alleles in the list to delete. Thus, we have to eliminate this variant from the problem
-                    {
-                        #print("\t\tDEBUG vcf_prune_single: there were extra alleles in the reference, but not in the problem. Eliminating variant $variant_to_remove;\n");
-                        delete $variants1{$variant_to_remove};
-                    }
-                }
-                
-            }
+			delete($variants1{$variant_to_remove});
+            #print("deleted in vcf1");
 		}
+		#print("\n");
 		if(scalar(keys %variants1)==0)
 		{
             last;
-            #print("DEBUG vcf_prune_single: No more variants in vcf1\n");
+            #print("DEBUG: No more variants in vcf1\n");
 		}
 		
 	}
@@ -1624,95 +1409,11 @@ sub vcf_unite_parsed
     my ($ref_common_variantsA,$ref_different_variantsA,$ref_common_variantsB,$ref_different_variantsB,$ref_statistics)=@_;
     my %common_variants=(%{$ref_common_variantsA},%{$ref_common_variantsB}); ##Union
     my %different_variants=(%{$ref_different_variantsA},%{$ref_different_variantsB});#Union
-    my $ref;
-    my @aAs;
-    my @bAs;
-    my %tempAs;
 
-    #print("\nDEBUG vcf_unite_parse: vcf_unite_parsed\n\n");
-    foreach my $common_variant (keys %common_variants) ##We have to delete candidate private variants that are not private any more
+    foreach my $common_variant (keys %common_variants) ##We have to delete possible variants that are not different any more
     {
-        if(exists $ref_common_variantsA->{$common_variant})
-        {
-            if(exists $ref_common_variantsB->{$common_variant})
-            {
-                #Allele info exists in both. We need to make sure it is the same, or otherwise combine them
-                if ($ref_common_variantsA->{$common_variant} eq $ref_common_variantsB->{$common_variant}) #We can get it from either A or B
-                {
-                    $common_variants{$common_variant}=$ref_common_variantsA->{$common_variant};
-                }
-                else ##Worst case scenario, we gotta combine them
-                {
-                    @aAs=split($OFS,$ref_common_variantsA->{$common_variant});
-                    @bAs=split($OFS,$ref_common_variantsB->{$common_variant});
-                    $ref=shift(@aAs);
-                    shift(@bAs);
-                    %tempAs=();
-                    @tempAs{@aAs,@bAs}=(1) x (scalar @aAs + scalar @bAs);#Union
-                    $common_variants{$common_variant}=join($OFS,$ref,keys %tempAs); 
-                }
-            }
-            else #It does not exist in cB, so we are sure we can get it from cA
-            {
-                $common_variants{$common_variant}=$ref_common_variantsA->{$common_variant};
-            }
-        }
-        else ##If the variant is common but does not exist in cA, we are sure we can get the allele information from cB
-        {
-            $common_variants{$common_variant}=$ref_common_variantsB->{$common_variant};
-        }
-        
+        delete($different_variants{$common_variant}); 
     }
-    
-    foreach my $different_variant (keys %different_variants) ##We have to sync the alleles from the two sides since there is a remote possibility of the same location being private with different alleles in the two sides
-    {
-        if(exists $ref_different_variantsA->{$different_variant})
-        {
-            if(exists $ref_different_variantsB->{$different_variant})
-            {
-                #Allele info exists in both. We need to make sure it is the same, or otherwise combine them
-                if ($ref_different_variantsA->{$different_variant} eq $ref_different_variantsB->{$different_variant}) #We can get it from either A or B
-                {
-                    die "This should definetly not happen\n";
-                    #$different_variants{$different_variant}=$ref_differentvariantsA{$different_variant};
-                }
-                else ##Worst case scenario, we gotta combine them. There should not be any overlap since these are private variants
-                {
-                    @aAs=split($OFS,$ref_different_variantsA->{$different_variant});
-                    @bAs=split($OFS,$ref_different_variantsB->{$different_variant});
-                    $ref=shift(@aAs);
-                    shift(@bAs);
-                    %tempAs=();
-                    @tempAs{@aAs,@bAs}=(1) x (scalar @aAs + scalar @bAs);#Union
-                    scalar @aAs + scalar @bAs != scalar keys %tempAs and die "The same private genotype is shared by the two samples\n";
-                    $different_variants{$different_variant}=join($OFS,$ref,keys %tempAs); 
-                }
-            }
-            else #It does not exist in pB, so we are sure we can get it from pA
-            {
-                $different_variants{$different_variant}=$ref_different_variantsA->{$different_variant};
-            }
-        }
-        else ##If the variant is different but does not exist in pA, we are sure we can get the allele information from pB
-        {
-            $different_variants{$different_variant}=$ref_different_variantsB->{$different_variant};
-        }
-        if(exists $common_variants{$different_variant})
-        {
-            print("\tDEBUG vcf_unite_parse: Same genomic position is common and private, lets compare the genotypes\n");
-            ##I am reusing variables. aAs for commons and bAs for privates
-            @aAs=split($OFS,$common_variants{$different_variant});
-            @bAs=split($OFS,$different_variants{$different_variant});
-            shift(@aAs);
-            shift(@bAs);
-            %tempAs=();
-            @tempAs{@aAs,@bAs}=(1) x (scalar @aAs + scalar @bAs);#Union
-            scalar @aAs + scalar @bAs != scalar keys %tempAs and die "The same genotype is private and common. Private:$different_variants{$different_variant}, common: $common_variants{$different_variant}\n";
-           #TODO: nothing to delete? 
-            #delete($different_variants{$common_variant});
-        }
-    }
-    
     
     my $n_selvariants=scalar keys %common_variants;
     my $n_filtvariants=scalar keys %different_variants;
@@ -1728,125 +1429,22 @@ sub vcf_intersect_parsed
 {
     my ($ref_common_variantsA,$ref_different_variantsA,$ref_common_variantsB,$ref_different_variantsB,$ref_statistics)=@_;
     my %common_variants;
-    my @aAs;
-    my @bAs;
-    my @adAs;
-    my @bdAs;
-    my %tempAs;
-    my @cAs;
-    my @ctempAs;
-    my @candidateAs;
-    my $i;
-    my $j;
-    my $ref;
-    my $flag;
-
-    #print("\nDEBUG vcf_intersect_parsed: vcf_intersect_parsed\n\n");
-    foreach my $key (keys %{$ref_common_variantsA})
+    
+    foreach my $key (keys %$ref_common_variantsA)
     {
-       if(exists $ref_common_variantsB->{$key})
-       {
-           #Allele info exists in both. We need to make sure it is the same, or otherwise choose the commons. If no commons, is not in the intersection
-           if ($ref_common_variantsA->{$key} eq $ref_common_variantsB->{$key}) #We can get it from either A or B
-           {
-               $common_variants{$key}=$ref_common_variantsA->{$key};
-           }
-           else ##Only the commons, if there are commons
-           {
-                @aAs=split($OFS,$ref_common_variantsA->{$key});
-                @bAs=split($OFS,$ref_common_variantsB->{$key});
-                @cAs=(shift(@aAs)); #We initialize the common array with the reference
-                shift(@bAs);
-                for ($i=0; $i<scalar @aAs; ++$i)
-                {
-                    for ($j=0; $j<scalar @bAs; ++$j)
-                    {
-                        if($aAs[$i] eq $bAs[$j])
-                        {
-                            push(@cAs,$aAs[$i]);
-                            last;
-                        }
-                    }
-                }
-                if (scalar @cAs > 1)
-                {
-                    $common_variants{$key}=join($OFS,@cAs); 
-                }
-           }
-       }
+        if (exists $ref_common_variantsB->{$key})
+        {
+            $common_variants{$key}=$ref_common_variantsA->{$key};
+        }
     }
     
     my %different_variants=(%{$ref_different_variantsA},%{$ref_different_variantsB},%{$ref_common_variantsA},%{$ref_common_variantsB});#Union of all variants
 
-    foreach my $variant (keys %different_variants)
+    foreach my $common_variant (keys %common_variants) ##We recalculate the different variants (total-common)
     {
-        @aAs=();
-        @bAs=();
-        @adAs=();
-        @bdAs=();
-
-        if(exists $ref_different_variantsA->{$variant})
-        {
-            @adAs=split($OFS,$ref_different_variantsA->{$variant});
-            $ref=shift(@adAs);
-        }
-        if(exists $ref_different_variantsB->{$variant})
-        {
-            @bdAs=split($OFS,$ref_different_variantsB->{$variant});
-            $ref=shift(@bdAs);
-        }
-        if(exists $ref_common_variantsA->{$variant})
-        {
-            @aAs=split($OFS,$ref_common_variantsA->{$variant});
-            $ref=shift(@aAs);
-        }
-        if(exists $ref_common_variantsB->{$variant})
-        {
-            @bAs=split($OFS,$ref_common_variantsB->{$variant});
-            $ref=shift(@bAs);
-        }
-
-        %tempAs=();
-        @tempAs{@aAs,@bAs,@adAs,@bdAs}=(1) x (scalar @aAs + scalar @bAs + scalar @adAs + scalar @bdAs);#Union of all alternate alleles
-
-        @candidateAs=keys %tempAs;
-
-        if (exists $common_variants{$variant}) #if it is in common, we can only accept the alternative alleles that are not in common, or delete this variant
-        {
-            @cAs=($ref);
-            @ctempAs=$common_variants{$variant};
-            shift(@ctempAs);
-            for ($i=0; $i<scalar @candidateAs; ++$i)
-            {
-                $flag=0;
-                for($j=0; $j<scalar @ctempAs; ++$j)
-                {
-                    if($candidateAs[$i] eq $ctempAs[$j])
-                    {
-                        $flag=1;
-                        last;
-                    }
-                }
-                if($flag==0)
-                {
-                    push(@cAs,$candidateAs[$i]);
-                }
-            }
-            if(scalar @cAs >1) ##Despite having some common alleles for this position, we also have some different
-            {
-                $different_variants{$variant}=join($OFS,@cAs);
-            }
-            else ##All are common. I need to delete this variant
-            {
-                delete $different_variants{$variant};
-            }
-        }
-        else #if it is not in common, this is a good different variant
-        {
-            $different_variants{$variant}=join($OFS,$ref,@candidateAs);
-        }
+        delete($different_variants{$common_variant});
     }
-
+   
     my $n_selvariants=scalar keys %common_variants;
     my $n_filtvariants=scalar keys %different_variants;
     @{ $ref_statistics }=($n_selvariants/($n_selvariants+$n_filtvariants),$n_selvariants,$n_selvariants+$n_filtvariants); ##Stats= proportion of selected reads in the reference, number of selected variants
@@ -1881,14 +1479,12 @@ sub variants_to_hash
 	my ($array)=@_;
 	my %hash;
 	my $key;
-    my $value;
 	for (my $i=1; $i<scalar @{$array};$i++) ###The first line is the header
 	{
         chomp(${$array}[$i]);
-		$key=$value=${$array}[$i];
-		$key=~s/^(.*?)\t(.*?)\t.*/$1$OFS$2/;
-        $value=~s/^[^\t]+\t[^\t]+\t[^\t]\t([^\t]+)\t([^\t]+)\t.*/$1$OFS$2/;
-		$hash{$key}=$value;
+		$key=${$array}[$i];
+        $key=~s/^([^\t]+)\t([^\t]+)\t[^\t]\t([^\t]+)\t([^\t]+)\t.*/$1$OFS$2$OFS$3$OFS$4/;
+		$hash{$key}=1;
 		#print("DEBUG: New variant being hashed $key\n");
 	}
 	return \%hash;
@@ -1911,8 +1507,6 @@ sub write_variant_list
 }
 
 # Writes a vcf with the variables contained in a hash selected from another VCF file
-# This subrutine is genotype compatible: it prints only the information relative to
-# the genotypes present in the hash, even if several where present in the VCF file
 # ##################################################################################
 
 sub write_variant_vcf
@@ -1925,19 +1519,7 @@ sub write_variant_vcf
     close($IFILE);
     my $flag=0;
     my %hash=%{$ref_hash};
-    my $key;
-    my @newline;
-    my @helper; ##I know I know, I am microoptimizing and making this unreadable
-    my @helper2;
-    my $helpstring;
-    my @contline;
-    my @vcfAs;
-    my @hashAs;
-    my $vcfValue;
-    my @validAs;
-    my $i;
-    my $j;
-    my $k;
+    my $D
      
     #Copying the header and adding a new line with filtering info
     #Then adding the variants that are present in the hash.
@@ -1955,86 +1537,12 @@ sub write_variant_vcf
         else
         {
             $key=$icontent[$i];
-            $key=~s/^(.*?)\t(.*?)\t.*/$1$OFS$2/;
             chomp($key);
+            $key=~s/^([^\t]+)\t([^\t]+)\t[^\t]\t([^\t]+)\t([^\t]+)\t.*/$1$OFS$2$OFS$3$OFS$4/;
             #print("DEBUG: Key $key\n");
             if(exists $hash{$key})
             {
-                if($icontent[$i]=~m/^[^\t]+\t[^\t]+\t[^\t]+\t[^\t]+\t[^\t]+,[^\t]+\t.*/) #If there are several alternative alleles, we need to do extra work
-                {
-                    chomp($icontent[$i]);
-                    @contline=split("\t", $icontent[$i]);
-                    @vcfAs=split(",",$contline[$4]);
-                    $vcfValue=join($OFS, $contline[$3],@vcfAs);
-                    if ($vcfValue eq $hash{$key}) ##All alleles included, just print the line
-                    {
-                        print($OFILE $icontent[$i],"\n");
-                    }
-                    else #We need to detect which alleles need to be printed
-                    {
-                        @validAs=();
-                        @hashAs=split($OFS,$hash{$key});
-                        shift(@hashAs);
-                        for($j=0; $j<scalar @vcfAs; ++$j)
-                        {
-                            for($k=0; $k<scalar @hashAs; ++$k)
-                            {
-                                if($vcfAs[$j] eq $hashAs[$k])
-                                {
-                                    push(@validAs,$j);
-                                    last;
-                                }
-                            }
-                        }
-                        if(scalar @vcfAs == scalar @hashAs) ##Valid alleles in the VCF, need to print
-                        {
-                            @newline=();
-                            push(@newline,@contline[0 .. 3]); #CHROM  POS ID  REF
-                            push(@newline,join(",",@vcfAs[@validAs])); #ALT
-                            push(@newline,@contline[5,6]); #QUAL    FILTER
-                            @helper=split(";",$contline[7]); #INFO, format: X..X=???,???...???;
-                            for ($j=0; $j< scalar @helper; ++$j) #We traverse the INFO fields, ;-separated. The ones that have several fields (,-separated) are broken up and only the valid indexes are chosen.
-                            {
-                                if($helper[$j] =~ m/,/)
-                                {
-                                    $helpstring=$helper[$j];
-                                    $helpstring=~s/^(.+=).+$/$1/; #header of this field
-                                    $helper[$j]=~s/^.+=(.+)$/$1/; #contents
-                                    @helper2=split(",",$helper[$j]);
-                                    $helper[$j]=join(",",@helper2[@validAs]);
-                                    $helper[$j]=$helpstring.$helper[$j];
-                                }
-                            }
-                            push(@newline,join(";",@helper));## Add reconstructed info field back
-                            push(@newline,$contline[8]); #FORMAT
-                            
-                            #SAMPLES. This should be just one in this approach, but I am generalizing it
-                            for ($j=9; $j<scalar @contline; ++$j)
-                            {
-                                @helper=split(":",$contline[$j]); #SAMPLE, format: fields :-separated, some, allele separated (,).
-                                for ($k=0; $k< scalar @helper; ++$k) #We traverse the SAMPLE fields, :-separated. The ones that have several fields (,-separated) are broken up and only the valid indexes are chosen.
-                                {
-                                    if($helper[$k] =~ m/,/)
-                                    {
-                                        @helper2=split(",",$helper[$k]);
-                                        $helper[$k]=join(",",@helper2[@validAs]);
-                                    }
-                                }
-                                push(@newline,join(":",@helper));## Add reconstructed SAMPLE field back
-                                 
-                            }
-                            print($OFILE join("\t",@newline),"\n");
-                        }
-                        else
-                        {
-                            die "ERROR in write_variant_vcf. The alleles present in the hash are not present in the VCF file\n\n";
-                        } #Else we don't do anything, this hash variant will be removed but not printed
-                    }
-                }
-                else #Otherwise we are good to go
-                {
-                    print($OFILE $icontent[$i],"\n");
-                }
+                print($OFILE $icontent[$i]);
                 delete($hash{$key});
             }
             if(scalar keys %hash == 0)
@@ -2053,9 +1561,7 @@ sub write_variant_vcf
 # ATTENTION: Variants in the first VCF file have higher priority when they are 
 # present in the two VCF files. The header comes also from the first VCF file. ONLY one sample information, comming from the first VCF file with higher priority.
 # This subrutine is compatible with genotypes. If a given genotype is present in the two
-# VCF files, the information will come from the first VCF file. If different genotypes
-# come from different VCF files, all information comes from the first file except the one 
-# relative to the alleles that are not present in that file. THIS IS SOME KIND OF FRANKENSTEIN'S
+# VCF files, the information will come from the first VCF file. THIS IS SOME KIND OF FRANKENSTEIN'S
 # MONSTER VCF FILE. IT WILL DEFINETLY CONTAIN INCONSISTENCIES. USE IT ONLY AS A LIST OF VARIANTS
 # ##################################################################################
 sub write_variant_2vcf
@@ -2064,7 +1570,6 @@ sub write_variant_2vcf
     my $OFILE=openwrite_vcf_refname("$filename",$filter);
     my %outcontent;
     (! defined $OFILE) and return;
-    my $ref_vcf2_hash=parse_vcf_complete($vcf2);
     open(my $IFILE, $vcf);
     open(my $IFILE2, $vcf2);
     my @icontent= <$IFILE>;
@@ -2074,37 +1579,7 @@ sub write_variant_2vcf
     my $flag=0;
     my %hash=%{$ref_hash};
     my $key;
-    my $value;
-    my @contline;
-    my @contline_vcf2;
-    my @ids_contline;
-    my @newline;
-    my @helper;
-    my @helper2;
-    my @helper21;
-    my @helper22;
-    my @helper3;
-    my $helpstring;
-    my $helpstring2;
-    my @vcfAs;
-    my @vcfAs2;
-    my @validAs;
-    my @hashAs;
-    my $vcfValue;
-    my $j;
-    my $k;
-    my $l;
      
-    #print("\nDEBUG: write_variant_2vcf\n\n");
-
-    ##Description of the main strategy (this subrutine is a mess):
-    #   for each line of vcf1
-    #       if the vcf matches the alleles in the hash, print
-    #       elsif, if they are a superset of the alleles in hash, print the needed
-    #       elsif they are not enough, get from vcf2
-    #       else , do nothing, this will get parsed from vcf2
-
-
     #Copying the header and adding a new line with filtering info
     #Then adding the variants that are present in the hash.
     for(my $i=0;$i< scalar @icontent; ++$i)
@@ -2122,186 +1597,12 @@ sub write_variant_2vcf
         {
             $key=$icontent[$i];
             chomp($key);
-            $value=$key;
-            $key=~s/^(.*?)\t(.*?)\t.*/$1$OFS$2/;
-            $value=~s/^[^\t]+\t[^\t]+\t[^\t]\t([^\t]+)\t([^\t]+)\t.*/$1$OFS$2/;
+            $key=~s/^([^\t]+)\t([^\t]+)\t[^\t]\t([^\t]+)\t([^\t]+)\t.*/$1$OFS$2$OFS$3$OFS$4/;
             #print("DEBUG: Key $key\n");
             if(exists $hash{$key})
             {
-                if($value eq $hash{$key})
-                {
-                    ##This file contains all needed information
-                    $outcontent{$key}=$icontent[$i];
-                    delete($hash{$key});
-                    delete($ref_vcf2_hash->{$key});
-                }
-                else
-                {
-                    chomp($icontent[$i]);
-                    @contline=split("\t", $icontent[$i]);
-                    @vcfAs=split(",",$contline[$4]);
-                    @validAs=();
-                    @hashAs=split($OFS,$hash{$key});
-                    shift(@hashAs);
-                    for($j=0; $j<scalar @vcfAs; ++$j)
-                    {
-                        for($k=0; $k<scalar @hashAs; ++$k)
-                        {
-                            if($vcfAs[$j] eq $hashAs[$k])
-                            {
-                                push(@validAs,$j);
-                                last;
-                            }
-                        }
-                    }
-                    if (scalar @validAs == scalar @hashAs) ##All needed alleles in vcf1, no need to use vcf2
-                    {
-                        @newline=();
-                        push(@newline,@contline[0 .. 3]); #CHROM  POS ID  REF
-                        push(@newline,join(",",@vcfAs[@validAs])); #ALT
-                        push(@newline,@contline[5,6]); #QUAL    FILTER
-                        @helper=split(";",$contline[7]); #INFO, format: X..X=???,???...???;
-                        for ($j=0; $j< scalar @helper; ++$j) #We traverse the INFO fields, ;-separated. The ones that have several fields (,-separated) are broken up and only the valid indexes are chosen.
-                        {
-                            if($helper[$j] =~ m/,/)
-                            {
-                                $helpstring=$helper[$j];
-                                $helpstring=~s/^(.+=).+$/$1/; #header of this field
-                                $helper[$j]=~s/^.+=(.+)$/$1/; #contents
-                                @helper2=split(",",$helper[$j]);
-                                $helper[$j]=join(",",@helper2[@validAs]);
-                                $helper[$j]=$helpstring.$helper[$j];
-                            }
-                        }
-                        push(@newline,join(";",@helper));## Add reconstructed info field back
-                        push(@newline,$contline[8]); #FORMAT
-                        
-                        #SAMPLES. This should be just one in this approach, but I am generalizing it
-                        for ($j=9; $j<scalar @contline; ++$j)
-                        {
-                            @helper=split(":",$contline[$j]); #SAMPLE, format: fields :-separated, some, allele separated (,).
-                            for ($k=0; $k< scalar @helper; ++$k) #We traverse the SAMPLE fields, :-separated. The ones that have several fields (,-separated) are broken up and only the valid indexes are chosen.
-                            {
-                                if($helper[$k] =~ m/,/)
-                                {
-                                    @helper2=split(",",$helper[$k]);
-                                    $helper[$k]=join(",",@helper2[@validAs]);
-                                }
-                            }
-                            push(@newline,join(":",@helper));## Add reconstructed SAMPLE field back
-                             
-                        }
-                        $outcontent{$key}=join("\t",@newline);
-                        delete($hash{$key});
-                        delete($ref_vcf2_hash->{$key});
-                    }
-                    elsif (scalar @validAs != 0) ##Combine alleles from vcf1 and vcf2
-                    {
-                        @contline_vcf2=split("\t",$ref_vcf2_hash->{$key});
-                        scalar @contline_vcf2 != scalar @contline and die "Error, the number of VCF columns is not the same in the two VCF files\n\n";
-                        @vcfAs2=split(",",$contline_vcf2[4]);
-                        
-                        for($j=0; $j<scalar @hashAs; ++$j)
-                        {
-                            $helpstring=0;
-                            for($k=0; $k<scalar @vcfAs; ++$k)
-                            {
-                                if($hashAs[$j] eq $vcfAs[$k])
-                                {
-                                    $ids_contline[$j]=1;
-                                    push(@validAs,$k);
-                                    $helpstring=1;
-                                    last;
-                                }
-                            }
-                            if($helpstring==0)
-                            {
-                                for($k=0; $k<scalar @vcfAs2; ++$k)
-                                {
-                                    if($hashAs[$j] eq $vcfAs2[$k])
-                                    {
-                                        $ids_contline[$j]=2;
-                                        push(@validAs,$k);
-                                        $helpstring=1;
-                                        last;
-                                    }
-                                }
-                            }
-                            if($helpstring==0)
-                            {
-                                die "Error in write_variant_2vcf";
-                            }
-                        }
-                        
-                        @newline=();
-                        push(@newline,@contline[0 .. 3]); #CHROM  POS ID  REF
-                        @helper=();
-                        for ($j=0; $j< scalar @validAs; ++$j)
-                        {
-                            push(@helper,(split(",",$ids_contline[$j]==1?$contline[4]:$contline_vcf2[4]))[$validAs[$j]]);
-                        }
-                        push(@newline,join(",",@helper)); #ALT
-                        push(@newline,@contline[5,6]); #QUAL    FILTER
-                        @helper=split(";", $contline[7]); #INFO
-                        @helper2=split(";", $contline_vcf2[7]); #INFO_VCF2
-                        scalar @helper != scalar @helper2 and die "Error in write_variant_2vcf. The number of elements of the INFO field is not the same in the two VCF files\n\n";
-                        
-                        for ($j=0; $j< scalar @helper; ++$j) #We traverse the INFO fields, ;-separated. The ones that have several fields (,-separated) are broken up and only the valid indexes are chosen.
-                        {
-                            if($helper[$j] =~ m/,/ || $helper2[$j] =~ m/,/)
-                            {
-                                $helpstring=$helper[$j];
-                                $helpstring2=$helper2[$j];
-                                
-                                $helpstring=~s/^(.+=).+$/$1/; #header of this field
-                                $helpstring2=~s/^(.+=).+$/$1/; #header of this field
-                                $helpstring ne $helpstring2 and die "Error in write_variant_2vcf. The INFO fields of vcf1 and 2 are not the same/in the same order";
-                                $helper[$j]=~s/^.+=(.+)$/$1/; #contents
-                                $helper2[$j]=~s/^.+=(.+)$/$1/; #contents
-
-                                @helper21=split(",",$helper[$j]);
-                                @helper22=split(",",$helper2[$j]);
-                                @helper3=();
-                                for ($k=0; $k< scalar @validAs; ++$k)
-                                {
-                                    push(@helper3,$ids_contline[$j]==1?$helper21[$validAs[$k]]:$helper22[$validAs[$k]]);
-                                }
-                                $helper[$j]=$helpstring.join(",",@helper3);
-                            }
-                        }
-                        push(@newline,join(";",@helper));## Add reconstructed info field back
-                        push(@newline,$contline[8]); #FORMAT
-                        
-                        #SAMPLES. This should be just one in this approach, but I am generalizing it
-                        for ($j=9; $j<scalar @contline; ++$j)
-                        {
-                            @helper=split(":",$contline[$j]); #SAMPLE, format: fields :-separated, some, allele separated (,).
-                            @helper2=split(":",$contline_vcf2[$j]); #SAMPLE, format: fields :-separated, some, allele separated (,).
-                            for ($k=0; $k< scalar @helper; ++$k) #We traverse the SAMPLE fields, :-separated. The ones that have several fields (,-separated) are broken up and only the valid indexes are chosen.
-                            {
-                                if($helper[$k] =~ m/,/ || $helper2[$k] =~ m/,/)
-                                {
-                                    @helper21=split(",",$helper[$k]);
-                                    @helper22=split(",",$helper2[$k]);
-                                    @helper3=();
-                                    for ($l=0; $l<scalar @validAs; ++$l)
-                                    {
-                                        push(@helper3,$ids_contline[$j]==1?$helper21[$validAs[$l]]:$helper22[$validAs[$l]]);
-                                    }
-                                    $helper[$k]=join(",",@helper3);
-                                }
-                            }
-                            push(@newline,join(":",@helper));## Add reconstructed SAMPLE field back
-                             
-                        } 
-                        $outcontent{$key}=join("\t",@newline);
-                        delete($hash{$key});
-                        delete($ref_vcf2_hash->{$key});
-                    }
-#                    else ##Don't do anyting, this variable will be dealt with after the loop, using vcf2
-#                    {
-#                    }
-                }
+                $outcontent{$key}=$icontent[$i];
+                delete($hash{$key});
             }
             if(scalar keys %hash == 0)
             {
@@ -2313,78 +1614,25 @@ sub write_variant_2vcf
     }
     if (scalar keys %hash !=0) #Not present at all in vcf1 (the needed alleles), needs to be printed from vcf2
     {
-        foreach $key (keys %hash)
-	    {
-            exists $ref_vcf2_hash->{$key} or die "Error in write_variant_2vcf. Variant that was not cleared using VCF1 is not present in VCF2\n\n";
-    		
-			$value=$ref_vcf2_hash->{$key};
-            $value=~s/^[^\t]+\t[^\t]+\t[^\t]\t([^\t]+)\t([^\t]+)\t.*/$1$OFS$2/;
-       		#print("DEBUG: Key $key\n");
-            if($value eq $hash{$key}) ##This file contains all needed information as needed
-            {
-                $outcontent{$key}=$ref_vcf2_hash->{$key};
-            }
-            elsif($ref_vcf2_hash->{$key}=~m/^[^\t]+\t[^\t]+\t[^\t]+\t[^\t]+\t[^\t]+,[^\t]+\t.*/) ##This file contains all needed information, but some alleles need to be discarded
-            {
-                @contline=split("\t",$ref_vcf2_hash->{$key});
-                @vcfAs=split(",",$contline[$4]);
-                @validAs=();
-                @hashAs=split($OFS,$hash{$key});
-                shift(@hashAs);
-                for($j=0; $j<scalar @vcfAs; ++$j)
-                {
-                    for($k=0; $k<scalar @hashAs; ++$k)
-                    {
-                        if($vcfAs[$j] eq $hashAs[$k])
-                        {
-                            push(@validAs,$j);
-                            last;
-                        }
-                    }
-                }
-                scalar @validAs != scalar @hashAs and die "ERROR: Variant only present in VCF2 does not have all needed alleles present in VCF2. Where did these alleles come from?\n";
-                @newline=();
-                push(@newline,@contline[0 .. 3]); #CHROM  POS ID  REF
-                push(@newline,join(",",@vcfAs[@validAs])); #ALT
-                push(@newline,@contline[5,6]); #QUAL    FILTER
-                @helper=split(";",$contline[7]); #INFO, format: X..X=???,???...???;
-                for ($j=0; $j< scalar @helper; ++$j) #We traverse the INFO fields, ;-separated. The ones that have several fields (,-separated) are broken up and only the valid indexes are chosen.
-                {
-                    if($helper[$j] =~ m/,/)
-                    {
-                        $helpstring=$helper[$j];
-                        $helpstring=~s/^(.+=).+$/$1/; #header of this field
-                        $helper[$j]=~s/^.+=(.+)$/$1/; #contents
-                        @helper2=split(",",$helper[$j]);
-                        $helper[$j]=join(",",@helper2[@validAs]);
-                        $helper[$j]=$helpstring.$helper[$j];
-                    }
-                }
-                push(@newline,join(";",@helper));## Add reconstructed info field back
-                push(@newline,$contline[8]); #FORMAT
-                
-                #SAMPLES. This should be just one in this approach, but I am generalizing it
-                for ($j=9; $j<scalar @contline; ++$j)
-                {
-                    @helper=split(":",$contline[$j]); #SAMPLE, format: fields :-separated, some, allele separated (,).
-                    for ($k=0; $k< scalar @helper; ++$k) #We traverse the SAMPLE fields, :-separated. The ones that have several fields (,-separated) are broken up and only the valid indexes are chosen.
-                    {
-                        if($helper[$k] =~ m/,/)
-                        {
-                            @helper2=split(",",$helper[$k]);
-                            $helper[$k]=join(",",@helper2[@validAs]);
-                        }
-                    }
-                    push(@newline,join(":",@helper));## Add reconstructed SAMPLE field back
-                     
-                }
-                $outcontent{$key}=join("\t",@newline);
-            }
-            else
-            {
-                die "ERROR: in write_variant_2vcf. Variant not present in VCF1 and incomplete in VCF2. Where did the other alleles come from?";
-            }
-        }
+        for(my $i=0;$i< scalar @icontent2; ++$i)
+    	{
+		    unless ($icontent2[$i]=~/^#/)
+		    {
+			    $key=$icontent2[$i];
+                chomp($key);
+                $key=~s/^([^\t]+)\t([^\t]+)\t[^\t]\t([^\t]+)\t([^\t]+)\t.*/$1$OFS$2$OFS$3$OFS$4/;
+            	#print("DEBUG: Key $key\n");
+            	if(exists $hash{$key})
+            	{
+                    $outcontent{$key}=$icontent2[$i];
+                    delete($hash{$key});
+            	}
+            	if(scalar keys %hash == 0)
+            	{
+                	last;
+            	}
+		    }
+	    }
     }
     
     ##Sort outcontent and print to OFILE
@@ -2396,6 +1644,7 @@ sub write_variant_2vcf
         print($OFILE $outcontent{$key},"\n");
     }
 
+    
     close $OFILE;
 }
 
@@ -2655,37 +1904,29 @@ sub parse_const_execond
 }
 
 ##Returns a hash ref to the population allele frequency information for all variants present in the input reference hashes 
+#The tabix query gets the data we are looking for and also some neighbors. To keep the output data clean from those, we handle two different hashes.
 sub getPAFdata
 {
     my $tabix = Bio::DB::HTS::Tabix->new( filename =>$GNOMAD );
-    my %outdata; #key: CHROM${OFS}POS${OFS}ALT value: [$tref,$tfilt,$taf];
-    my @keyOutPAFs;
-    my @keys;
-    my $ref;
+    my %outdata; #key: CHROM${OFS}POS${OFS}REF${OFS}ALT value: [$tfilt,$taf];
     my $parsedPAFS;
-    my %obtainedPAFs; #key = CHROM${OFS}POS #value = {ALT => [$tref, $tfilt, $taf]}
-    my %neededKeys;
+    my %obtainedPAFs; #key = CHROM${OFS}POS${OFS}REF${OFS}ALT #value = [$tfilt, $taf]
     my $tabix_iter;
-    my $chr;
-    my $nstart;
+    my ($chr, $nstart, $ref, $alt);
     my $line;
-    my $flag;
     my $i;
     my ($tstart,$talt,$tref,$tfilt,$taf);
-    my @alts;
 
     foreach my $ref_hash (@_)
     {
         foreach my $key (keys %{$ref_hash}) ##Foreach key
         {
-            #key = CHROM${OFS}POS
-            #$ref_hash->{$key} = REF${OFS}ALT1${OFS}ALT2...${OFS}ALTN
+            #key = CHROM${OFS}POS${OFS}REF${OFS}ALT
             unless (exists $obtainedPAFs{$key})
             {
                 ##Obtain gnomAD data for this genomic position if it has not been obtained before. MULI-SNVs are represented in different lines
-                ($chr,$nstart)=split($OFS,$key);
+                ($chr,$nstart,$ref,$alt)=split($OFS,$key);
                 $tabix_iter=$tabix->query("$chr:$nstart-".($nstart+1));
-                $flag=0;
                 if(defined $tabix_iter)
                 {
                     while($line=$tabix_iter->next)
@@ -2693,17 +1934,7 @@ sub getPAFdata
                         #CHROM  POS ID  REF ALT QUAL    FILTER  INFO    FORMAT  S1 ... SN
                         $line =~ s/^[^\t]+\t([^\t]+)\t[^\t]+\t([^\t]+)\t([^\t]+)\t[^\t]+\t([^\t]+)\t[^\t]*AF=([^;]+).*$/$1\t$3\t$2\t$4\t$5/;
                         ($tstart,$talt,$tref,$tfilt,$taf)=split("\t",$line);
-                        if($flag==0) ##Need to generate the new hash
-                        {
-                            my %thisposdata;
-                            $thisposdata{$talt}=[$tref,$tfilt,$taf];
-                            $obtainedPAFs{"$chr$OFS$nstart"}=\%thisposdata;
-                            $flag=1;
-                        }
-                        else
-                        {
-                            $obtainedPAFs{"$chr$OFS$nstart"}->{$talt}=[$tref,$tfilt,$taf];
-                        }
+                        $obtainedPAFs{"$chr$OFS$tstart$OFS$tref$OFS$talt"}=[$tfilt,$taf];
                     }
     
                 }
@@ -2713,29 +1944,22 @@ sub getPAFdata
 #                    warn "There is no data for $chr:$nstart-".($nstart+1);
 #                }
             }
-            @alts=split($OFS,$ref_hash->{$key});
-            $ref=shift(@keys);
-            @keyOutPAFs= map {$key.$OFS.$_} @alts;
             
-            foreach ($i=0; $i<scalar @keyOutPAFs; ++$i)
+            unless (exists $outdata{$key}) ##If it exists we don't need to do anything, otherwise, we copy the data if we have it, or add NA data since we know we have tried to obtain it and it is not available
             {
-                unless (exists $outdata{$keyOutPAFs[$i]}) ##If it exists we don't need to do anything
+                if(exists $obtainedPAFs{$key})
                 {
-                    if(exists $obtainedPAFs{$key} && exists $obtainedPAFs{$key}->{$alts[$i]})
-                    {
-                        $outdata{$keyOutPAFs[$i]}=$obtainedPAFs{$key}->{$alts[$i]};
-                    }
-                    else
-                    {
-                        $outdata{$keyOutPAFs[$i]}=["NA","NA","NA"];
-                    }
+                    $outdata{$key}=$obtainedPAFs{$key};
+                }
+                else
+                {
+                    $outdata{$key}=["NA","NA"];
                 }
             }
         }##foreach key
     }##foreach hash
     return \%outdata;
 }
-
 
 ##This subrutine gets an array of PAF conditions and generates the frequency of private A, B and common C variants with PAF<=condition for each condition
 sub getPAFStats
@@ -2745,11 +1969,9 @@ sub getPAFStats
     my @filt_values;
     my $ngood;
     my $ntotal;
-    my $pos_key;
-    my $comp_key;
+    my $key;
     my $filtvalue;
-    my @alts;
-    #ref_pAFfiltN; #key: CHROM${OFS}POS${OFS}ALT value: [$tref,$tfilt,$taf];
+    #ref_pAFfiltN; #key: CHROM${OFS}POS${OFS}REF${OFS}ALT value: [$tfilt,$taf];
 
     foreach my $filtcond (@{$ref_conditions})
     {
@@ -2763,80 +1985,66 @@ sub getPAFStats
         #PrivA
         $ngood=0;
         $ntotal=0;
-        foreach $pos_key (keys %{$ref_A})
+        foreach $key (keys %{$ref_A})
         {
-            @alts=split($OFS,$ref_A->{$pos_key});
-            shift(@alts);
-            foreach $comp_key (map {$pos_key.$OFS.$_} @alts)
+            if(exists $ref_pAFfiltN->{$key})
             {
-                if(exists $ref_pAFfiltN->{$comp_key})
-                {
-                    if($ref_pAFfiltN->{$comp_key}->[2] eq "NA" || $ref_pAFfiltN->{$comp_key}->[2] <= $value)
-                    {
-                        ++$ngood;
-                    }
-                }
-                else
+                if($ref_pAFfiltN->{$key}->[1] eq "NA" || $ref_pAFfiltN->{$key}->[1] <= $value)
                 {
                     ++$ngood;
-                    warn "No population data for $comp_key\n";
                 }
-                ++$ntotal;
             }
+            else
+            {
+                ++$ngood;
+                warn "No population data for $comp_key\n";
+            }
+            ++$ntotal;
         }
         push(@output,$ngood*1.0/$ntotal);
-
+        
         #PrivB
         $ngood=0;
         $ntotal=0;
-        foreach $pos_key (keys %{$ref_B})
+        foreach $key (keys %{$ref_B})
         {
-            @alts=split($OFS,$ref_B->{$pos_key});
-            shift(@alts);
-            foreach $comp_key (map {$pos_key.$OFS.$_} @alts)
+            if(exists $ref_pAFfiltN->{$key})
             {
-                if(exists $ref_pAFfiltN->{$comp_key})
-                {
-                    if($ref_pAFfiltN->{$comp_key}->[2] eq "NA" || $ref_pAFfiltN->{$comp_key}->[2] <= $value)
-                    {
-                        ++$ngood;
-                    }
-                }
-                else
+                if($ref_pAFfiltN->{$key}->[1] eq "NA" || $ref_pAFfiltN->{$key}->[1] <= $value)
                 {
                     ++$ngood;
-                    warn "No population data for $comp_key\n";
                 }
-                ++$ntotal;
             }
+            else
+            {
+                ++$ngood;
+                warn "No population data for $comp_key\n";
+            }
+            ++$ntotal;
         }
         push(@output,$ngood*1.0/$ntotal);
-
+        
         #Common
         $ngood=0;
         $ntotal=0;
-        foreach $pos_key (keys %{$ref_C})
+        foreach $key (keys %{$ref_C})
         {
-            @alts=split($OFS,$ref_C->{$pos_key});
-            shift(@alts);
-            foreach $comp_key (map {$pos_key.$OFS.$_} @alts)
+            if(exists $ref_pAFfiltN->{$key})
             {
-                if(exists $ref_pAFfiltN->{$comp_key})
-                {
-                    if($ref_pAFfiltN->{$comp_key}->[2] eq "NA" || $ref_pAFfiltN->{$comp_key}->[2] <= $value)
-                    {
-                        ++$ngood;
-                    }
-                }
-                else
+                if($ref_pAFfiltN->{$key}->[1] eq "NA" || $ref_pAFfiltN->{$key}->[1] <= $value)
                 {
                     ++$ngood;
-                    warn "No population data for $comp_key\n";
                 }
-                ++$ntotal;
             }
+            else
+            {
+                ++$ngood;
+                warn "No population data for $comp_key\n";
+            }
+            ++$ntotal;
         }
         push(@output,$ngood*1.0/$ntotal);
+
     } ##Foreach filter
 
     return @output;
@@ -2871,7 +2079,7 @@ sub filt_PAF
     my %outdata;
     foreach my $key (keys %{$ref_data})
     {
-        if($ref_data->{$key}[2] eq "NA" || $ref_data->{$key}[2]<=$condition)
+        if($ref_data->{$key}[1] eq "NA" || $ref_data->{$key}[1]<=$condition)
         {
             $outdata{$key}=$ref_data->{$key};
         }
@@ -2880,68 +2088,40 @@ sub filt_PAF
     return \%outdata;
 }
 
+##WORKING HERE
 ##Filters two hashes of variants using a hash of variants that are valid (this will be a superset of the variants that will be valid)  and generates stats like vcf_prune
 sub filter_with_PAF
 {
     my ($ref_common, $ref_different, $ref_PAF, $ref_stats)=@_;
     my (%out_common, %out_different);
-    my $ref;
-    my $ckey;
-    my $alt;
-    my @alts;
-    my @validAlts;
    
 #    print("DEBUG: filter_with_PAF\n"); 
     ##The number of ref_PAF variants will be much larger than ref_common or ref_different. Thus, I will loop along those two, instead of the first.
-    foreach my $variant (keys %{$ref_common})
+    foreach my $key (keys %{$ref_common})
     {
-        @alts=split($OFS,$ref_common->{$variant});
-        $ref=shift(@alts);
-        @validAlts=($ref);
-        foreach $alt (@alts)
+#        print("DEBUG:\t variant $key\n");
+        if(exists $ref_PAF->{$key}) ##I don't need to check the value of this since this list of variants has been pre-made
         {
-            $ckey=$variant.$OFS.$alt;
-#            print("DEBUG:\t variant $ckey\n");
-            if(exists $ref_PAF->{$ckey}) ##I don't need to check the value of this since this list of variants has been pre-made
-            {
-#                print("DEBUG:\t\t with PAF information ",join(",",@{$ref_PAF->{$ckey}}),"\n");
-                push(@validAlts,$alt);
-            }
-#            else
-#            {
-#                print("DEBUG:\t\t This variant had been filtered out and therefore is not present in PAF information\n");
-#            }
+            $out_common{$variant}=1;
+#            print("DEBUG:\t\t with PAF information ",join(",",@{$ref_PAF->{$key}}),"\n");
         }
-        if(scalar @validAlts > 1)
-        {
-            $out_common{$variant}=join($OFS,@validAlts);
-#            print("DEBUG:\t Valid variant $variant added to the output common hash, with value $out_common{$variant}\n");
-        }
+#        else
+#        {
+#            print("DEBUG:\t\t This variant had been filtered out and therefore is not present in PAF information\n");
+#        }
     }
-    foreach my $variant (keys %{$ref_different})
+    foreach my $key (keys %{$ref_different})
     {
-        @alts=split($OFS,$ref_different->{$variant});
-        $ref=shift(@alts);
-        @validAlts=($ref);
-        foreach $alt (@alts)
+#        print("DEBUG:\t variant $key\n");
+        if(exists $ref_PAF->{$key}) ##I don't need to check the value of this since this list of variants has been pre-made
         {
-            $ckey=$variant.$OFS.$alt;
- #           print("DEBUG:\t variant $ckey\n");
-            if(exists $ref_PAF->{$ckey}) ##I don't need to check the value of this since this list of variants has been pre-made
-            {
-#                print("DEBUG:\t\t with PAF information ",join(",",@{$ref_PAF->{$ckey}}),"\n");
-                push(@validAlts,$alt);
-            }
-            else
-            {
-#                print("DEBUG:\t\t This variant had been filtered out and therefore is not present in PAF information\n");
-            }
+            $out_different{$variant}=1;
+#            print("DEBUG:\t\t with PAF information ",join(",",@{$ref_PAF->{$key}}),"\n");
         }
-        if(scalar @validAlts > 1) ##The 1 is the reference, we need at least one valid alternative 
-        {
-            $out_different{$variant}=join($OFS,@validAlts);
-#            print("DEBUG:\t Valid variant $variant added to the private hash, with value $out_different{$variant}\n");
-        }
+#        else
+#        {
+#            print("DEBUG:\t\t This variant had been filtered out and therefore is not present in PAF information\n");
+#        }
     }
     	
     my $n_selvariants=scalar keys %out_common;

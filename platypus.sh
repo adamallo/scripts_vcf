@@ -6,7 +6,8 @@ module load parallel/20140822 platypus/0.8.1 python/2.7.9
 
 if [[ $# -eq 3 ]]
 then
-        time python /packages/6x/platypus/0.8.1/platypus callVariants --nCPU=$SLURM_JOB_CPUS_PER_NODE --bamFiles=$1 --refFile=/home/dmalload/storage/DCIS/temp_storage/GRCh37-lite.fa --output=$2 --logFileName=$3
+    output=$2
+    time python /packages/6x/platypus/0.8.1/platypus callVariants --nCPU=$SLURM_JOB_CPUS_PER_NODE --bamFiles=$1 --refFile=/home/dmalload/storage/DCIS/temp_storage/GRCh37-lite.fa --output=$2 --logFileName=$3
 elif [[ $# -ge 4 ]]
 then
     bamfiles=$1
@@ -17,3 +18,6 @@ then
 else
     echo "Error, the number of arguments for this script is not appropriate"
 fi
+
+mv $output ${output}_bkp_multisnv
+perl $SCRIPTSVCF_DIR/separateMultipleSNVPlatypus.pl -i ${output}_bkp_multisnv -o $output
