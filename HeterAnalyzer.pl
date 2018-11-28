@@ -1074,8 +1074,8 @@ sub vcf_prune_covB
     my ($vcf_1,$vcf_2,$tsv_todelete,$ref_statistics,$covBfiltering_options)=@_;
     my %common_variants=%{$vcf_1};
     my %private_variants=%{$vcf_2};
-    my %common_variant_mapping=make_mapping_short_long_key($vcf_1);
-    my %private_variant_mapping=make_mapping_short_long_key($vcf_2);
+    my %common_variant_mapping=%{make_mapping_short_long_key($vcf_1)};
+    my %private_variant_mapping=%{make_mapping_short_long_key($vcf_2)};
     my $tag1=0;
     my $tag2=0;
     my $totalreads=0;
@@ -1211,7 +1211,7 @@ sub vcf_prune_covB
 ####################################################################
 sub make_mapping_short_long_key
 {
-    my $ref_variants=$_;
+    my $ref_variants=$_[0];
     my %out_mapping;
     my $shortkey;
     foreach my $variant (keys %{$ref_variants})
@@ -1237,8 +1237,8 @@ sub vcf_prune_tsv_vars
     my ($ref_common,$ref_private,$tsv_todelete,$ref_statistics)=@_;
     my %common=%{$ref_common};
     my %private=%{$ref_private};
-    my %common_map=make_mapping_short_long_key($ref_common);
-    my %private_map=make_mapping_short_long_key($ref_private);
+    my %common_map=%{make_mapping_short_long_key($ref_common)};
+    my %private_map=%{make_mapping_short_long_key($ref_private)};
     my $tag1=0;
     my $tag2=0;
     my $vcf_variant;
@@ -1519,11 +1519,11 @@ sub write_variant_vcf
     close($IFILE);
     my $flag=0;
     my %hash=%{$ref_hash};
-    my $D
+    my $key;
      
     #Copying the header and adding a new line with filtering info
     #Then adding the variants that are present in the hash.
-    for($i=0;$i< scalar @icontent; ++$i)
+    for(my $i=0;$i< scalar @icontent; ++$i)
     {
         if ($flag==0 and $icontent[$i]=~/^##/)
         {
@@ -1997,7 +1997,7 @@ sub getPAFStats
             else
             {
                 ++$ngood;
-                warn "No population data for $comp_key\n";
+                warn "No population data for $key\n";
             }
             ++$ntotal;
         }
@@ -2018,7 +2018,7 @@ sub getPAFStats
             else
             {
                 ++$ngood;
-                warn "No population data for $comp_key\n";
+                warn "No population data for $key\n";
             }
             ++$ntotal;
         }
@@ -2039,7 +2039,7 @@ sub getPAFStats
             else
             {
                 ++$ngood;
-                warn "No population data for $comp_key\n";
+                warn "No population data for $key\n";
             }
             ++$ntotal;
         }
@@ -2088,7 +2088,6 @@ sub filt_PAF
     return \%outdata;
 }
 
-##WORKING HERE
 ##Filters two hashes of variants using a hash of variants that are valid (this will be a superset of the variants that will be valid)  and generates stats like vcf_prune
 sub filter_with_PAF
 {
@@ -2102,7 +2101,7 @@ sub filter_with_PAF
 #        print("DEBUG:\t variant $key\n");
         if(exists $ref_PAF->{$key}) ##I don't need to check the value of this since this list of variants has been pre-made
         {
-            $out_common{$variant}=1;
+            $out_common{$key}=1;
 #            print("DEBUG:\t\t with PAF information ",join(",",@{$ref_PAF->{$key}}),"\n");
         }
 #        else
@@ -2115,7 +2114,7 @@ sub filter_with_PAF
 #        print("DEBUG:\t variant $key\n");
         if(exists $ref_PAF->{$key}) ##I don't need to check the value of this since this list of variants has been pre-made
         {
-            $out_different{$variant}=1;
+            $out_different{$key}=1;
 #            print("DEBUG:\t\t with PAF information ",join(",",@{$ref_PAF->{$key}}),"\n");
         }
 #        else
