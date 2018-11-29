@@ -1,10 +1,10 @@
 #!/bin/bash
 
-usage="\n$0 directory torun_file exe_params filtering_params NAB_params NAB2_params covB_params n_cores tstv\n\ntorun_file structure: output N_file A_file B_file\n-------------------------------------------------\n
+usage="\n$0 directory torun_file exe_params filtering_params NAB_params NAB2_params covB_params popAF_params n_cores tstv\n\ntorun_file structure: output N_file A_file B_file\n-------------------------------------------------\n
 \n
 This script postprocess the output of HeterAnalyzer_control.pl for each sample in a directory with its name, integrating all the information in a file named results.csv. Results results_basictstv.csv is generated only if tstv==1.\n"
 
-if [[ $# -ne 9 ]] || [[ ! -d $1 ]] || [[ ! -f $2 ]]  || [[ ! -f $3 ]]  || [[ ! -f $4 ]]  || [[ ! -f $5 ]]  || [[ ! -f $6 ]] || [[ ! -f $7 ]]
+if [[ $# -ne 10 ]] || [[ ! -d $1 ]] || [[ ! -f $2 ]]  || [[ ! -f $3 ]]  || [[ ! -f $4 ]]  || [[ ! -f $5 ]]  || [[ ! -f $6 ]] || [[ ! -f $7 ]] || [[ ! -f $8 ]]
 then
     echo -e $usage
     exit
@@ -16,8 +16,9 @@ else
     NAB_params=$(readlink -f $5)
     NAB2_params=$(readlink -f $6)
     covB_params=$(readlink -f $7)
-    n_cores=$8
-    tstv=$9
+    popAF_params=$(readlink -f $8)
+    n_cores=$9
+    tstv=${10}
 fi
 
 flag=0

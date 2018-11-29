@@ -10,7 +10,8 @@ use Env;
 
 ##Configuration variables
 ######################################################
-my $private="-p private";
+my $queue="";
+my $queue_argument="--partition=";
 my $sep_param="#";
 my $sep_value=":";
 my $OFS=",";
@@ -25,8 +26,9 @@ my $covB_sh="covB_half.sh";
 my $covN_sh="covN.sh";
 my $reduce_sh="reduceHeterAnalyzer_control.sh";
 my $n_cores=1;
-my $qsub="submit ${private} -N 1 -n 1 -c ";
-my $qsub_noparallel="submit ${private} -N 1 -n 1 -c 1";
+my $scheduler="submit";
+my $qsub="-N 1 -n 1 -c ";
+my $qsub_noparallel="-N 1 -n 1 -c 1"; ##TODO complete qsubs with $scheduler $qsub or $scheduler $queue_argument$queue $qsub
 my $qstat="qstat";
 my $sed='sed "s/Queued job \(.*\)/\1/"';
 my $sep_dep=":";
@@ -54,7 +56,7 @@ my $comp=0;
 
 #Flags
 my $help;
-my $usage="Usage: $0 [options] -o output_file --normal_bamfile bamfile_normal_sample --sample_A_bamfile bamfile_A_sample --sample_B_bamfile bamfile_B_sample --output_vcf --output_list --comp\n--output_vcf: (bool) generate resulting vcf files or not\n--output_list: (bool) generate resulting list of variants or not\n--comp: (int) indicating the comprehensiveness of the output, 0=no files, 1=only needed files to call variants, 2= all intermediate variants\nOptions:\n--------\n\t-e/--exec_cond_inputfile : input file for execution parameters and options\n\t-f/--filt_cond_inputfile : input file for execution parameters and options\n\t--NABfilt_cond_inputfile : input file for the filtering options of the NAB sample\n\t--NABfilt_cond_inputfile2 : input file for the secondary filtering options of the NAB sample (OR filter implemented in a dirty way)\n\t--covaltB_cond_inputfile : input file for the filtering taking into account characteristics of the unfiltered in the comparison\n\t--popAF_cond_inputfile: input file for the filter of population allele frequencies using gnomAD\n\t--output_dir : output directory for vcf files\n\t--n_cores : number of cores to execute some steps in parallel\n\t\n\n";
+my $usage="Usage: $0 [options] -o output_file --normal_bamfile bamfile_normal_sample --sample_A_bamfile bamfile_A_sample --sample_B_bamfile bamfile_B_sample --output_vcf --output_list --comp [--queue]\n--output_vcf: (bool) generate resulting vcf files or not\n--output_list: (bool) generate resulting list of variants or not\n--comp: (int) indicating the comprehensiveness of the output, 0=no files, 1=only needed files to call variants, 2= all intermediate variants\nOptions:\n--------\n\t-e/--exec_cond_inputfile : input file for execution parameters and options\n\t-f/--filt_cond_inputfile : input file for execution parameters and options\n\t--NABfilt_cond_inputfile : input file for the filtering options of the NAB sample\n\t--NABfilt_cond_inputfile2 : input file for the secondary filtering options of the NAB sample (OR filter implemented in a dirty way)\n\t--covaltB_cond_inputfile : input file for the filtering taking into account characteristics of the unfiltered in the comparison\n\t--popAF_cond_inputfile: input file for the filter of population allele frequencies using gnomAD\n\t--output_dir: output directory for vcf files\n\t--n_cores: number of cores to execute some steps in parallel\n\t--queue: optional, name of the queue jobs should be submitted\n\n";
 ######################################################
 
 ######################################################
@@ -79,10 +81,9 @@ my $usage="Usage: $0 [options] -o output_file --normal_bamfile bamfile_normal_sa
     'output_vcf=i'=>\$output_vcf,
     'output_list=i' => \$output_list,
     'comp=i' => \$comp,
+    'queue=s' => \$queue,
     'help|h' => \$help,
                 )) or (($output_file eq "") || ($normal_bam eq "")  || ($sample1_bam eq "") || ($sample2_bam eq "")  || $help) and die $usage;
-
-$qsub.=$n_cores;
 
 ##Input file parsing and directory creation
 ######################################################
@@ -180,6 +181,18 @@ else
 if($output_vcf==0 || $comp != 2)
 {
     print "Warning: not generating output vcf files or restricting them (--comp<2) will eliminate the tstv posterior analyses\n"
+}
+
+##Job submitting command finalization
+if ($queue ne "")
+{
+    $qsub=join(" ",$scheduler,$queue_argument.$queue,$qsub.$n_cores);
+    $qsub_noparallel=join(" ",$scheduler,$queue_argument.$queue,$qsub_noparallel);
+}
+else
+{
+    $qsub=join(" ",$scheduler,$qsub.$n_cores);
+    $qsub_noparallel=join(" ",$scheduler,$qsub_noparallel);
 }
 
 #

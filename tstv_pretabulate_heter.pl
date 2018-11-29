@@ -37,6 +37,8 @@ my %fullUconds;
 my %fullIconds;
 my %fullcovBUconds;
 my %fullcovBIconds;
+my %fullcovBpopAFUconds;
+my %fullcovBpopAFIconds;
 
 my @temp;
 
@@ -58,6 +60,16 @@ foreach my $line (@content)
     {
         $temp[0]=~s/_common//;
         $fullIconds{$temp[0]}=$temp[1];
+    }
+    elsif($temp[0]=~s/^filtcovBNABUPAF${sep_param}//)
+    {
+        $temp[0]=~s/_common//;
+        $fullcovBpopAFUconds{$temp[0]}=$temp[1];
+    }
+    elsif($temp[0]=~s/^filtcovBNABIPAF${sep_param}//)
+    {
+        $temp[0]=~s/_common//;
+        $fullcovBpopAFIconds{$temp[0]}=$temp[1];
     }
     elsif($temp[0]=~s/^filtcovBNABU${sep_param}//)
     {
@@ -111,18 +123,19 @@ foreach my $line (@content)
 }
 
 open(my $OFILE, ">$outputfile") or die "The file $outputfile can't be opened, check your input options\n";
-print($OFILE join($OFS,("Condition","TsTv_A","TsTv_B","TsTv_filtU","TsTv_filtI","TsTv_filtNU","TsTv_filtNI","TsTv_filtNcovBU","TsTv_filtNcovBI","TsTv_filtNABU","TsTv_filtNABI","TsTv_filtcovBNABU","TsTv_filtcovBNABI")),"\n");
+print($OFILE join($OFS,("Condition","TsTv_A","TsTv_B","TsTv_filtU","TsTv_filtI","TsTv_filtNU","TsTv_filtNI","TsTv_filtNcovBU","TsTv_filtNcovBI","TsTv_filtNABU","TsTv_filtNABI","TsTv_filtcovBNABU","TsTv_filtcovBNABI","TsTv_filtcovBNABUPAF","TsTv_filtcovBNABIPAF")),"\n");
 
 ###Pending: I should make sure that I and U have the same keys for every filtering level
 
 my $filtcond;
 my $covBcond;
 my $NABcond;
+my $popAFcond;
 
-foreach my $fullcond (keys %fullcovBUconds)
+foreach my $fullcond (keys %fullcovBpopAFUconds)
 {
-    ($filtcond,$covBcond,$NABcond)=($fullcond=~m/^(.*?)(${sep_param}covB${sep_param}.*?)(${sep_param}NAB${sep_param}.*?)$/);
-    print($OFILE join($OFS,($fullcond,$Aconds{$filtcond},$Bconds{$filtcond},$filtUconds{$filtcond},$filtIconds{$filtcond},$filtNUconds{$filtcond},$filtNIconds{$filtcond},$filtcovBNUconds{"$filtcond$covBcond"},$filtcovBNIconds{"$filtcond$covBcond"},$fullUconds{"$filtcond$NABcond"},$fullIconds{"$filtcond$NABcond"},$fullcovBUconds{$fullcond},$fullcovBIconds{$fullcond})),"\n");
+    ($filtcond,$covBcond,$NABcond,$popAFcond)=($fullcond=~m/^(.*?)(${sep_param}covB${sep_param}.*?)(${sep_param}NAB${sep_param}.*?)(${sep_param}PAF${sep_param}.*?)$/);
+    print($OFILE join($OFS,($fullcond,$Aconds{$filtcond},$Bconds{$filtcond},$filtUconds{$filtcond},$filtIconds{$filtcond},$filtNUconds{$filtcond},$filtNIconds{$filtcond},$filtcovBNUconds{"$filtcond$covBcond"},$filtcovBNIconds{"$filtcond$covBcond"},$fullUconds{"$filtcond$NABcond"},$fullIconds{"$filtcond$NABcond"},$fullcovBUconds{"$filtcond$covBcond$NABcond"},$fullcovBIconds{"$filtcond$covBcond$NABcond"},$fullcovBpopAFUconds{$fullcond},$fullcovBpopAFIconds{$fullcond})),"\n");
 
 }
 close($OFILE);
