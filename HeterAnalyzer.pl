@@ -2001,7 +2001,15 @@ sub getPAFStats
             }
             ++$ntotal;
         }
-        push(@output,$ngood*1.0/$ntotal);
+
+        if($ntotal != 0)
+        {
+            push(@output,$ngood*1.0/$ntotal);
+        }
+        else
+        {
+            push(@output,"NaN");
+        }
         
         #PrivB
         $ngood=0;
@@ -2022,7 +2030,14 @@ sub getPAFStats
             }
             ++$ntotal;
         }
-        push(@output,$ngood*1.0/$ntotal);
+        if($ntotal != 0)
+        {
+            push(@output,$ngood*1.0/$ntotal);
+        }
+        else
+        {
+            push(@output,"NaN");
+        }
         
         #Common
         $ngood=0;
@@ -2043,7 +2058,15 @@ sub getPAFStats
             }
             ++$ntotal;
         }
-        push(@output,$ngood*1.0/$ntotal);
+        
+        if($ntotal != 0)
+        {
+            push(@output,$ngood*1.0/$ntotal);
+        }
+        else
+        {
+            push(@output,"NaN");
+        }
 
     } ##Foreach filter
 
