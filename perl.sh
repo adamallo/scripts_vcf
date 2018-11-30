@@ -3,6 +3,5 @@
 #SBATCH --mem-per-cpu 7500
 
 ###The memory is generating problems
-
-module load perl/5.22.1
+module load perl/5.26.0
 perl $@
