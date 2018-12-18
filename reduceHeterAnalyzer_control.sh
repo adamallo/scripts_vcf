@@ -10,7 +10,9 @@ then
     exit 1
 fi
 
-pref=$(echo $1 | sed "s/^\([^.]*\).*$/\1/")
+dir=$(dirname $1)
+pref=$(basename $1 | sed "s/^\([^.]*\).*$/\1/")
+pref=$dir/$pref
 output="$pref$sufix"
 withheader=0
 

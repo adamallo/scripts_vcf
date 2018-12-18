@@ -199,12 +199,14 @@ my %constExeCondContentRefs;
 my %nofiltResultsRef;
 
 ##Generate all combinations of proposed values for execution and filtering parameters
+print("Generating all combinations of filtering values to be explored by this run...");
 combs(0,"",\@exe_parameters,\@exe_param_values,\@exe_conditions);
 combs(0,"",\@filtering_parameters,\@filtering_param_values,\@filtering_conditions);
 combs(0,"",\@NABfiltering_parameters1,\@NABfiltering_param_values1,\@NABfiltering_conditions1);
 combs(0,"",\@NABfiltering_parameters2,\@NABfiltering_param_values2,\@NABfiltering_conditions2);
 combs(0,"",\@covBfiltering_parameters,\@covBfiltering_param_values,\@covBfiltering_conditions);
 combs(0,"",\@popAFfiltering_parameters,\@popAFfiltering_param_values,\@popAFfiltering_conditions);
+print(" Done\n");
 
 ##Generate headers of statistics that change in number and name depending on the input filtering conditions
 my @HeaderStatsfiltNPAF,

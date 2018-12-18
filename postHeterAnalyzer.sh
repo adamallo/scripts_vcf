@@ -1,4 +1,5 @@
 #!/bin/bash
+#SBATCH --mem 16000
 
 usage="\n$0 directory torun_file exe_params filtering_params NAB_params NAB2_params covB_params popAF_params n_cores tstv\n\ntorun_file structure: output N_file A_file B_file\n-------------------------------------------------\n
 \n
