@@ -30,7 +30,7 @@ my $scheduler="sbatch";
 my $qsub="-N 1 -n 1 -c ";
 my $qsub_noparallel="-N 1 -n 1 -c 1"; 
 my $qstat="qstat";
-my $sed='sed "s/Queued job \(.*\)/\1/"';
+my $sed='sed "s/Submitted batch job //"';
 my $sep_dep=":";
 my $dep_prefix="--dependency=afterok";
 my $sleep=60;
