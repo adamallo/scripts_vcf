@@ -5,7 +5,6 @@ usage="\n$0 directory torun_file exe_params filtering_params NAB_params NAB2_par
 This script executes HeterAnalyzer_control.pl for each sample in a directory with its name. Then it integrates all the information in a file named results.csv and results_basictstv.csv\n"
 
 queue=""
-submit="sbatch"
 
 if (! ([[ $# -eq 12 ]] || [[ $# -eq 13 ]])) || [[ ! -d $1 ]] || [[ ! -f $2 ]]  || [[ ! -f $3 ]]  || [[ ! -f $4 ]]  || [[ ! -f $5 ]]  || [[ ! -f $6 ]] || [[ ! -f $7 ]] || [[ ! -f $8 ]]
 
@@ -50,10 +49,10 @@ then
     tstv=0
 fi
 
-if [[ $queue == "" ]]
-then
-    $submit --dependency=afterok$dependency $EXE_DIR/postHeterAnalyzer.sh $dir $torun $exe_params $filtering_params $NAB_params $NAB2_params $covB_params $popAF_params $n_cores $tstv
-else
-    $submit --partition=$queue --dependency=afterok$dependency $EXE_DIR/postHeterAnalyzer.sh $dir $torun $exe_params $filtering_params $NAB_params $NAB2_params $covB_params $popAF_params $n_cores $tstv
-fi 
-#sbatch -p private --job-name=getdependencies --dependency=afterok$dependency <(echo -e '#!/bin/bash' "\ndependency=\"\";while read -r output normal a b;do id=\$(tail -n 1 $dir/\${output}.out);dependency=\"\$dependency:\$id\";done < $torun;sbatch -p private --dependency=afterok\$dependency $EXE_DIR/postHeterAnalyzer.sh $dir $torun $exe_params $filtering_params $NAB_params $NAB2_params $covB_params $n_cores")
+##Commented out
+#if [[ $queue == "" ]]
+#then
+#    submit --dependency=afterok$dependency $EXE_DIR/postHeterAnalyzer.sh $dir $torun $exe_params $filtering_params $NAB_params $NAB2_params $covB_params $popAF_params $n_cores $tstv
+#else
+#    submit --partition=$queue --dependency=afterok$dependency $EXE_DIR/postHeterAnalyzer.sh $dir $torun $exe_params $filtering_params $NAB_params $NAB2_params $covB_params $popAF_params $n_cores $tstv
+#fi 
