@@ -2,26 +2,34 @@
 use strict;
 use warnings;
 use File::Basename;
+use Getopt::Long qw(GetOptions);
+Getopt::Long::Configure qw(gnu_getopt);
 
-our $covB="";
+#Configuration variables
+my $OFS="\t";
+my $usage="$0 -d main_directory -o output_file [--covB covBprefix --paf PAFprefix]\n";
 
+#Input variables
+my $main_dir="";
+my $covB="";
+my $PAF="";
 my $outfile="";
-our $OFS="\t";
-my $usage="$0 main_directory output_file [covBprefix]\n";
+my $help;
 
-if (scalar @ARGV < 2 || scalar @ARGV > 3 || !-d $ARGV[0])
-{
-    die($usage);
-}
+##Getopt
+######################################################
+(! GetOptions(
+    'main_directory|d=s' => \$main_dir,
+    'output_file|o=s' => \$outfile,
+    'covB|b=s' =>\$covB ,
+    'PAF|p=s' =>\$PAF ,
+    'help|h' => \$help,
+                )) or (($outfile eq "") || ($main_dir eq "")  || $help) and die $usage;
 
-$ARGV[2] = '' unless defined $ARGV[2];
-$covB=$ARGV[2];
-chomp($covB);
 
-#print("DEBUG: $covB\n");
-open(my $OUTPUT,">$ARGV[1]") or die "Impossible to open the output file $ARGV[1]\n";
+open(my $OUTPUT,">$outfile") or die "Impossible to open the output file $ARGV[1]\n";
 
-my $output2name=$ARGV[1];
+my $output2name=$outfile;
 $output2name=~s/(\.[^.]+)$/_1col$1/g;
 open(my $OUTPUT2,">$output2name") or die "Impossible to open the output file $output2name\n";
 
@@ -29,7 +37,7 @@ print($OUTPUT "Patient${OFS}Chr${OFS}Start${OFS}End${OFS}REF${OFS}ALT${OFS}Commo
 
 print($OUTPUT2 "Patient${OFS}Shared${OFS}Chr${OFS}Start${OFS}End${OFS}REF${OFS}ALT${OFS}Name${OFS}Pos${OFS}Type\n");
 
-chdir($ARGV[0]);
+chdir($main_dir);
 
 opendir(my $DH,".");
 
@@ -55,19 +63,19 @@ foreach my $dir (@dirs)
     {
         chomp($line);
         #print("DEBUG: $line\n");
-        if ($line =~ m/filt${covB}NABU#.*common\.vcf/)
+        if ($line =~ m/filt${covB}NABU${PAF}#.*common\.vcf/)
         {
             @temp=split(",",$line);
             push(@common_files,"$dir/".$temp[1].".annotated.variant_function");
            #print("\tDEBUG: pushing $temp[1] in common files\n");
         }
-        elsif( $line =~ m/Afilt${covB}NAB#.*different\.vcf/)
+        elsif( $line =~ m/Afilt${covB}NAB${PAF}#.*different\.vcf/)
         {
             @temp=split(",",$line);
             push(@da_files,"$dir/".$temp[1].".annotated.variant_function");
             #print("\tDEBUG: pushing $temp[1] in da files\n");
         }
-        elsif( $line =~ m/Bfilt${covB}NAB#.*different\.vcf/)
+        elsif( $line =~ m/Bfilt${covB}NAB${PAF}#.*different\.vcf/)
         { 
             @temp=split(",",$line);
             push(@db_files,"$dir/".$temp[1].".annotated.variant_function");
@@ -83,7 +91,7 @@ foreach my $dir (@dirs)
     if (scalar @common_files != 1)
     {
 #        print("DEBUG: @common_files\n");
-        die "More than one files detected with the format filt${covB}NABU#*common.vcf.annotated.variant_function. This script is intended to analyse the output of only one filter\n";
+        die "More than one files detected with the format filt${covB}NABU${PAF}#*common.vcf.annotated.variant_function. This script is intended to analyse the output of only one filter\n";
     }
 
 #   my @da_files=glob("$dir/Afilt${covB}NAB#*different.vcf.annotated.variant_function");
@@ -93,7 +101,7 @@ foreach my $dir (@dirs)
 
     if (scalar @da_files != 1)
     {
-        die "More than one files detected with the format Afilt${covB}NAB#*different.vcf.annotated.variant_function. This script is intended to analyse the output of only one filter\n";
+        die "More than one files detected with the format Afilt${covB}NAB${PAF}#*different.vcf.annotated.variant_function. This script is intended to analyse the output of only one filter\n";
     }
 
 #   my @db_files=glob("$dir/Bfilt${covB}NAB#*different.vcf.annotated.variant_function");
@@ -103,7 +111,7 @@ foreach my $dir (@dirs)
 
     if (scalar @db_files != 1)
     {
-        die "More than one files detected with the format Bfilt${covB}NAB#*different.vcf.annotated.variant_function. This script is intended to analyse the output of only one filter\n";
+        die "More than one files detected with the format Bfilt${covB}NAB${PAF}#*different.vcf.annotated.variant_function. This script is intended to analyse the output of only one filter\n";
     }
 
     open(my $COMMON,$common_file) or die "Impossible to open the input file $common_file\n";
