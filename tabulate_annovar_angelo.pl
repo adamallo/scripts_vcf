@@ -88,9 +88,9 @@ foreach my $dir (@dirs)
     my $common_file_aux=$common_file;
     $common_file_aux=~s/variant_function/exonic_variant_function/;
 
+    #print("DEBUG: common files @common_files\n");
     if (scalar @common_files != 1)
     {
-#        print("DEBUG: @common_files\n");
         die "More than one files detected with the format filt${covB}NABU${PAF}#*common.vcf.annotated.variant_function. This script is intended to analyse the output of only one filter\n";
     }
 
@@ -99,6 +99,7 @@ foreach my $dir (@dirs)
     my $da_file_aux=$da_file;
     $da_file_aux=~s/variant_function/exonic_variant_function/;
 
+    #print("DEBUG: privateA files @da_files\n");
     if (scalar @da_files != 1)
     {
         die "More than one files detected with the format Afilt${covB}NAB${PAF}#*different.vcf.annotated.variant_function. This script is intended to analyse the output of only one filter\n";
@@ -109,6 +110,7 @@ foreach my $dir (@dirs)
     my $db_file_aux=$db_file;
     $db_file_aux=~s/variant_function/exonic_variant_function/;
 
+    #print("DEBUG: privateB files @db_files\n");
     if (scalar @db_files != 1)
     {
         die "More than one files detected with the format Bfilt${covB}NAB${PAF}#*different.vcf.annotated.variant_function. This script is intended to analyse the output of only one filter\n";
