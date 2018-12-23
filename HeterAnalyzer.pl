@@ -1643,7 +1643,7 @@ sub write_variant_2vcf
 
     foreach $key (nat_i_sorter{@int_v=split($OFS,$_);$int_v[0],$int_v[1]} keys %outcontent)
     {
-        print($OFILE $outcontent{$key},"\n");
+        print($OFILE $outcontent{$key});
     }
 
     
