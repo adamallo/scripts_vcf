@@ -1902,7 +1902,7 @@ sub parse_const_execond
         $constExeCondContentRefs{"${exe_condition}_${cond}"}=filt_PAF($constExeCondContentRefs{"${exe_condition}_PAF"},$cond);
     } 
     
-    $nofiltResultsRef{$exe_condition}=[scalar keys %{$constExeCondContentRefs{$AcovBname}}, scalar keys %{$constExeCondContentRefs{$BcovBname}}, scalar keys %N, scalar keys %{vcf_prune_single($constExeCondContentRefs{$Aexecondname},\%N)}, scalar keys %{vcf_prune_single($constExeCondContentRefs{$Bexecondname},\%N)}];
+    $nofiltResultsRef{$exe_condition}=[scalar keys %{$constExeCondContentRefs{$Aexecondname}}, scalar keys %{$constExeCondContentRefs{$Bexecondname}}, scalar keys %N, scalar keys %{vcf_prune_single($constExeCondContentRefs{$Aexecondname},\%N)}, scalar keys %{vcf_prune_single($constExeCondContentRefs{$Bexecondname},\%N)}];
 }
 
 ##Returns a hash ref to the population allele frequency information for all variants present in the input reference hashes 
