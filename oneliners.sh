@@ -37,3 +37,7 @@ for i in *.md5; do name=$(echo $i | sed "s/.md5//");echo $(cat $i) " $name" | md
 #Fasta dictionary
 module load picard/2.3.0
 picard CreateSequenceDictionary R=~/my_storage/GRCh37-lite.fa O=~/my_storage/GRCh37-lite.dict
+
+#Summary of optimization results
+#NABcovB prop and #U, NABcovBPAF prop and #U and all PAF statistics for optimization with two PAF levels
+perl -F, -lane 'print(join(",",@F[0..13],@F[(112,114,121..129,136,138,145..153)]))' results.csv | gzip > summary_results.csv.gz
