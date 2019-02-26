@@ -195,11 +195,7 @@ sub parseVCF
     my @format;
     my @sample;
     my ($chr, $pos, $ref, $alt);
-    my ($newalt,$newref,$newpos); #IMPORTANT NOTE: Annovar uses a different ref/alt format for INDELS. They never contain repeated information. For example, if ref is A and alt AC, in annovar this will be noted as - C.     ###MultiSNVS sometimes have extra common characters. For example, a reference AC, with alternatives CC and AT. When the multisnv is split in two variants, AC AT has an extra As, and annovar will consider it as C T. These two things generate downstream problems. I am adding a second entry with this format to solve it.
-    my (@aref, @aalt);
-    my $i;
-    my $nshared;
-    my $minlength;
+    my ($newalt,$newref,$newpos); #IMPORTANT NOTE: Annovar uses a different ref/alt format for INDELS. They never contain repeated information. For example, if ref is A and alt AC, in annovar this will be noted as - C. This generates downstream problems. I am adding a second entry with this format to solve it.
     my ($nreads,$nvarreads);
 
     foreach my $line (@rawdata)
@@ -214,61 +210,22 @@ sub parseVCF
             ($format[(scalar @format) -1] ne "NV") or ($format[(scalar @format) -2] ne "NR") and die "Format problem\n";
             ($nvarreads,$nreads)=@sample[scalar @sample -1, scalar @sample -2];
             $data{"$chr$OFS$pos$OFS$ref$OFS$alt"}=[$nvarreads,$nreads];
-
-            @aref=split("",$ref);
-            @aalt=split("",$alt);
-            $nshared=0;
-            $minlength=scalar @aref<scalar @aalt ? scalar @aref : scalar @aalt;
-            
-            for ($i=0; $i< $minlength; ++$i)
+            if($alt=~m/^$ref/) ##Adding a second entry, as explained in the "important note" right above
             {
-                if($aref[$i] ne $aalt[$i])
-                {
-                    last;
-                }
-                else
-                {
-                    $nshared+=1;
-                }
-            }    
-            
-            if($nshared>0)
-            {
-                $newref=join("",splice(@aref,$nshared));
-                $newalt=join("",splice(@aalt,$nshared));
-                if($newref eq "")
-                {
-                    $newref="-";
-                    $nshared-=1;
-                }
-                if($newalt eq "")
-                {
-                    $newalt="-";
-                }
-                
-                $newpos=$pos+$nshared;
-    
-                $data{"$chr$OFS$newpos$OFS$newref$OFS$newalt"}=[$nvarreads,$nreads];
-                #print("DEBUG: $chr$OFS$pos$OFS$ref$OFS$alt converted into $chr$OFS$newpos$OFS$newref$OFS$newalt\n");
+                ($newref,$newalt)=($ref,$alt);
+                $newref="-";
+                $newalt=~s/^$ref//;
+                $data{"$chr$OFS$pos$OFS$newref$OFS$newalt"}=[$nvarreads,$nreads];
             }
-            
-
-#            if($alt=~m/^$ref/) ##Adding a second entry, as explained in the "important note" right above
-#            {
-#                ($newref,$newalt)=($ref,$alt);
-#                $newref="-";
-#                $newalt=~s/^$ref//;
-#                $data{"$chr$OFS$pos$OFS$newref$OFS$newalt"}=[$nvarreads,$nreads];
-#            }
-#            if($ref=~m/^$alt/) ##Adding a second entry, as explained in the "important note" right above
-#            {
-#                ($newref,$newalt)=($ref,$alt);
-#                $newalt="-";
-#                $newref=~s/^$alt//;
-#                $newpos=$pos+length($alt);
-#                #print("DEBUG: before $ref, $alt, $pos. after: $newref, $newalt, $newpos\n");
-#                $data{"$chr$OFS$newpos$OFS$newref$OFS$newalt"}=[$nvarreads,$nreads];
-#            }
+            if($ref=~m/^$alt/) ##Adding a second entry, as explained in the "important note" right above
+            {
+                ($newref,$newalt)=($ref,$alt);
+                $newalt="-";
+                $newref=~s/^$alt//;
+                $newpos=$pos+length($alt);
+                #print("DEBUG: before $ref, $alt, $pos. after: $newref, $newalt, $newpos\n");
+                $data{"$chr$OFS$newpos$OFS$newref$OFS$newalt"}=[$nvarreads,$nreads];
+            }
             #print("DEBUG parseVCF: $chr$OFS$pos$OFS$ref$OFS$alt: $nvarreads,$nreads\n");
         }
     }

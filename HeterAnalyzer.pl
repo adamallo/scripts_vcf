@@ -157,9 +157,19 @@ if (! -f "$vcf_filt_exe")
     die "The executable vcf_filtering.pl can't be located. Please, make sure that the environment variable SCRIPTSVCF_DIR indicates the directory with this package of scripts\n";
 }
 
-unless (-s "$GNOMAD" && -s "${GNOMAD}.tbi")
+my $gnomAD_prec_file=dirname($GNOMAD)."/n_genomes.info";
+my $GNOMAD_MIN=0;
+
+unless (-s "$GNOMAD" && -s "${GNOMAD}.tbi" && -s "$gnomAD_prec_file")
 {
-    die "The gnomAD data can't be found at $GNOMAD and $GNOMAD.tbi\n";
+    die "The gnomAD data can't be found at $GNOMAD, $GNOMAD.tbi, and $gnomAD_prec_file\n";
+}
+else
+{
+    open(my $gnomAD_prec_filehandle, $gnomAD_prec_file) or die "Problems opening $gnomAD_prec_file\n";
+    my @tempcontent=<$gnomAD_prec_filehandle>;
+    $GNOMAD_MIN=1.0/($tempcontent[0]+1);
+    close($gnomAD_prec_filehandle);
 }
 
 ## Parsing static variants
@@ -213,15 +223,18 @@ my @HeaderStatsfiltNPAF,
 my @HeaderStatsfiltNcovBPAF;
 my @HeaderStatsfiltNABPAF;
 my @HeaderStatsfiltNABcovBPAF;
-my @filtNPAFnames=qw(AfiltN_Priv_PAF_ BfiltN_Priv_PAF_ filtN_U_PAF_);
+my @HeaderStatsfiltNABcovBPAFPAF;
+my @filtNPAFnames=qw(AfiltN_Priv_PAF_ BfiltN_Priv_PAF_ filtN_U_PAF_ );
 my @filtNcovBPAFnames=qw(AfiltNcovB_Priv_PAF_ BfiltNcovB_Priv_PAF_ filtNcovB_U_PAF_);
 my @filtNABPAFnames=qw(AfiltNAB_Priv_PAF_ BfiltNAB_Priv_PAF_ filtNAB_U_PAF_);
 my @filtNABcovBPAFnames=qw(AfiltNABcovB_Priv_PAF_ BfiltNABcovB_Priv_PAF_ filtNABcovB_U_PAF_);
+my @filtNABcovBPAFPAFnames=qw(AfiltNABcovBPAF_Priv_PAF_ BfiltNABcovBPAF_Priv_PAF_ filtNABcovBPAF_U_PAF_);
 
 @HeaderStatsfiltNPAF=makeHeaderPAF(\@filtNPAFnames,\@popAFfiltering_conditions);
 @HeaderStatsfiltNcovBPAF=makeHeaderPAF(\@filtNcovBPAFnames,\@popAFfiltering_conditions);
 @HeaderStatsfiltNABPAF=makeHeaderPAF(\@filtNABPAFnames,\@popAFfiltering_conditions);
 @HeaderStatsfiltNABcovBPAF=makeHeaderPAF(\@filtNABcovBPAFnames,\@popAFfiltering_conditions);
+@HeaderStatsfiltNABcovBPAFPAF=makeHeaderPAF(\@filtNABcovBPAFPAFnames,\@popAFfiltering_conditions);
 
 #print("DEBUG: @exe_parameters, @exe_param_values");
 #print("DEBUG: @exe_conditions,@filtering_conditions,@NABfiltering_conditions1,@NABfiltering_conditions2\n");
@@ -309,9 +322,9 @@ open(my $OFILE,">$output_file");
 ##Making a block here to use the no warnings qw. It complains because of the # but they are valid
 {
     no warnings 'qw';
-    print($OFILE join(",",qw(Sample Condition A_# B_# N_# AN_# BN_# Afilt_prop Afilt_N Afilt_# Bfilt_prop Bfilt_N Bfilt_# filt_propU filt_NU filt_#U filt_propI filt_NI filt_#I filt_prop_mean filt_N_mean filt_#_mean AfiltN_prop AfiltN_N AfiltN_# BfiltN_prop BfiltN_N BfiltN_# filtN_propU filtN_NU filtN_#U filtN_propI filtN_NI filtN_#I filtN_prop_mean filtN_N_mean filtN_#_mean),@HeaderStatsfiltNPAF,qw(AfiltNcovB_prop AfiltNcovB_N AfiltNcovB_# BfiltNcovB_prop BfiltNcovB_N BfiltNcovB_# filtNcovB_propU filtNcovB_NU filtNcovB_#U filtNcovB_propI filtNcovB_NI filtNcovB_#I filtNcovB_prop_mean filtNcovB_N_mean filtNcovB_#_mean),@HeaderStatsfiltNcovBPAF,qw(AfiltNAB_prop AfiltNAB_N AfiltNAB_# BfiltNAB_prop BfiltNAB_N BfiltNAB_# filtNAB_propU filtNAB_NU filtNAB_#U filtNAB_propI filtNAB_NI filtNAB_#I filtNAB_prop_mean filtNAB_N_mean filtNAB_#_mean),@HeaderStatsfiltNABPAF,qw(AfiltNABcovB_prop AfiltNABcovB_N AfiltNABcovB_# BfiltNABcovB_prop BfiltNABcovB_N BfiltNABcovB_# filtNABcovB_propU filtNABcovB_NU filtNABcovB_#U filtNABcovB_propI filtNABcovB_NI filtNABcovB_#I filtNABcovB_prop_mean filtNABcovB_N_mean filtNABcovB_#_mean),@HeaderStatsfiltNABcovBPAF,qw(AfiltNABcovBPAF_prop AfiltNABcovBPAF_N AfiltNABcovBPAF_# BfiltNABcovBPAF_prop BfiltNABcovBPAF_N BfiltNABcovBPAF_# filtNABcovBPAF_propU filtNABcovBPAF_NU filtNABcovBPAF_#U filtNABcovBPAF_propI filtNABcovBPAF_NI filtNABcovBPAF_#I filtNABcovBPAF_prop_mean filtNABcovBPAF_N_mean filtNABcovBPAF_#_mean)),"\n");
+    print($OFILE join(",",qw(Sample Condition A_# B_# N_# AN_# BN_# Afilt_prop Afilt_N Afilt_# Bfilt_prop Bfilt_N Bfilt_# filt_propU filt_NU filt_#U filt_propI filt_NI filt_#I filt_prop_mean filt_N_mean filt_#_mean AfiltN_prop AfiltN_N AfiltN_# BfiltN_prop BfiltN_N BfiltN_# filtN_propU filtN_NU filtN_#U filtN_propI filtN_NI filtN_#I filtN_prop_mean filtN_N_mean filtN_#_mean),@HeaderStatsfiltNPAF,qw(AfiltNcovB_prop AfiltNcovB_N AfiltNcovB_# BfiltNcovB_prop BfiltNcovB_N BfiltNcovB_# filtNcovB_propU filtNcovB_NU filtNcovB_#U filtNcovB_propI filtNcovB_NI filtNcovB_#I filtNcovB_prop_mean filtNcovB_N_mean filtNcovB_#_mean),@HeaderStatsfiltNcovBPAF,qw(AfiltNAB_prop AfiltNAB_N AfiltNAB_# BfiltNAB_prop BfiltNAB_N BfiltNAB_# filtNAB_propU filtNAB_NU filtNAB_#U filtNAB_propI filtNAB_NI filtNAB_#I filtNAB_prop_mean filtNAB_N_mean filtNAB_#_mean),@HeaderStatsfiltNABPAF,qw(AfiltNABcovB_prop AfiltNABcovB_N AfiltNABcovB_# BfiltNABcovB_prop BfiltNABcovB_N BfiltNABcovB_# filtNABcovB_propU filtNABcovB_NU filtNABcovB_#U filtNABcovB_propI filtNABcovB_NI filtNABcovB_#I filtNABcovB_prop_mean filtNABcovB_N_mean filtNABcovB_#_mean),@HeaderStatsfiltNABcovBPAF,qw(AfiltNABcovBPAF_prop AfiltNABcovBPAF_N AfiltNABcovBPAF_# BfiltNABcovBPAF_prop BfiltNABcovBPAF_N BfiltNABcovBPAF_# filtNABcovBPAF_propU filtNABcovBPAF_NU filtNABcovBPAF_#U filtNABcovBPAF_propI filtNABcovBPAF_NI filtNABcovBPAF_#I filtNABcovBPAF_prop_mean filtNABcovBPAF_N_mean filtNABcovBPAF_#_mean),@HeaderStatsfiltNABcovBPAFPAF),"\n");
 }
-    #Condition,#A_#,B_#,N_#,AN_#,BN_#,Afilt_prop,Afilt_N,Afilt_#,Bfilt_prop,Bfilt_N,Bfilt_#,filt_propU,filt_NU,filt_#U,filt_propI,filt_NI,filt_#I,filt_prop_mean,filt_N_mean,filt_#_mean,AfiltN_prop,AfiltN_N,AfiltN_#,BfiltN_prop,BfiltN_N,BfiltN_#,filtN_propU,filtN_NU,filtN_#U,filtN_propI,filtN_NI,filtN_#I,filtN_prop_mean,filtN_N_mean,filtN_#_mean,(nPAFfreqs) x (AfiltN_Priv_PAF_XX,BfiltN_Priv_PAF_XX,filtN_U_PAF_XX),AfiltNcovB_prop,AfiltNcovB_N,AfiltNcovB_#,BfiltNcovB_prop,BfiltNcovB_N,BfiltNcovB_#,filtNcovB_propU,filtNcovB_NU,filtNcovB_#U,filtNcovB_propI,filtNcovB_NI,filtNcovB_#I,filtNcovB_prop_mean,filtNcovB_N_mean,filtNcovB_#_mean,(nPAFfreqs) x (AfiltNcovB_Priv_PAF_XX,BfiltNcovB_Priv_PAF_XX,filtNcovB_U_PAF_XX),AfiltNAB_prop,AfiltNAB_N,AfiltNAB_#,BfiltNAB_prop,BfiltNAB_N,BfiltNAB_#,filtNAB_propU,filtNAB_NU,filtNAB_#U,filtNAB_propI,filtNAB_NI,filtNAB_#I,filtNAB_prop_mean,filtNAB_N_mean,filtNAB_#_mean,(nPAFfreqs) x (AfiltNAB_Priv_PAF_XX,BfiltNAB_Priv_PAF_XX,filtNAB_U_PAF_XX),AfiltNABcovB_prop,AfiltNABcovB_N,AfiltNABcovB_#,BfiltNABcovB_prop,BfiltNABcovB_N,BfiltNABcovB_#,filtNABcovB_propU,filtNABcovB_NU,filtNABcovB_#U,filtNABcovB_propI,filtNABcovB_NI,filtNABcovB_#I,filtNABcovB_prop_mean,filtNABcovB_N_mean,filtNABcovB_#_mean,(nPAFfreqs) x (AfiltNABcovB_Priv_PAF_XX,BfiltNABcovB_Priv_PAF_XX,filtNABcovB_U_PAF_XX),AfiltNABcovBPAF_prop,AfiltNABcovBPAF_N,AfiltNABcovBPAF_#,BfiltNABcovBPAF_prop,BfiltNABcovBPAF_N,BfiltNABcovBPAF_#,filtNABcovBPAF_propU,filtNABcovBPAF_NU,filtNABcovBPAF_#U,filtNABcovBPAF_propI,filtNABcovBPAF_NI,filtNABcovBPAF_#I,filtNABcovBPAF_prop_mean,filtNABcovBPAF_N_mean,filtNABcovBPAF_#_mean
+    #Condition,#A_#,B_#,N_#,AN_#,BN_#,Afilt_prop,Afilt_N,Afilt_#,Bfilt_prop,Bfilt_N,Bfilt_#,filt_propU,filt_NU,filt_#U,filt_propI,filt_NI,filt_#I,filt_prop_mean,filt_N_mean,filt_#_mean,AfiltN_prop,AfiltN_N,AfiltN_#,BfiltN_prop,BfiltN_N,BfiltN_#,filtN_propU,filtN_NU,filtN_#U,filtN_propI,filtN_NI,filtN_#I,filtN_prop_mean,filtN_N_mean,filtN_#_mean,(nPAFfreqs) x (AfiltN_Priv_PAF_XX,BfiltN_Priv_PAF_XX,filtN_U_PAF_XX),AfiltNcovB_prop,AfiltNcovB_N,AfiltNcovB_#,BfiltNcovB_prop,BfiltNcovB_N,BfiltNcovB_#,filtNcovB_propU,filtNcovB_NU,filtNcovB_#U,filtNcovB_propI,filtNcovB_NI,filtNcovB_#I,filtNcovB_prop_mean,filtNcovB_N_mean,filtNcovB_#_mean,(nPAFfreqs) x (AfiltNcovB_Priv_PAF_XX,BfiltNcovB_Priv_PAF_XX,filtNcovB_U_PAF_XX),AfiltNAB_prop,AfiltNAB_N,AfiltNAB_#,BfiltNAB_prop,BfiltNAB_N,BfiltNAB_#,filtNAB_propU,filtNAB_NU,filtNAB_#U,filtNAB_propI,filtNAB_NI,filtNAB_#I,filtNAB_prop_mean,filtNAB_N_mean,filtNAB_#_mean,(nPAFfreqs) x (AfiltNAB_Priv_PAF_XX,BfiltNAB_Priv_PAF_XX,filtNAB_U_PAF_XX),AfiltNABcovB_prop,AfiltNABcovB_N,AfiltNABcovB_#,BfiltNABcovB_prop,BfiltNABcovB_N,BfiltNABcovB_#,filtNABcovB_propU,filtNABcovB_NU,filtNABcovB_#U,filtNABcovB_propI,filtNABcovB_NI,filtNABcovB_#I,filtNABcovB_prop_mean,filtNABcovB_N_mean,filtNABcovB_#_mean,(nPAFfreqs) x (AfiltNABcovB_Priv_PAF_XX,BfiltNABcovB_Priv_PAF_XX,filtNABcovB_U_PAF_XX),AfiltNABcovBPAF_prop,AfiltNABcovBPAF_N,AfiltNABcovBPAF_#,BfiltNABcovBPAF_prop,BfiltNABcovBPAF_N,BfiltNABcovBPAF_#,filtNABcovBPAF_propU,filtNABcovBPAF_NU,filtNABcovBPAF_#U,filtNABcovBPAF_propI,filtNABcovBPAF_NI,filtNABcovBPAF_#I,filtNABcovBPAF_prop_mean,filtNABcovBPAF_N_mean,filtNABcovBPAF_#_mean,(nPAFfreqs) x (AfiltNABcovBPAF_Priv_PAF_XX,BfiltNABcovBPAF_Priv_PAF_XX,filtNABcovBPAF_U_PAF_XX)
 
 my $sample=$output_file;
 $sample=basename($sample);
@@ -689,6 +702,7 @@ sub filter
                 my ($ref_common_variantsfiltcovBNABUPAF,$ref_different_variantsfiltcovBNABUPAF);
                 my ($ref_common_variantsfiltcovBNABIPAF,$ref_different_variantsfiltcovBNABIPAF);
                 my @statsfiltcovBNABmeanPAF;
+                my @statsfiltcovBNABPAFPAF;
     
                 $PAF_condition=$popAFfiltering_conditions[$nPAF];
 
@@ -705,6 +719,8 @@ sub filter
                 ($ref_common_variantsfiltcovBNABIPAF,$ref_different_variantsfiltcovBNABIPAF)=filter_with_PAF($ref_common_variantsfiltcovBNABI,$ref_different_variantsfiltcovBNABI,$constExeCondContentRefs{"${exe_condition}_${PAF_condition}"},\@statsfiltcovBNABIPAF);
         
                 @statsfiltcovBNABmeanPAF=(($statsAfiltcovBNABPAF[0]+$statsBfiltcovBNABPAF[0])/2.0,($statsAfiltcovBNABPAF[1]+$statsBfiltcovBNABPAF[1])/2.0,($statsAfiltcovBNABPAF[2]+$statsBfiltcovBNABPAF[2])/2.0);
+
+                @statsfiltcovBNABPAFPAF=getPAFStats(\@popAFfiltering_conditions, $constExeCondContentRefs{"${exe_condition}_${PAF_condition}"},$ref_different_variantsAfiltcovBNABPAF, $ref_different_variantsBfiltcovBNABPAF, $ref_common_variantsfiltcovBNABUPAF);
 
 #                #Output of list of variants and/or intermediate vcf files
                 
@@ -745,7 +761,7 @@ sub filter
                 #Final variables
                 my @statistics;
                 #Store and/or print
-                @statistics=(@{$nofiltResultsRef{$exe_condition}},@statsAfilt,@statsBfilt,@statsfiltU,@statsfiltI,@statsfiltmean,@statsAfiltN,@statsBfiltN,@statsfiltNU,@statsfiltNI,@statsfiltNmean,@statsfiltNPAF,@statsAfiltNcovB,@statsBfiltNcovB,@statsfiltNcovBU,@statsfiltNcovBI,@statsfiltNcovBmean,@statsfiltNcovBPAF,@{$statsfiltNABrefs[$nNAB]},@{$statsfiltNABPAFrefs[$nNAB]},@statsAfiltcovBNAB,@statsBfiltcovBNAB,@statsfiltcovBNABU,@statsfiltcovBNABI,@statsfiltcovBNABmean,@statsfiltcovBNABPAF,@statsAfiltcovBNABPAF, @statsBfiltcovBNABPAF, @statsfiltcovBNABUPAF, @statsfiltcovBNABIPAF, @statsfiltcovBNABmeanPAF);
+                @statistics=(@{$nofiltResultsRef{$exe_condition}},@statsAfilt,@statsBfilt,@statsfiltU,@statsfiltI,@statsfiltmean,@statsAfiltN,@statsBfiltN,@statsfiltNU,@statsfiltNI,@statsfiltNmean,@statsfiltNPAF,@statsAfiltNcovB,@statsBfiltNcovB,@statsfiltNcovBU,@statsfiltNcovBI,@statsfiltNcovBmean,@statsfiltNcovBPAF,@{$statsfiltNABrefs[$nNAB]},@{$statsfiltNABPAFrefs[$nNAB]},@statsAfiltcovBNAB,@statsBfiltcovBNAB,@statsfiltcovBNABU,@statsfiltcovBNABI,@statsfiltcovBNABmean,@statsfiltcovBNABPAF,@statsAfiltcovBNABPAF, @statsBfiltcovBNABPAF, @statsfiltcovBNABUPAF, @statsfiltcovBNABIPAF, @statsfiltcovBNABmeanPAF,@statsfiltcovBNABPAFPAF);
         #Condition,#A_#,B_#,N_#,AN_#,BN_#,Afilt_prop,Afilt_N,Afilt_#,Bfilt_prop,Bfilt_N,Bfilt_#,filt_propU,filt_NU,filt_#U,filt_propI,filt_NI,filt_#I,filt_prop_mean,filt_N_mean,filt_#_mean,AfiltN_prop,AfiltN_N,AfiltN_#,BfiltN_prop,BfiltN_N,BfiltN_#,filtN_propU,filtN_NU,filtN_#U,filtN_propI,filtN_NI,filtN_#I,filtN_prop_mean,filtN_N_mean,filtN_#_mean,(nPAFfreqs) x (AfiltN_Priv_PAF_XX,BfiltN_Priv_PAF_XX,filtN_U_PAF_XX),AfiltNcovB_prop,AfiltNcovB_N,AfiltNcovB_#,BfiltNcovB_prop,BfiltNcovB_N,BfiltNcovB_#,filtNcovB_propU,filtNcovB_NU,filtNcovB_#U,filtNcovB_propI,filtNcovB_NI,filtNcovB_#I,filtNcovB_prop_mean,filtNcovB_N_mean,filtNcovB_#_mean,(nPAFfreqs) x (AfiltNcovB_Priv_PAF_XX,BfiltNcovB_Priv_PAF_XX,filtNcovB_U_PAF_XX),AfiltNAB_prop,AfiltNAB_N,AfiltNAB_#,BfiltNAB_prop,BfiltNAB_N,BfiltNAB_#,filtNAB_propU,filtNAB_NU,filtNAB_#U,filtNAB_propI,filtNAB_NI,filtNAB_#I,filtNAB_prop_mean,filtNAB_N_mean,filtNAB_#_mean,(nPAFfreqs) x (AfiltNAB_Priv_PAF_XX,BfiltNAB_Priv_PAF_XX,filtNAB_U_PAF_XX),AfiltNABcovB_prop,AfiltNABcovB_N,AfiltNABcovB_#,BfiltNABcovB_prop,BfiltNABcovB_N,BfiltNABcovB_#,filtNABcovB_propU,filtNABcovB_NU,filtNABcovB_#U,filtNABcovB_propI,filtNABcovB_NI,filtNABcovB_#I,filtNABcovB_prop_mean,filtNABcovB_N_mean,filtNABcovB_#_mean,(nPAFfreqs) x (AfiltNABcovB_Priv_PAF_XX,BfiltNABcovB_Priv_PAF_XX,filtNABcovB_U_PAF_XX),AfiltNABcovBPAF_prop,AfiltNABcovBPAF_N,AfiltNABcovBPAF_#,BfiltNABcovBPAF_prop,BfiltNABcovBPAF_N,BfiltNABcovBPAF_#,filtNABcovBPAF_propU,filtNABcovBPAF_NU,filtNABcovBPAF_#U,filtNABcovBPAF_propI,filtNABcovBPAF_NI,filtNABcovBPAF_#I,filtNABcovBPAF_prop_mean,filtNABcovBPAF_N_mean,filtNABcovBPAF_#_mean
         
         		$results{"$NcovBcondition${sep_param}NAB$sep_param$NAB_condition${sep_param}PAF$sep_param$PAF_condition"}=\@statistics;
@@ -1963,7 +1979,7 @@ sub getPAFdata
     return \%outdata;
 }
 
-##This subrutine gets an array of PAF conditions and generates the frequency of private A, B and common C variants with PAF<=condition for each condition
+##This subrutine gets an array of PAF conditions and generates the frequency of private A, B and common C variants with PAF<=condition for each condition plus the mean PAF for A, B, and C respectively.
 sub getPAFStats
 {
     my ($ref_conditions, $ref_pAFfiltN, $ref_A, $ref_B, $ref_C)=@_;
@@ -1973,6 +1989,11 @@ sub getPAFStats
     my $ntotal;
     my $key;
     my $filtvalue;
+    my $cumPAF;
+    my $meanPAFA;
+    my $meanPAFB;
+    my $meanPAFC;
+
     #ref_pAFfiltN; #key: CHROM${OFS}POS${OFS}REF${OFS}ALT value: [$tfilt,$taf];
 
     foreach my $filtcond (@{$ref_conditions})
@@ -1982,22 +2003,41 @@ sub getPAFStats
         push(@filt_values,$filtvalue);
     }
 
-    foreach my $value (@filt_values)
+    for (my $i=0; $i<scalar@filt_values; ++$i)
     {
+        my $value=$filt_values[$i];
+
         #PrivA
         $ngood=0;
         $ntotal=0;
+        $cumPAF=0;
+
         foreach $key (keys %{$ref_A})
         {
             if(exists $ref_pAFfiltN->{$key})
             {
-                if($ref_pAFfiltN->{$key}->[1] eq "NA" || $ref_pAFfiltN->{$key}->[1] <= $value)
+                if($ref_pAFfiltN->{$key}->[1] eq "NA")
                 {
+                    $i==0 and $cumPAF+=$GNOMAD_MIN;
                     ++$ngood;
+                }
+                else
+                {
+                    if($ref_pAFfiltN->{$key}->[1] <= $value)
+                    {
+                        ++$ngood;
+                    }
+#                    else
+#                    {
+#                        ##Bad variant
+#                    }
+#
+                    $i==0 and $cumPAF+=$ref_pAFfiltN->{$key}->[1];
                 }
             }
             else
             {
+                $i==0 and $cumPAF+=$GNOMAD_MIN;
                 ++$ngood;
                 warn "No population data for $key\n";
             }
@@ -2007,26 +2047,40 @@ sub getPAFStats
         if($ntotal != 0)
         {
             push(@output,$ngood*1.0/$ntotal);
+            $i==0 and $meanPAFA=$cumPAF*1.0/$ntotal;
         }
         else
         {
             push(@output,"NaN");
+            $i==0 and $meanPAFA="NaN";
         }
         
         #PrivB
         $ngood=0;
         $ntotal=0;
+        $cumPAF=0;
+        
         foreach $key (keys %{$ref_B})
         {
             if(exists $ref_pAFfiltN->{$key})
             {
-                if($ref_pAFfiltN->{$key}->[1] eq "NA" || $ref_pAFfiltN->{$key}->[1] <= $value)
+                if($ref_pAFfiltN->{$key}->[1] eq "NA")
                 {
+                    $i==0 and $cumPAF+=$GNOMAD_MIN; 
                     ++$ngood;
+                }
+                else
+                {
+                    if($ref_pAFfiltN->{$key}->[1] <= $value)
+                    {
+                        ++$ngood;
+                    }
+                    $i==0 and $cumPAF+=$ref_pAFfiltN->{$key}->[1]; 
                 }
             }
             else
             {
+                $i==0 and $cumPAF+=$GNOMAD_MIN;
                 ++$ngood;
                 warn "No population data for $key\n";
             }
@@ -2035,26 +2089,40 @@ sub getPAFStats
         if($ntotal != 0)
         {
             push(@output,$ngood*1.0/$ntotal);
+            $i==0 and $meanPAFB=$cumPAF*1.0/$ntotal;
         }
         else
         {
             push(@output,"NaN");
+            $i==0 and $meanPAFB="NaN";
         }
         
         #Common
         $ngood=0;
         $ntotal=0;
+        $cumPAF=0;
+
         foreach $key (keys %{$ref_C})
         {
             if(exists $ref_pAFfiltN->{$key})
             {
-                if($ref_pAFfiltN->{$key}->[1] eq "NA" || $ref_pAFfiltN->{$key}->[1] <= $value)
+                if($ref_pAFfiltN->{$key}->[1] eq "NA")
                 {
+                    $i==0 and $cumPAF+=$GNOMAD_MIN;
                     ++$ngood;
+                }
+                else
+                {
+                    if($ref_pAFfiltN->{$key}->[1] <= $value)
+                    {
+                        ++$ngood;
+                    }
+                    $i==0 and $cumPAF+=$ref_pAFfiltN->{$key}->[1];
                 }
             }
             else
             {
+                $i==0 and $cumPAF+=$GNOMAD_MIN;
                 ++$ngood;
                 warn "No population data for $key\n";
             }
@@ -2064,14 +2132,17 @@ sub getPAFStats
         if($ntotal != 0)
         {
             push(@output,$ngood*1.0/$ntotal);
+            $i==0 and $meanPAFC=$cumPAF*1.0/$ntotal;
         }
         else
         {
             push(@output,"NaN");
+            $i==0 and $meanPAFC="NaN";
         }
 
     } ##Foreach filter
 
+    push(@output,$meanPAFA,$meanPAFB,$meanPAFC);
     return @output;
 }
 
@@ -2092,6 +2163,10 @@ sub makeHeaderPAF
         {
             push(@outcolumns,$name.$outcondition);
         }
+    }
+    foreach my $name (@{$ref_names})
+    {
+        push(@outcolumns, $name."Mean");
     }
     return @outcolumns;
 }
