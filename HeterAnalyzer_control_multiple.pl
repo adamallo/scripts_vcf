@@ -10,24 +10,39 @@ use Env;
 
 ##Configuration variables
 ######################################################
-our $private="-p private";
-our $sep_param="#";
-our $sep_value=":";
-our $OFS=",";
-our $FS=",";
-our $variant_caller="platypus";
-our $variant_calling_sh;
-our $helper_sh="HeterAnalyzer_multiple_helper.sh";
-our $helper_pl="HeterAnalyzer_multiple.pl";
-our $tstv_sh="tstv.sbatch";
-#our $annotation_sh="annovar.sh";
-our $n_cores=1;
-our $qsub="sbatch ${private} -N 1 -c ";
-our $qsub_noparallel="sbatch ${private} -N 1 -n 1 -c 1";
-our $qstat="qstat";
-our $sed='sed "s/Submitted batch job \(.*\)/\1/"';
-our $sleep=60;
+my $queue="";
+my $queue_argument="--partition=";
+my $sep_param="#";
+my $sep_value=":";
+my $OFS=",";
+my $FS=",";
+my $variant_caller="platypus";
+my $variant_calling_sh;
+my $helper_sh="perl.sh";
+my $helper_pl="HeterAnalyzer_multiple.pl";
+my $tstv_sh="tstv_multiple.sbatch";
+my $annotation_sh="annovar_multiple_loop.sh";
+my $covBED_sh="covBED.sh";
+my $covB_sh="covB_half_multiple.sh";
+my $covN_sh="covN_multiple.sh";
+my $reduce_sh="reduceHeterAnalyzer_multiple_control.sh";
+my $vcf_filt_exe="vcf_filtering.pl";
+my $n_cores=1;
+my $scheduler="submit";
+my $qsub="-N 1 -n 1 -c ";
+my $qsub_noparallel="-N 1 -n 1 -c 1"; 
+my $qstat="qstat";
+my $sed='sed "s/Queued job \(.*\)/\1/"';
+my $sep_dep=":";
+my $dep_prefix="--dependency=afterok";
+my $sleep=60;
 ######################################################
+
+##Global variables
+######################################################
+my %dictrealnamevcf;
+my @vcfnames;
+my @namedvcffiles;
 
 ##IO Variables
 ######################################################
@@ -36,16 +51,19 @@ my $filtercond_inputfile="";
 my $NABfiltercond_inputfile1="";
 my $NABfiltercond_inputfile2="";
 my $covBfiltercond_inputfile="";
+my $popAFfiltercond_inputfile="";
 my $output_dir="vcf_outputdir";
-my $input_file="";
-#my $normal_bam="";
-#my $sample1_bam="";
-#my $sample2_bam="";
+my $output_file="";
+my $normal_bam="";
 my $SCRIPTSVCF_DIR=$ENV{'SCRIPTSVCF_DIR'};
+my $output_vcf=0;
+my $output_list=0;
+my $comp=0;
+my @sample_bams;
 
 #Flags
 my $help;
-my $usage="\nUsage: $0 [options] -i inputfile\n\n\nOptions:\n--------\n\t-e/--exec_cond_inputfile : input file for execution parameters and options\n\t-f/--filt_cond_inputfile : input file for execution parameters and options\n\t--NABfilt_cond_inputfile : input file for the filtering options of the NAB sample\n\t--NABfilt_cond_inputfile2 : input file for the secondary filtering options of the NAB sample (OR filter implemented in a dirty way)\n\t--covaltB_cond_inputfile : input file for the filtering taking into account characteristics of the unfiltered in the comparison\n\t--output_dir : output directory for vcf files\n\t--n_cores : number of cores to execute some steps in parallel\n\t\n\nATTENTION: This version of the script is to run pairwise comparisons of multiple samples from the same individual (single normal) (i.e., large-dcis).\n\n";
+my $usage="Usage: $0 [options] -o output_file --normal_bamfile bamfile_normal_sample --output_vcf --output_list --comp [--queue] file1 file2 ... filen\n--output_vcf: (bool) generate resulting vcf files or not\n--output_list: (bool) generate resulting list of variants or not\n--comp: (int) indicating the comprehensiveness of the output, 0=no files, 1=only needed files to call variants, 2= all intermediate variants\nOptions:\n--------\n\t-e/--exec_cond_inputfile : input file for execution parameters and options\n\t-f/--filt_cond_inputfile : input file for execution parameters and options\n\t--NABfilt_cond_inputfile : input file for the filtering options of the NAB sample\n\t--NABfilt_cond_inputfile2 : input file for the secondary filtering options of the NAB sample (OR filter implemented in a dirty way)\n\t--covaltB_cond_inputfile : input file for the filtering taking into account characteristics of the unfiltered in the comparison\n\t--popAF_cond_inputfile: input file for the filter of population allele frequencies using gnomAD\n\t--output_dir: output directory for vcf files\n\t--n_cores: number of cores to execute some steps in parallel\n\t--queue: optional, name of the queue jobs should be submitted\n\n";
 ######################################################
 
 ######################################################
@@ -60,28 +78,43 @@ my $usage="\nUsage: $0 [options] -i inputfile\n\n\nOptions:\n--------\n\t-e/--ex
 	'NABfilt_cond_inputfile=s' => \$NABfiltercond_inputfile1,
     'NABfilt_cond_inputfile2=s' => \$NABfiltercond_inputfile2,
     'covaltB_cond_inputfile=s' => \$covBfiltercond_inputfile,
+    'popAF_cond_inputfile=s' => \$popAFfiltercond_inputfile,
     'output_dir=s' => \$output_dir,
-    'input_file|i=s' => \$input_file,
+	'output_file|o=s' => \$output_file,
+	'normal_bamfile=s' => \$normal_bam,
     'n_cores=i' => \$n_cores,
+    'output_vcf=i'=>\$output_vcf,
+    'output_list=i' => \$output_list,
+    'comp=i' => \$comp,
+    'queue=s' => \$queue,
     'help|h' => \$help,
-                )) or (($input_file eq "") || $help) and die $usage;
+                )) or (($output_file eq "") || ($normal_bam eq "") || $help) and die $usage;
 
-$qsub.=$n_cores;
+##Parsing input bam files
+#########################
+
+@sample_bams=@ARGV;
+
+foreach my $samplefile (@sample_bams)
+{
+    if ( ! -f $samplefile)
+    {
+        die "The BAM file $samplefile is not accesible. Please, check input options.\n";
+    }
+    else
+    {
+        $samplefile=Cwd::abs_path($samplefile);
+    }
+
+}
 
 ##Input file parsing and directory creation
 ######################################################
 
 my @exe_parameters=("input");
-my @exe_param_values=([("")]);
 my @filtering_parameters=("");
-my @NABfiltering_parameters1=("");
-my @NABfiltering_parameters2=("");
-my @covBfiltering_parameters=("");
-
+my @exe_param_values=([("")]);
 my @filtering_param_values=([("")]);
-my @NABfiltering_param_values1=([("")]);
-my @NABfiltering_param_values2=([("")]);
-my @covBfiltering_param_values=([("")]);
 
 ##Input files
 
@@ -90,40 +123,33 @@ if ($execond_inputfile ne "")
 	@exe_parameters=();
 	parse_parameters_values($execond_inputfile,\@exe_parameters,\@exe_param_values);
 }
+
 if ($filtercond_inputfile ne "")
 {
     @filtering_parameters=();
     parse_parameters_values($filtercond_inputfile,\@filtering_parameters,\@filtering_param_values);
 }
 
-if ($NABfiltercond_inputfile1 ne "")
+##BAMs
+if ( ! -f $normal_bam)
 {
-    @NABfiltering_parameters1=();
-    parse_parameters_values($NABfiltercond_inputfile1,\@NABfiltering_parameters1,\@NABfiltering_param_values1);
+	die "The BAM file $normal_bam is not accesible. Please, check ymy input options.\n";
+}
+else
+{
+	$normal_bam=Cwd::abs_path($normal_bam);
 }
 
-if ($NABfiltercond_inputfile2 ne "")
-{
-    @NABfiltering_parameters2=();
-    parse_parameters_values($NABfiltercond_inputfile2,\@NABfiltering_parameters2,\@NABfiltering_param_values2);
-}
 
-if ($covBfiltercond_inputfile ne "")
-{
-    @covBfiltering_parameters=();
-    parse_parameters_values($covBfiltercond_inputfile,\@covBfiltering_parameters,\@covBfiltering_param_values);
-}
-
+mkdir $output_dir;
 my $oefile=Cwd::abs_path($execond_inputfile);
 my $offile=Cwd::abs_path($filtercond_inputfile);
 my $onfile=Cwd::abs_path($NABfiltercond_inputfile1);
 my $onfile2=Cwd::abs_path($NABfiltercond_inputfile2);
-my $ifile=Cwd::abs_path($input_file);
 my $ocfile=Cwd::abs_path($covBfiltercond_inputfile);
-
-mkdir $output_dir;
-chdir $output_dir or die "The output directory $output_dir is not accesible";
+my $opfile=Cwd::abs_path($popAFfiltercond_inputfile);
 $output_dir=Cwd::abs_path($output_dir);
+chdir $output_dir or die "The output directory $output_dir is not accesible";
 
 if (-f "$SCRIPTSVCF_DIR/$variant_caller.sh")
 {
@@ -134,14 +160,18 @@ else
     die "Error, the sh file for the variant caller $variant_caller can't be located. Please, make sure that the environment variable SCRIPTSVCF_DIR is indicating the folder with this package of scripts\n"
 }
 
-if (-f "$SCRIPTSVCF_DIR/$helper_sh" && -f "$SCRIPTSVCF_DIR/$helper_pl")
+if (-f "$SCRIPTSVCF_DIR/$helper_sh" && -f "$SCRIPTSVCF_DIR/$helper_pl" && -f "$SCRIPTSVCF_DIR/$reduce_sh" && -f "$SCRIPTSVCF_DIR/$covB_sh" && -f "$SCRIPTSVCF_DIR/$covN_sh")
 {
     $helper_sh="$SCRIPTSVCF_DIR/$helper_sh";
     $helper_pl="$SCRIPTSVCF_DIR/$helper_pl";
+    $reduce_sh="$SCRIPTSVCF_DIR/$reduce_sh";
+    $covB_sh="$SCRIPTSVCF_DIR/$covB_sh";
+    $covN_sh="$SCRIPTSVCF_DIR/$covN_sh";
+    $covBED_sh="$SCRIPTSVCF_DIR/$covBED_sh";
 }
 else
 {
-    die "Error, the files for the secondary analysis of the data, $helper_sh and $helper_pl can't be located. Please, make sure that the environment variable SCRIPTSVCF_DIR is indicating the folder with this package of scripts\n"
+    die "Error, the files for the secondary analysis of the data, $helper_sh, $helper_pl, $reduce_sh, $covB_sh, and $covN_sh can't be located. Please, make sure that the environment variable SCRIPTSVCF_DIR is indicating the folder with this package of scripts\n"
 }
 
 if (-f "$SCRIPTSVCF_DIR/$tstv_sh")
@@ -153,324 +183,357 @@ else
   die "Error, the sh file to get the TsTv data, $tstv_sh can't be located. Please, make sure that the environment variable SCRIPTSVCF_DIR is indicating the folder with this package of scripts\n"
 }
 
-my $vcf_filt_exe="$SCRIPTSVCF_DIR/vcf_filtering.pl";
+if (-f "$SCRIPTSVCF_DIR/$annotation_sh")
+{
+    $annotation_sh="$SCRIPTSVCF_DIR/$annotation_sh";
+}
+else
+{
+  die "Error, the sh file to annotate variants using annovar, $annotation_sh can't be located. Please, make sure that the environment variable SCRIPTSVCF_DIR is indicating the folder with this package of scripts\n"
+}
 
-if (! -f "$vcf_filt_exe")
+if (-f "$SCRIPTSVCF_DIR/$vcf_filt_exe")
+{
+    $vcf_filt_exe="$SCRIPTSVCF_DIR/$vcf_filt_exe";
+}
+else
 {
     die "The executable vcf_filtering.pl can't be located. Please, make sure that the environment variable SCRIPTSVCF_DIR indicates the directory with this package of scripts\n";
 }
 
-my $postanalyzer_exe="$SCRIPTSVCF_DIR/postHeterAnalyzer_multiple.sh";
-if (! -f $postanalyzer_exe)
+if($output_vcf==0 || $comp != 2)
 {
-    die "The executable postanalyzer.exe can't be located. Please, make sure that the environment variable SCRIPTSVCF_DIR indicates the directory with this package of scripts\n";
+    print "Warning: not generating output vcf files or restricting them (--comp<2) will eliminate the tstv posterior analyses\n"
 }
 
-##Input file parsing
-####################
-
-my %cases;
-my %datafiles;
-my $normalfile="";
-open(my $INPUT,$ifile) or die "Error opening input file $ifile\n$usage";
-my @acases=<$INPUT>;
-close($INPUT);
-my $name;
-my $normal;
-my $a;
-my $b;
-
-foreach my $case (@acases)
+##Job submitting command finalization
+if ($queue ne "")
 {
-    ($name,$normal, $a, $b) = split (" ",$case);
-    $cases{$name}=[$normal,$a,$b];
-
-    if ($normalfile eq "")
-    {
-        $normalfile= $normal;
-    }
-    ($normal ne $normalfile) and die "Error, all normal files must be the same\n";
-
-    $datafiles{$a}=1;
-    $datafiles{$b}=1;
+    $qsub=join(" ",$scheduler,$queue_argument.$queue,$qsub.$n_cores);
+    $qsub_noparallel=join(" ",$scheduler,$queue_argument.$queue,$qsub_noparallel);
+}
+else
+{
+    $qsub=join(" ",$scheduler,$qsub.$n_cores);
+    $qsub_noparallel=join(" ",$scheduler,$qsub_noparallel);
 }
 
+#
 ## Main conditions loop
 #######################
 
 my $name_condition;
 my @exe_conditions;
-my $bamfiles;
 my @filtering_conditions;
-my @NABfiltering_conditions1; 
-my @NABfiltering_conditions2;
-my @NABfiltering_conditions;
-my @covBfiltering_conditions;
+my $bamfiles;
 
-##Generate all combinations of proposed values for execution and filtering parameters
+###Generate all combinations of proposed values for execution
 combs(0,"",\@exe_parameters,\@exe_param_values,\@exe_conditions);
 combs(0,"",\@filtering_parameters,\@filtering_param_values,\@filtering_conditions);
-combs(0,"",\@NABfiltering_parameters1,\@NABfiltering_param_values1,\@NABfiltering_conditions1);
-combs(0,"",\@NABfiltering_parameters2,\@NABfiltering_param_values2,\@NABfiltering_conditions2);
-combs(0,"",\@covBfiltering_parameters,\@covBfiltering_param_values,\@covBfiltering_conditions);
 
-our %job_ids;
+my %job_ids;
+my $exe_condition;
 
 mkdir("e_logs");
 mkdir("o_logs");
 
-### Normal with default calling parameters. This may be changed in the future
+### Default calling parameters. This may be changed in the future
 #########################################################
 
-my $job_id;
-my $normalvcf=basename($normalfile);
-my $vcfname=$normalvcf;
-$vcfname=~s/.bam//;
-$normalvcf=~s/.bam/.vcf/;
 print("Unfiltered variant calling detection/execution:\n");	
-if(! -f $normalvcf)
+if(! -f "N.vcf")
 {
-	$bamfiles=$normalfile;
-	my $exe_condition="";
-    $job_id=submit_job_name($vcfname,"$qsub $variant_calling_sh $bamfiles $vcfname.vcf ${vcfname}_platypus.log $exe_condition");
+	$bamfiles=$normal_bam;
+	$exe_condition="";
+    my $job_id=submit_job("$qsub $variant_calling_sh $bamfiles N.vcf N_platypus.log $exe_condition");
     print("\tNormal tissue variant calling submited with job_id $job_id\n");
 }
 else
 {
 	print("\tNormal tissue variant calling already present, skipping it\n");
 }
+push(@namedvcffiles,"N.vcf");
 
-my @afiles=sort keys %datafiles; #If we do not sort them NAB files will not have always the same order between runs
-my $fjob_id="";
-my $actual_exe_conditions;
+my $samplename;
 
-for (my $i=0; $i<scalar(@afiles); ++$i)
+for (my $i=0; $i< scalar @sample_bams; ++$i)
 {
-    $bamfiles=$afiles[$i];
-    $vcfname=basename($bamfiles);
-    $vcfname=~s/.bam//;
-    unless (-f "$vcfname.vcf") ##Variant calling for each cancer file
+
+    $samplename=sprintf("S%0*d", length scalar @sample_bams, $i);
+    if(! -f "${samplename}.vcf")
     {
-        $job_id=submit_job_name($vcfname,"$qsub $variant_calling_sh $bamfiles $vcfname.vcf ${vcfname}_platypus.log"); ##Defaults do not generate dependencies
-        print("\tSample $vcfname variant calling submited with job_id $job_id\n");
+    	$bamfiles=$sample_bams[$i];
+    	$exe_condition="";
+        my $job_id=submit_job("$qsub $variant_calling_sh $bamfiles ${samplename}.vcf ${samplename}_platypus.log $exe_condition"); 
+    	print("\tSample $samplename variant calling submited with job_id $job_id\n");
     }
     else
     {
-        print("\tSample $vcfname variant calling already present. Skipping\n");
+	    print("\tSample $samplename variant calling already present, skipping it\n");
     }
+    push(@namedvcffiles,"${samplename}.vcf");
+}
 
-    foreach my $exe_condition (@exe_conditions)
+my $cdeps=compile_dependencies(); #Dependencies for the N and SX files, just for heteranalyzer
+
+### Calling with filters (Only cancer samples so far)
+##############################################################
+my $job_id;
+my $actual_exe_conditions;
+print("Filtered variant calling detection/execution:\n");
+my $covNname;
+my $BEDname;
+my $file_exe_cond_name;
+my $file_covB_name;
+my @rep_deps;
+my %exe_deps;
+my $deps;
+my $tempofile;
+my $tag;
+my $EXETOFILE;
+my $exetcontent;
+my $casename=basename($output_dir,(".csv"));
+my $condition;
+my $this_filtered_sample;
+my $filtering_options;
+
+foreach my $exe_condition (@exe_conditions)
+{
+    $BEDname="ALL$exe_condition.bed";
+    $covNname="covN$sep_param$exe_condition.tsv";
+    my @sample_vcfs;
+	@rep_deps=();
+    %exe_deps=();
+    
+    my @current_conditions;
+    ##Current_conditions: for naming, includes info on exe and filtering conditions
+    ##Filtering_conditions: needed to filter the files generated using the exe conditions
+    for (my $i=0; $i<scalar @filtering_conditions;++$i)
     {
-        $job_id="";
-        unless (-f "$vcfname$sep_param$exe_condition.vcf")
-        {
+        $current_conditions[$i]="$exe_condition$sep_param$filtering_conditions[$i]";
+    }
+    
+    for (my $nfile=0; $nfile<scalar @sample_bams; ++$nfile)
+    {
+        $samplename=sprintf("S%0*d", length scalar @sample_bams, $nfile);
+        $file_exe_cond_name="$samplename$sep_param$exe_condition.vcf";
+        push(@sample_vcfs,$file_exe_cond_name);
+        push(@namedvcffiles,$file_exe_cond_name);
+        $file_covB_name="$samplename$sep_param$exe_condition${sep_param}covBfiltering.tsv";
+        if (! -f "$file_exe_cond_name")
+    	{
+    		$bamfiles=$sample_bams[$nfile];
             if ($exe_condition eq "Default${sep_value}1")
-        	{
-        		$actual_exe_conditions="";
-        		#print("DEBUG: A: Default exe conditions\n");
-        	}
-        	else
-        	{
-        		$actual_exe_conditions=join(" ",split("$sep_value",join(" ",split("$sep_param",$exe_condition))));
-        		#print("DEBUG: A: Real exe_conditions\n");
-        	}
-            $job_id=submit_job_name($vcfname,"$qsub $variant_calling_sh $bamfiles $vcfname$sep_param$exe_condition.vcf $vcfname$sep_param${exe_condition}_platypus.log $actual_exe_conditions");
-            print("\tSample $vcfname$sep_param$exe_condition.vcf variant calling submited with job_id $job_id\n");
-        }
-        else
-        {
-            print("\tSample $vcfname$sep_param$exe_condition.vcf variant calling already present. Skipping\n");
-        }
-        for my $filtering_condition (@filtering_conditions)
-        {
-            my $condition="$exe_condition$sep_param$filtering_condition";
-            unless (-f "$vcfname$sep_param$condition.vcf")
             {
-                my $filtering_command="$vcf_filt_exe ";
-                $filtering_command.=join(" ",split("$sep_value",join(" ",split("$sep_param",$filtering_condition))));
-                if($job_id eq "")
-                {
-                    #No dependency
-                    $fjob_id=submit_job_name($vcfname,"$qsub_noparallel --job-name=$vcfname$sep_param${condition}_filtering $filtering_command -i $vcfname$sep_param$exe_condition.vcf -o $vcfname$sep_param$condition.vcf");
-                    print("\tFiltering $vcfname$sep_param$exe_condition to generate $vcfname$sep_param$condition.vcf in job $fjob_id\n"); 
-                }
-                else
-                {
-                    $fjob_id=submit_job_name($vcfname,"$qsub_noparallel --dependency=afterok:$job_id --job-name=$vcfname$sep_param${condition}_filtering $filtering_command -i $vcfname$sep_param$exe_condition.vcf -o $vcfname$sep_param$condition.vcf");
-                    print("\tFiltering $vcfname$sep_param$exe_condition to generate $vcfname$sep_param$condition.vcf in job $fjob_id\n"); 
-                }
+                $actual_exe_conditions="";
+                #print("DEBUG: A: Default exe conditions\n");
+           	}
+            else
+       		{
+           		$actual_exe_conditions=join(" ",split("$sep_value",join(" ",split("$sep_param",$exe_condition))));
+           		#print("DEBUG: A: Real exe_conditions\n");
+       		}
+    		
+            $job_id=submit_job("$qsub $variant_calling_sh $bamfiles $file_exe_cond_name $samplename$sep_param${exe_condition}_platypus.log $actual_exe_conditions",\%exe_deps);
+            push(@rep_deps,$job_id);
+            $deps=$dep_prefix.$sep_dep.$job_id;
+    		print("\tSample $samplename variant calling for conditions $exe_condition submited with job_id $job_id\n");
+    
+    	}
+    	else
+        {
+            $deps="";
+    		print("\tSample $samplename variant calling for conditions $exe_condition already present, skipping it\n");
+    	}
+
+        #WORKING HERE
+        #TODO Improvement
+        #These jobs are very quick, I could just calculate them with a single script? I cannot run them in this script since they depend on jobs submitted from it
+        for (my $i=0; $i<scalar @current_conditions; ++$i)
+        {
+            $condition=$current_conditions[$i];
+            $this_filtered_sample=vcf_refname("$samplename$sep_param$condition.vcf",$condition);
+            $filtering_options=join(" ",split("$sep_value",join(" ",split("$sep_param",$filtering_conditions[$i]))));
+            if (! -f $this_filtered_sample)
+            {
+                $job_id=submit_job("$qsub_noparallel $deps -J Filtering.$samplename.$i $helper_sh $vcf_filt_exe $filtering_options -i $file_exe_cond_name -o $this_filtered_sample",\%exe_deps);
+       
+                print("\tFiltering $samplename to generate $this_filtered_sample submited with job_id $job_id\n");
             }
             else
             {
-                print("\tSample $vcfname$sep_param$condition.vcf already present. Skipping\n");
+                print("$this_filtered_sample has been previously generated and it will be recycled. WARNING: this may generate inconsistencies if the number or order of parameters are changed between executions\n");
             }
         }
-    }    
-    for (my $j=$i+1; $j<scalar(@afiles);++$j)
-    {
-        $job_id="";
-        $bamfiles="$normalfile,".$afiles[$i].",".$afiles[$j];
-        $vcfname=basename($normalfile)."_".basename($afiles[$i])."_".basename($afiles[$j]);
-        $vcfname=~s/.bam//g;
-        unless (-f "$vcfname.vcf") ##Variant calling for each NAB file
-        {
-            $job_id=submit_job_name($vcfname,"$qsub $variant_calling_sh $bamfiles $vcfname.vcf ${vcfname}_platypus.log");
-            print("\tSample $vcfname variant calling submited with job_id $job_id\n");
-        }
-        else
-        {
-            print("\tSample $vcfname variant calling already present. Skipping\n");
-        }
-    }
-}
-
-my $deps="";
-
-foreach my $name (keys %cases)
-{
-
-    ($normal, $a, $b)=@{$cases{$name}};
-    $normal=basename($normal);
-    $normal=~s/.bam//;
-    $a=basename($a);
-    $a=~s/.bam//;
-    $b=basename($b);
-    $b=~s/.bam//;
-    my @tempdeps;
-    if(exists $job_ids{$normal})
-    {
-        push(@tempdeps,join(":",@{$job_ids{$normal}}));
-    }
-    if(exists $job_ids{$a})
-    {
-        push(@tempdeps,join(":",@{$job_ids{$a}}));
-    }
-    if(exists $job_ids{$b})
-    {
-        push(@tempdeps,join(":",@{$job_ids{$b}}));
-    }
-    if(exists $job_ids{"${normal}_${a}_${b}"}) ##
-    {
-        push(@tempdeps,join(":",@{$job_ids{"${normal}_${a}_${b}"}}));
-    }
-    if(exists $job_ids{"${normal}_${b}_${a}"})
-    {
-        push(@tempdeps,join(":",@{$job_ids{"${normal}_${b}_${a}"}}));
     }
 
-    if (scalar @tempdeps > 0)
+    $deps=join($sep_dep,@rep_deps);
+    if ($deps ne "")
     {
-        $deps="--dependency=afterok:".join(":",@tempdeps);
+        $deps="$dep_prefix$sep_dep$deps";
+    }
+
+    #Generates a BED file with all the variants for this exe_cond. This will be used for covB and covN and it depends on @rep_deps
+    if ( ! -f "$BEDname")
+    {
+        $job_id=submit_job("$qsub_noparallel $deps $covBED_sh $BEDname ".join(" ",@sample_vcfs),\%exe_deps);
+        print("\tThe generation of the BED file for all sample variants for exe_conditions $exe_condition submitted with job_id $job_id\n");
+        $deps="$dep_prefix$sep_dep$job_id";
     }
     else
     {
         $deps="";
+        print("\tReusing previously generated $BEDname\n");
     }
-    if(-f $onfile2)
-    {   
-        $job_id=submit_job_name("comp","$qsub $deps $helper_sh $helper_pl --output_folder $output_dir/$name -n $normal -a $a -b $b -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile2 $onfile2 --covaltB_cond_inputfile $ocfile -o $name.csv --n_cores $n_cores");
+
+    #Call covN variants just once
+    if (! -f "$covNname")
+    {
+        $job_id=submit_job("$qsub_noparallel $deps $covN_sh $BEDname $covNname $normal_bam",\%exe_deps);
+        print("\tThe variant calling of N using the $BEDname BED file for exe_conditions $exe_condition submitted with job_id $job_id\n");
     }
     else
     {
-        $job_id=submit_job_name("comp","$qsub $deps $helper_sh $helper_pl --output_folder $output_dir/$name -n $normal -a $a -b $b -e $oefile -f $offile --NABfilt_cond_inputfile $onfile --covaltB_cond_inputfile $ocfile -o $name.csv --n_cores $n_cores");
+        $job_id="";
+        print("\tReusing previously generated $covNname\n");
     }
-    print("The filtering and analysis of the vcf files is being conducted with the job_id $job_id\n");
-    
-    $job_id=submit_job_name("tstv","$qsub_noparallel --dependency=afterok:$job_id $tstv_sh $output_dir/$name");
-    print("Ts/Tv statistics for $name are being calculated in the job_id $job_id\n");
-   
-}
 
-###Annovar and Ts/Tv for the main directory
-#Depends on variant calling
-my @temp;
-foreach my $key (keys %job_ids)
-{
-    unless ($key =~ /tstv/) #All variant callings
+    #Call covB variants in each sample
+    for (my $nfile=0; $nfile<scalar @sample_bams; ++$nfile)
     {
-        push(@temp,@{$job_ids{$key}});
+        $samplename=sprintf("S%0*d", length scalar @sample_bams, $nfile);
+        $file_covB_name="$samplename$sep_param$exe_condition${sep_param}covBfiltering.tsv";
+        if(! -f $file_covB_name)
+        {
+            $job_id=submit_job("$qsub_noparallel $deps $covB_sh $BEDname $file_covB_name $sample_bams[$nfile]",\%exe_deps);
+            print("\tCalling variants on $samplename for covB calculations for exe_conditions $exe_condition submitted with job_id $job_id\n");
+        }
+        else
+        {
+            print("\tReusing previously generated $file_covB_name\n");
+        }
+
     }
-}
-if (scalar @temp > 0)
+
+    $deps=dependencies_string(\%exe_deps);
+
+    if($cdeps ne "")
+    {
+        $deps=$deps.$sep_dep.$cdeps;
+    }
+
+    #Generating temprorary file with the exe-params of this exe-condition
+    $tag=$exe_condition;
+    $tag=~s/[^0-9]*//g; #Unique identifier generated with the numbers of the parameter values of this exe-condition
+    open($EXETOFILE,">exeparams.$tag") or die "Problems generating the temp exeparams.$tag file\n";
+    $exetcontent=$exe_condition;
+    $exetcontent=~s/=/=$FS/g;
+    $exetcontent=~s/$sep_param/\n/g;
+    print($EXETOFILE $exetcontent);
+    close($EXETOFILE) or die "Problems closing the temp exeparams.$tag file\n";
+    
+    #Generating name of the temporary output file for this exe-condition 
+
+    $tempofile=$output_file;
+
+    $tempofile=~s/\/[^\/]+$//g;
+    
+    for (my $i=0; $i<scalar @sample_bams; ++$i)
+    {
+        for (my $j=$i+1; $j<scalar @sample_bams; ++$j)
+        {
+            my $nameA=sprintf("S%0*d",length scalar @sample_bams, $i);
+            my $nameB=sprintf("S%0*d", length scalar @sample_bams, $j);
+            my $thistempofile="$tempofile/${casename}_${nameA}_${nameB}.$tag.csv";
+            if(-f $onfile2)
+            { 
+                $job_id=submit_job("$qsub $deps -J HeterAnalyzer.${casename}_$samplename.$tag $helper_sh $helper_pl -a $nameA -b $nameB -e exeparams.$tag -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile2 $onfile2 --covaltB_cond_inputfile $ocfile --popAF_cond_inputfile $opfile -o $thistempofile --output_vcf $output_vcf --output_list $output_list --comp $comp --n_cores $n_cores");
+
+            }
+            else
+            {
+                $job_id=submit_job("$qsub $deps -J HeterAnalyzer.${casename}_$samplename.$tag $helper_sh $helper_pl -a $nameA -b $nameB -e exeparams.$tag -f $offile --NABfilt_cond_inputfile $onfile --covaltB_cond_inputfile $ocfile --popAF_cond_inputfile $opfile -o $thistempofile --output_vcf $output_vcf --output_list $output_list --comp $comp --n_cores $n_cores");
+            }
+            print("\tThe filtering and analysis of the vcf files is being conducted with the job_id $job_id\n");
+        }
+    }
+
+} 
+
+$deps=dependencies_string();
+
+$job_id=submit_job("$qsub_noparallel $deps $reduce_sh $output_file");
+print("The reduction of results of parallelized jobs submitted with job_id $job_id\n");
+
+unless ($output_vcf==0 || $comp != 2)
 {
-    $deps="--dependency=afterok:".join(":",@temp);
+    $deps=dependencies_string();
+    $job_id=submit_job("$qsub $deps $annotation_sh $n_cores"); 
+    print("Variant annotation with annovar submitted with job_id $job_id\n");
+    $job_id=submit_job("$qsub $deps $tstv_sh $output_dir");
+    print("Ts/Tv statistics are being calculated in the job_id $job_id\n");
+
 }
-else
-{
-    $deps="";
-}
+print("Jobs submitted!\n$job_id");
 
-
-$job_id=submit_job_name("tstv","$qsub $deps $helper_sh $n_cores"); ##Annovar ##I think this is wrong
-
-$job_id=submit_job_name("tstv","$qsub_noparallel --dependency=afterok:$job_id $tstv_sh $output_dir"); #TsTv ##I think this is wrong
-
-print("Common Ts/Tv statistics are being calculated in the job_id $job_id\n"); ##What are these?
-
-$deps=join(":",@{$job_ids{"tstv"}});
-
-###EDIT: I definetly need to modify the postanalyzer, so that I can get all the data back.
-
-### I will need to bring back the postanalyzer step. However, I do need to check other things first, this starting to be too complicated
-
-$job_id=submit_job_name("","$qsub_noparallel --dependency=afterok:$deps $postanalyzer_exe $output_dir $ifile $oefile $offile $onfile $onfile2 $ocfile");
-print("PostHeterAnalyzer job submitted with job_id $job_id\n");
-print("Jobs submitted!\n");
+write_vcfrefname_dict("vcfdict.csv");
 
 exit;
 
 ###################################################################################
 ###FUNCTIONS
 ###################################################################################
+
 sub submit_job
 {
-    my ($command)=@_;
-    my $job_id="";
-    $job_id=`$command | $sed`;
-    chomp($job_id);
-    while ($job_id eq "")
-    {
-	    print("WARNING: Job submission has failed, trying again\n");
-        sleep($sleep);
-        $job_id=`$command | $sed`;
-   		chomp($job_id);
-    }
-    #$job_ids{$job_id}=1;
-    return $job_id;
-}
+    my $refhash=\%job_ids;
+    my $command;
 
-sub submit_job_name
-{
-    my ($name,$command)=@_;
-    my $job_id="";
-    $job_id=`$command | $sed`;
-    chomp($job_id);
-    while ($job_id eq "")
+    if (scalar @_ == 2)
     {
-	    print("WARNING: Job submission has failed, trying again\n");
-        sleep($sleep);
-        $job_id=`$command | $sed`;
-   		chomp($job_id);
-    }
-    if (exists $job_ids{$name})
-    {
-        push(@{$job_ids{$name}},$job_id);
+        ($command,$refhash)=@_;
     }
     else
     {
-        $job_ids{$name}=[$job_id];
+        ($command)=@_;
     }
 
-    #print("DEBUG: job name $name, id $job_id\n");
-
+    my $job_id="";
+    $job_id=`$command | $sed`;
+    chomp($job_id);
+    while ($job_id eq "")
+    {
+	    print("WARNING: Job submission has failed, trying again\n");
+        sleep($sleep);
+        $job_id=`$command | $sed`;
+   		chomp($job_id);
+    }
+    ${$refhash}{$job_id}=1;
     return $job_id;
 }
+
+sub dependencies_string
+{
+    my $deps=compile_dependencies(@_);
+    if ($deps ne "")
+    {
+        return "$dep_prefix$sep_dep$deps";
+    }
+
+    return $deps;
+}
+
 sub compile_dependencies
 {
     my $option="";
-    if (scalar(@_) ==1)
+    my $refhash=\%job_ids;
+    if (scalar(@_) ==2)
     {
-        ($option)=@_;
+        ($refhash,$option)=@_;
+    }
+    elsif (scalar(@_) ==1)
+    {
+        ($refhash)=@_;
     }
     my $dependencies="";
     my $keep=0;
@@ -478,10 +541,10 @@ sub compile_dependencies
     {
         $keep=1;    
     }
-    for my $key (keys %job_ids)
+    for my $key (keys %{$refhash})
     {
-        $dependencies="$dependencies$key:";
-        $keep == 0 and delete($job_ids{$key});
+        $dependencies="$dependencies$key$sep_dep";
+        $keep == 0 and delete(${$refhash}{$key});
     }
     chop($dependencies);
     return $dependencies;
@@ -905,3 +968,41 @@ sub write_variant_vcf
     close $OFILE;
 }
 
+# Returns the new vcf filename to write, using a number instead of its original name
+# It calculates a tag eliminating all non-numeric characters from the filter name
+# This is necessary for the parallel version since processes cannot share variables (they are only shared at the end)
+# A mapping between numbers and original names has to be then printed using write_vcfrefname_dict
+# If the file is already in the hash/array system, returns the name previously stored
+# ###############################################################################################
+
+sub vcf_refname
+{
+    my ($filename,$filter)=@_;
+    $filter=~s/[^0-9]//g;
+    if(exists $dictrealnamevcf{$filename} && $dictrealnamevcf{$filename}=~/^$filter/)
+    {
+        #warn "DEBUG: this file, $filename had been previously written by this process\n";
+        return $dictrealnamevcf{$filename}
+    }
+    my $n_name=push (@vcfnames,$filename);
+    my $realfilename=$output_dir."/".$filter . $n_name . ".vcf";
+    $dictrealnamevcf{$filename}=$realfilename;
+    return $realfilename;
+}
+
+# Generates the output file with the mapping of vcf file numbers and ideal names
+# ##############################################################################
+sub write_vcfrefname_dict
+{
+    my ($filename)=@_;
+    open (my $FILE, ">$filename");
+    foreach my $filename (keys %dictrealnamevcf)
+    {
+        print($FILE "$filename$OFS$dictrealnamevcf{$filename}\n");
+    }
+    foreach my $file (@namedvcffiles)
+    {
+        print($FILE "$file$OFS$output_dir/$file\n");
+    }
+    close($FILE);
+}

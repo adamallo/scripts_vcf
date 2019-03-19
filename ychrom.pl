@@ -1,6 +1,6 @@
 use strict;
 use warnings;
-
+use local::lib;
 use Bio::DB::Sam;
 use Bio::DB::Sam::Constants;
 use Bio::FeatureIO;

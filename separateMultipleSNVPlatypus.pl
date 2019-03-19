@@ -1,5 +1,6 @@
 use warnings;
 use strict;
+use local::lib;
 use Getopt::Long qw(GetOptions);
 Getopt::Long::Configure qw(gnu_getopt);
 use Sort::Key::Natural;
