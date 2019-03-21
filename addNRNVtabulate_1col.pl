@@ -9,7 +9,7 @@ use File::Basename;
 use Env;
 use Bio::DB::HTS::Tabix;
 
-my $usage="Usage: $0 [options] -i input_file -o output_file -f main_folder [-s suffix]\nThe variants file is the 1col result of tabulate_annovar_angelo.pl, filtered for the desired variants\nThis script adds the total number of reads, the number of alternative reads and the population allele frequency for each variant\nThe vcf parsed are in the form of A|B\${suffix}.*[different|common]. It requires the environment variable GNOMAD pointing to the GNOMAD database\n";
+my $usage="Usage: $0 [options] -i input_file -o output_file -f main_folder [-s suffix]\nThe variants file is the 1col result of tabulate_annovar_angelo.pl, filtered for the desired variants\nThis script adds the total number of reads, the number of alternative reads, the number of reads in the normal and the number of alternative reads in the normal, and the population allele frequency for each variant\nThe vcf parsed are in the form of A|B\${suffix}.*[different|common]. It requires the environment variable GNOMAD pointing to the GNOMAD database\n";
 ######################################################
 
 ######################################################
@@ -25,6 +25,7 @@ my $inputDir="";
 my $output_file="";
 my $input_file="";
 my $suffix="filtcovBNABPAF";
+my $normal='covN.*.tsv$';
 my $help;
 
 ##Getopt
@@ -96,41 +97,66 @@ opendir(my $IDIR, $inputDir) or die "can't opendir $inputDir: $!";
 my @dirs = grep { /^[^.]/ && -d "$inputDir/$_" } readdir($IDIR);
 closedir $IDIR;
 
-print("Writting the results...");
+print("Writting the results...\n");
 #my @shared_states=("Common","A","B");
 ##Opening the output file and prining the header
 open(my $OUTPUT, ">$output_file") or die "Impossible to write the output file\n";
 chomp($header);
 $header=~s/$IFS/$OFS/g;
-print($OUTPUT join("$OFS",$header,"VariantReads","TotalReads", "PAF"),"\n");
+print($OUTPUT join("$OFS",$header,"MeanVariantReads", "MeanTotalReads", "AVariantReads","ATotalReads","BVariantReads","BTotalReads", "NormalVariantReads", "NormalThisVariantReads", "NormalTotalReads", "PAF", "INDEL"),"\n");
+my ($ref_a,$ref_b,$ref_n);
+my $indel;
 
-foreach my $dir (@dirs){
+for (my $idir=0; $idir<scalar @dirs; ++$idir)
+{
+    $case=$dirs[$idir];
+    print("\tCase $case, ".($idir+1)."/".scalar @dirs."\n");
+    my @files=get_files($case);
 
-    $case=$dir;
-    #$case=~s/^.*?_//g;
-    #$case=~s///g;
-    my @files=get_files($dir);   
+    $ref_a=parseVCF($files[0]);
+    $ref_b=parseVCF($files[1]);
+    $ref_n=parseTSV($files[2]);
 
-    my $ref_a_private=parseVCF($files[0]);
-    my $ref_b_private=parseVCF($files[1]);
-    my $ref_a_common=parseVCF($files[2]);
-    my $ref_b_common=parseVCF($files[3]);
+    #DEBUG
+#    foreach my $key (keys %{$ref_n})
+#    {
+#        print("$key @{$ref_n->{$key}}\n");
+#    }
+
+    my $varnoalt;
     
     #print("DEBUG: ","case:$case",keys%{$variantdata{$case}->{"A"}});
     foreach my $varid (keys %{$variantdata{$case}->{"A"}})
     {
-        exists $ref_a_private->{$varid} or die "Private A variant $varid not found in the private VCF file for case $case\n";
-		print($OUTPUT join($OFS,$variantdata{$case}->{"A"}->{$varid},@{$ref_a_private->{$varid}},$ref_PAF_data->{$varid}[1]),"\n");
+        $indel=isindel($varid);
+        my $nvarid=updatevar($varid);
+        
+        unless(exists $ref_a->{$varid} && (exists $ref_n->{$nvarid} || $indel==1))
+        {
+            die "Private A variant $varid/$nvarid not found in the vcf files of the A or N samples for case $case\n";
+        }
+        
+		print($OUTPUT join($OFS,$variantdata{$case}->{"A"}->{$varid},@{$ref_a->{$varid}},@{$ref_a->{$varid}},"NA","NA",exists $ref_n->{$nvarid}?@{$ref_n->{$nvarid}}:["NA","NA","NA"],$ref_PAF_data->{$varid}[1],$indel),"\n");
     }
     foreach my $varid (keys %{$variantdata{$case}->{"B"}})
     {
-		exists $ref_b_private->{$varid} or die "Private B variant $varid not found in the private VCF file for case $case\n";
-		print($OUTPUT join($OFS,$variantdata{$case}->{"B"}->{$varid},@{$ref_b_private->{$varid}},$ref_PAF_data->{$varid}[1]),"\n");
+        $indel=isindel($varid);
+        my $nvarid=updatevar($varid);
+		unless(exists $ref_b->{$varid} && (exists $ref_n->{$nvarid} || $indel==1))
+        {
+            die "Private B variant $varid/$nvarid not found in the vcf files of the B or N samples for case $case\n";
+        }
+		print($OUTPUT join($OFS,$variantdata{$case}->{"B"}->{$varid},@{$ref_b->{$varid}},"NA","NA",@{$ref_b->{$varid}},exists $ref_n->{$nvarid}?@{$ref_n->{$nvarid}}:["NA","NA","NA"],$ref_PAF_data->{$varid}[1],$indel),"\n");
     }
     foreach my $varid (keys %{$variantdata{$case}->{"Common"}})
     {
-		(exists $ref_a_common->{$varid} and exists $ref_b_common->{$varid}) or die "Common variant $varid not found in one or both common variant VCF files for case $case\n";
-		print($OUTPUT join($OFS,$variantdata{$case}->{"Common"}->{$varid},join($FFS,$ref_a_common->{$varid}->[0],$ref_b_common->{$varid}->[0]),join($FFS,$ref_a_common->{$varid}->[1],$ref_b_common->{$varid}->[1]),$ref_PAF_data->{$varid}[1]),"\n");
+        $indel=isindel($varid);
+        my $nvarid=updatevar($varid);
+		unless(exists $ref_a->{$varid} && exists $ref_b->{$varid} && (exists $ref_n->{$nvarid} || $indel==1))
+        {
+            die "Common variant $varid/$nvarid not found in A, B, or N vcf files for case $case\n";
+        }
+		print($OUTPUT join($OFS,$variantdata{$case}->{"Common"}->{$varid},($ref_a->{$varid}->[0]+$ref_b->{$varid}->[0])/2,($ref_a->{$varid}->[1]+$ref_b->{$varid}->[1])/2,$ref_a->{$varid}->[0],$ref_a->{$varid}->[1],$ref_b->{$varid}->[0],$ref_b->{$varid}->[1],exists $ref_n->{$nvarid}?@{$ref_n->{$nvarid}}:["NA","NA","NA"],$ref_PAF_data->{$varid}[1],$indel),"\n");
     }
 }
 
@@ -138,47 +164,81 @@ close($OUTPUT);
 print("Done\n");
 exit;
 
+##Small functions to avoid repeating code
+sub updatevar
+{
+    my ($ivar)=@_;
+    if (! exists $ref_n->{$ivar})
+    {
+        $ivar=~s/$OFS[^$OFS]*$/$OFS\./g;
+    }
+    if (! exists $ref_n->{$ivar})
+    {
+        $ivar=~s/$OFS[^$OFS]*$OFS.$//g;
+    }
+    
+    return $ivar;
+}
+
+sub isindel
+{
+    my ($key)=@_;
+    my ($chr,$pos,$ref,$alt)=split($OFS,$key);
+
+    if(length $ref != length $alt)
+    {
+        return 1;
+    }
+
+    return 0;
+}
+
+##Larger functions
 sub get_files {
     my $directory=$_[0];
-    open(my $FILE, "$inputDir/$directory/vcfdict.csv");
-    my @vcfdict_cont=<$FILE>;
-    close($FILE);
+    ##We get the info from the ultimate source, the original vcf file.
+    opendir(my $DIR, $inputDir."/".$directory) or die "can't opendir $directory: $!";
+    my @dircontent = readdir($DIR);
+    closedir($DIR);
+    my @initial_variant_files;
+    my @covN_files;
     my @outfiles;
-    my $detected=0;
-    #print("DEBUG: ", join(" ",@vcfdict_cont));
-    foreach my $file(@vcfdict_cont)
+
+    foreach my $file (@dircontent)
     {
-        chomp($file);
-        if($file =~ m/A$suffix.*different\.vcf/)
+        if ($file =~ m/^[A|B](#--[^#]+)+.vcf$/)
         {
-            $outfiles[0]=$inputDir."/".$directory."/".(split(",",$file))[1];
-            $detected+=1;
+            push(@initial_variant_files, $file);
         }
-        elsif($file =~ m/B$suffix.*different\.vcf/)
+        elsif($file =~ m/$normal/)
         {
-            $outfiles[1]=$inputDir."/".$directory."/".(split(",",$file))[1];
-            $detected+=1;
+            push(@covN_files, $file);
         }
     }
 
-    ##The common files in the other output may not have the variant (one or the other). To get to the info we need to get to the ultimate source, the original vcf file. This is like this due to the fact that we are using the union of the variants.
-    opendir(my $DIR, $inputDir."/".$directory) or die "can't opendir $directory: $!";
-    my @initial_variant_files = grep { m/^[A|B](#--[^#]+)+.vcf$/ } readdir($DIR);
-    closedir($DIR);
+    scalar @initial_variant_files != 2 or scalar @covN_files != 1 and die "ERROR: detected ".scalar @initial_variant_files." vcf files containing common variants and ".scalar @covN_files." files with information of coverage in the normal, while expecting 2 and 1, respectively\nFiles:".join(",",@initial_variant_files)."and ".join(",",@covN_files)."\n";
+
     if($initial_variant_files[0]=~m/^A/)
     {
-        $outfiles[2]=$inputDir."/".$directory."/".$initial_variant_files[0];
-        $outfiles[3]=$inputDir."/".$directory."/".$initial_variant_files[1];
-        $detected+=2;
+        $outfiles[0]=$inputDir."/".$directory."/".$initial_variant_files[0];
+        $outfiles[1]=$inputDir."/".$directory."/".$initial_variant_files[1];
     }
     else
     {
-        $outfiles[2]=$inputDir."/".$directory."/".$initial_variant_files[1];
-        $outfiles[3]=$inputDir."/".$directory."/".$initial_variant_files[0];
-        $detected+=2;
+        $outfiles[0]=$inputDir."/".$directory."/".$initial_variant_files[1];
+        $outfiles[1]=$inputDir."/".$directory."/".$initial_variant_files[0];
     }
 
-    $detected != 4 and die "Problem parsing the VCF files. Detected $detected files\n";
+    $outfiles[2]=$inputDir."/".$directory."/".$covN_files[0];
+
+    foreach my $file (@outfiles)
+    {
+        if (!-f $file)
+        {
+            die "The file $file is not valid\n";
+        }
+    }
+
     #print("DEBUG: @outfiles\n");
     return @outfiles;
 
@@ -232,6 +292,75 @@ sub parseVCF
     }
     #print("DEBUG:",join(",",keys %data),"\n");   
     return \%data;
+}
+
+#Parses a covN tsv file and returns a dictionary with variant ids and values \@[normalvariantreads,normalthisvariantreads,normaltotalreads]. Foreach position, at least thre entries are added, one with information on the specific variant, another with specific reference but flexible variant ("."), and the last with only position information. The first is the preferred one, the second is necessary for cases in which 0 variants are found in the normal (or a different variant than in the problem samples), the third is needed in INDELS due to the different annovar format. As noted below, an insertion from A to AC in annovar would be coded as - C. However, UnifyGenotyper would call it as A . if the INDEL is not called. There is no way to go from one format to the other without accessing the reference genome.
+sub parseTSV
+{
+    my $file=$_[0];
+    open (my $FILE, $file) or die "Error opening the file $file\n";
+    #print("DEBUG: file $file\n");
+    my @rawdata=<$FILE>;
+    close($file);
+    my %data;
+    my @temp;
+    my @format;
+    my @sample;
+    my ($chr, $pos, $ref, $alt, $nref, $nvarreads, $nreads);
+    my ($newalt,$newref,$newpos); #IMPORTANT NOTE: Annovar uses a different ref/alt format for INDELS. They never contain repeated information. For example, if ref is A and alt AC, in annovar this will be noted as - C. This generates downstream problems. I am adding a second entry with this format to solve it.
+    my @alts;
+    my @array_nvarreads;
+
+    foreach my $line (@rawdata)
+    {
+        chomp($line);
+        if (!($line =~ m/^#/))
+        {
+            @temp=split("\t", $line);
+            ($chr, $pos, $ref, $alt, $nref, $nvarreads)=@temp;
+
+            @alts=split(",",$alt);
+            @array_nvarreads=split(",",$nvarreads);
+            ##We add a indetermined variant with 0 alternatives. If this was already present in the call, it will be eliminated since we are later using a hash, otherwise, it will provide info if the alternative in the problems is different than in the normal
+            push(@alts,".");
+            push(@array_nvarreads,0);
+
+            $nvarreads=0;
+
+            foreach my $thisvarreads (@array_nvarreads)
+            {
+                $nvarreads+=$thisvarreads;
+            }
+
+            $nreads = $nref+$nvarreads;
+
+            for (my $ialt=0; $ialt<scalar @alts; ++$ialt)
+            {
+                $data{join($OFS,$chr,$pos,$ref,$alts[$ialt])}=[$nvarreads,$array_nvarreads[$ialt],$nreads];
+                $data{join($OFS,$chr,$pos)}=[$nvarreads,$array_nvarreads[$ialt],$nreads];
+
+                if($alts[$ialt]=~m/^$ref/) ##Adding a second entry, as explained in the "important note" right above
+                {
+                    ($newref,$newalt)=($ref,$alts[$ialt]);
+                    $newref="-";
+                    $newalt=~s/^\Q$ref//;
+                    $data{join($OFS,$chr,$pos,$newref,$newalt)}=[$nvarreads,$array_nvarreads[$ialt],$nreads];
+                }
+                if($ref=~m/^$alts[$ialt]/) ##Adding a second entry, as explained in the "important note" right above
+                {
+                    ($newref,$newalt)=($ref,$alts[$ialt]);
+                    $newalt="-";
+                    $newref=~s/^\Q$alts[$ialt]//;
+                    $newpos=$pos+length($alts[$ialt]);
+                    #print("DEBUG: before $ref, $alt, $pos. after: $newref, $newalt, $newpos\n");
+                    $data{join($OFS,$chr,$pos,$newref,$newalt)}=[$nvarreads,$array_nvarreads[$ialt],$nreads];
+                }
+            }
+        }
+    }
+    #print("DEBUG:",join(",",keys %data),"\n");   
+    return \%data;
+    
 }
  
 ##Returns a hash ref to the population allele frequency information for all variants present in the input reference hashes 

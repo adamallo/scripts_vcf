@@ -867,6 +867,7 @@ sub parse_vcf
 
 #Parse tsv
 # WARNING: genotype information in TSV-related structures is different than in vcf-related ones. Here I used an array ref, with a different set of information. The format here is REF ALT1,ALTN READS READSALT1,READSALTN.
+# WARNING2: UnifiedGenotyper always writes first the info for SNVs, then for INDELS (if it detects and INDEL too). I benefit from this here since the second will overwrite the first. This may not be safe if something is changed.
 ###########################################
 sub parse_tsv
 {

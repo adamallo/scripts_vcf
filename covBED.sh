@@ -28,8 +28,9 @@ then
             exit 1
         fi
         vcf2bed --deletions < $vcf > ${vcf}_deletions.bed
+        vcf2bed --insertions < $vcf > ${vcf}_insertions.bed
         vcf2bed --snvs < $vcf > ${vcf}_snvs.bed
-        beds="$beds${vcf}_deletions.bed ${vcf}_snvs.bed "
+        beds="$beds${vcf}_deletions.bed ${vcf}_snvs.bed ${vcf}_insertions.bed "
     done
     ##working here paste $@ comma separated into allvcfs
     bedops --everything $beds | awk 'BEGIN{OFS="\t"}{print($1,$2,$3)}' > $out
