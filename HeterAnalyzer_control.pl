@@ -252,7 +252,7 @@ else
 	print("\tSample B variant calling already present, skipping it\n");
 }
 
-my $cdeps=compile_dependencies();
+my $cdeps=compile_dependencies(); #Dependencies for the A, B and N files, for heterAnalyzer
 
 ### Calling with filters (Only cancer samples so far)
 ##############################################################
@@ -265,8 +265,8 @@ my $BcovBname;
 my $covNname;
 my $Aexecondname;
 my $Bexecondname;
-my @rep_deps;
-my %exe_deps;
+my @rep_deps; ##Dependencies of a specific group of samples with an specific exe_condition --> For covN
+my %exe_deps; ##Dependencies of a specific group of samples with a specific exe_condition --> For HeterAnalyzer (includes covN)
 my $deps;
 my $tempofile;
 my $tag;
@@ -301,7 +301,7 @@ foreach my $exe_condition (@exe_conditions)
 		
         $job_id=submit_job("$qsub $variant_calling_sh $bamfiles $Aexecondname A$sep_param${exe_condition}_platypus.log $actual_exe_conditions",\%exe_deps);
         push(@rep_deps,$job_id);
-        $deps="$dep_prefix$sep_dep$job_id";
+        $deps="$dep_prefix$sep_dep$job_id"; #For covB
 		print("\tSample A variant calling for conditions $exe_condition submited with job_id $job_id\n");
 
 	}

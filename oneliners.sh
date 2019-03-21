@@ -41,3 +41,7 @@ picard CreateSequenceDictionary R=~/my_storage/GRCh37-lite.fa O=~/my_storage/GRC
 #Summary of optimization results
 #NABcovB prop and #U, NABcovBPAF prop and #U and all PAF statistics for optimization with two PAF levels
 perl -F, -lane 'print(join(",",@F[0..13],@F[(112,114,121..129,136,138,145..153)]))' results.csv | gzip > summary_results.csv.gz
+
+#Sumarization of multiple
+for i in ldcis*; do for j in $i/results/test2_vars_*/stats/var.csv; do strategy=$(echo $i | sed "s/ldcis//");case=$(echo $j | sed "s/stats\/var.csv//" | xargs -I{} basename {} | sed "s/test_vars_//"); while read line; do echo $case,$strategy,$line;done < <(tail -n+2 $j);done;done >> sumvars2.csv
+for i in ldcis*; do for j in $i/results/test2_vars_*/stats/sample.csv; do strategy=$(echo $i | sed "s/ldcis//");case=$(echo $j | sed "s/stats\/sample.csv//" | xargs -I{} basename {} | sed "s/test_vars_//"); while read line; do echo $case,$strategy,$line;done < <(tail -n+2 $j);done;done >> sumsamples2.csv

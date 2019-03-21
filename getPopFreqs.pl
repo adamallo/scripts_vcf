@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 use strict;
 use warnings;
+use local::lib;
 use Getopt::Long qw(GetOptions);
 Getopt::Long::Configure qw(gnu_getopt);
 use Bio::DB::HTS::Tabix;

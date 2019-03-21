@@ -170,6 +170,7 @@ foreach my $dir (@dirs)
             {
                 $type="";
             }
+            $type=~s/$OFS/ /g;
             @temp_data=(@temp_data[2..6],$temp_data[1],$temp_data[0],$type);
             print($OUTPUT2 print_array(($name,"Common",@temp_data)),"\n");
         }
@@ -201,7 +202,8 @@ foreach my $dir (@dirs)
                 $type="";
             }
 
-             @temp_data=(@temp_data[2..6],$temp_data[1],$temp_data[0],$type);
+            $type=~s/$OFS/ /g;
+            @temp_data=(@temp_data[2..6],$temp_data[1],$temp_data[0],$type);
             print($OUTPUT2 print_array(($name,"A",@temp_data)),"\n");
         }
         push(@out_line,@temp_data);
@@ -230,7 +232,7 @@ foreach my $dir (@dirs)
             {
                 $type="";
             }
-
+            $type=~s/$OFS/ /g;
             @temp_data=(@temp_data[2..6],$temp_data[1],$temp_data[0],$type);
             print($OUTPUT2 print_array(($name,"B",@temp_data)),"\n");
         }

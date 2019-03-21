@@ -3,6 +3,7 @@
 #SBATCH --mem-per-cpu 7500
 
 ###The memory is generating problems
-#module load perl/5.26.0
-#perl 5.26.0 is being loaded in my .basrc and my perl libraries added to @INC
+module load perl/5.26.0
+eval "$(perl -I$HOME/perl5/lib/perl5 -Mlocal::lib)" #My own perl library
+#perl 5.26.0 loaded perl libraries added to @INC
 perl $@
