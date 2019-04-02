@@ -1019,15 +1019,7 @@ sub vcf_compare_parsed
     }
 
     my $n_common=scalar(keys %commonvariants);
-    if($n2==0)
-    {
-        @{ $ref_statistics }=(0,$n_common,$n2); ##Stats= proportion of selected reads in the reference, number of selected variants
-
-    }
-    else
-    {
-        @{ $ref_statistics }=($n_common/$n2,$n_common,$n2); ##Stats= proportion of selected reads in the reference, number of selected variants
-    }
+    @{ $ref_statistics }=($n2>0?$n_common/$n2:"NaN",$n_common,$n2); ##Stats= proportion of selected reads in the reference, number of selected variants
     return (\%commonvariants,\%variants2); ##Common, not_in_ref
 
 }
@@ -1076,14 +1068,8 @@ sub vcf_prune
 	}
 	my $n_selvariants=scalar keys %variants1;
 	my $n_filtvariants=scalar keys %variants2;
-    if($n_selvariants+$n_filtvariants==0)
-    {
-         @{ $ref_statistics }=(0,$n_selvariants,$n_selvariants+$n_filtvariants); 
-    }
-    else
-    {   	
-	    @{ $ref_statistics }=($n_selvariants/($n_selvariants+$n_filtvariants),$n_selvariants,$n_selvariants+$n_filtvariants); ##Stats= proportion of selected reads in the reference, number of selected variants
-	}
+
+	@{ $ref_statistics }=($n_selvariants+$n_filtvariants>0?$n_selvariants/($n_selvariants+$n_filtvariants):"NaN",$n_selvariants,$n_selvariants+$n_filtvariants); ##Stats= proportion of selected reads in the reference, number of selected variants
     return (\%variants1,\%variants2);
 }
 
@@ -1092,12 +1078,9 @@ sub vcf_prune
 sub vcf_prune_covB
 {
     my ($vcf_1,$vcf_2,$tsv_todelete,$ref_statistics,$covBfiltering_options)=@_;
-    my %common_variants=%{$vcf_1};
     my %private_variants=%{$vcf_2};
-    my %common_variant_mapping=%{make_mapping_short_long_key($vcf_1)};
     my %private_variant_mapping=%{make_mapping_short_long_key($vcf_2)};
-    my $tag1=0;
-    my $tag2=0;
+    my $tag=0;
     my $totalreads=0;
     my $totalaltreads=0;
     my $prop_alts=0;
@@ -1132,6 +1115,10 @@ sub vcf_prune_covB
         {
            $max_propalt=$value;
         }
+        elsif ($param =~ /--default/i)
+        {
+            next;
+        }
         else
         {
             die "The param $param has not been recognized properly in the covB filtering step\n";
@@ -1141,7 +1128,6 @@ sub vcf_prune_covB
     ##Filtering loop
     ###############
     my $remove_var=0;
-    my $remove_private=0;
 
     foreach my $tsv_variant (keys %{$tsv_todelete})
     {
@@ -1152,21 +1138,9 @@ sub vcf_prune_covB
         $totalreads=$totalaltreads+${${$tsv_todelete}{$tsv_variant}}[2];
         $prop_alts=$totalreads != 0 ? ($totalaltreads+0.0)/$totalreads : 0 ;
 
-        if($totalreads < $min_coverage)
+        if($totalreads < $min_coverage || $totalaltreads>$max_alternative || $prop_alts>$max_propalt)
         {
-            $remove_var=1;
-        }
-        else
-        {
-            $remove_var=0;
-            if($totalaltreads>$max_alternative || $prop_alts>$max_propalt)
-            {
-               $remove_private=1; 
-            }
-            else
-            {
-                $remove_private=0;
-            }
+            $remove_var=1; 
         }
 
 #DEBUG        
@@ -1175,19 +1149,10 @@ sub vcf_prune_covB
 #        if(exists($common_variants{$tsv_variant}) || exists($private_variants{$tsv_variant}))
 #        {
 #            #print("DEBUG: Variant $tsv_variant\n");
-#            #print("DEBUG: removevar $remove_var, remove_private $remove_private, common $common, private $private, tag1 $tag1, tag2 $tag2, totalreads $totalreads, totalalternative $totalaltreads, proportion alternative $prop_alts,var 1 ${${$tsv_todelete}{$tsv_variant}}[2], var 2 ${${$tsv_todelete}{$tsv_variant}}[3]\n");###$tsv_todelete[2] Number of bases in the reference allele $tsv_todelete[3]
+#            #print("DEBUG: removevar $remove_var, remove_private $remove_private, common $common, private $private, tag $tag, totalreads $totalreads, totalalternative $totalaltreads, proportion alternative $prop_alts,var 1 ${${$tsv_todelete}{$tsv_variant}}[2], var 2 ${${$tsv_todelete}{$tsv_variant}}[3]\n");###$tsv_todelete[2] Number of bases in the reference allele $tsv_todelete[3]
 #        }
 #DEBUG
-        if ($tag1==0 and $remove_var==1 and exists($common_variant_mapping{$tsv_variant}))
-        {
-            foreach $vcf_variant (@{$common_variant_mapping{$tsv_variant}})
-            {
-                delete($common_variants{$vcf_variant});
-                #print("\tDEBUG: deleted genotype $vcf_variant from common mutation\n");
-            }
-            delete($common_variant_mapping{$tsv_variant});
-        }
-        if ($tag2==0 and ($remove_var==1 or $remove_private==1) and exists($private_variant_mapping{$tsv_variant}))
+        if ($tag==0 && $remove_var==1 && exists($private_variant_mapping{$tsv_variant}))
         {
             foreach $vcf_variant (@{$private_variant_mapping{$tsv_variant}})
             {
@@ -1196,25 +1161,20 @@ sub vcf_prune_covB
             }
             delete($private_variant_mapping{$tsv_variant});
         }
-        if($tag1==0 and scalar(keys %common_variant_mapping)==0)
+        if($tag==0 && scalar(keys %private_variant_mapping)==0)
         {
-            $tag1=1;
-            #print("\tDEBUG: No more common variants\n");
-        }
-        if($tag2==0 and scalar(keys %private_variant_mapping)==0)
-        {
-            $tag2=1;
+            $tag=1;
             #print("\tDEBUG: No more private variants\n");
         }
 		
-		if($tag1==1 and $tag2==1)
+		if($tag==1)
         {
             #print("\tDEBUG: No more variants\n");
             last;
         }
 
     }
-    my $n_selvariants=scalar keys %common_variants;
+    my $n_selvariants=scalar keys %{$vcf_1};
     my $n_filtvariants=scalar keys %private_variants;
     if($n_selvariants+$n_filtvariants==0)
     {
@@ -1224,7 +1184,7 @@ sub vcf_prune_covB
     {
         @{ $ref_statistics }=($n_selvariants/($n_selvariants+$n_filtvariants),$n_selvariants,$n_selvariants+$n_filtvariants); ##Stats= proportion of selected reads in the reference, number of selected variants
     }
-    return (\%common_variants,\%private_variants);
+    return ($vcf_1,\%private_variants);
 }
 
 #Generates a mapping of tsv keys (variants) and vcf keys (genotypes)
@@ -1437,6 +1397,7 @@ sub vcf_unite_parsed
     
     my $n_selvariants=scalar keys %common_variants;
     my $n_filtvariants=scalar keys %different_variants;
+    @{ $ref_statistics }=($n_selvariants+$n_filtvariants>0?$n_selvariants/($n_selvariants+$n_filtvariants):"NaN",$n_selvariants,$n_selvariants+$n_filtvariants); ##Stats= proportion of selected reads in the reference, number of selected variants
     @{ $ref_statistics }=($n_selvariants/($n_selvariants+$n_filtvariants),$n_selvariants,$n_selvariants+$n_filtvariants); ##Stats= proportion of selected reads in the reference, number of selected variants
     return (\%common_variants,\%different_variants);
 }
@@ -1467,7 +1428,7 @@ sub vcf_intersect_parsed
    
     my $n_selvariants=scalar keys %common_variants;
     my $n_filtvariants=scalar keys %different_variants;
-    @{ $ref_statistics }=($n_selvariants/($n_selvariants+$n_filtvariants),$n_selvariants,$n_selvariants+$n_filtvariants); ##Stats= proportion of selected reads in the reference, number of selected variants
+    @{ $ref_statistics }=($n_selvariants+$n_filtvariants>0?$n_selvariants/($n_selvariants+$n_filtvariants):"NaN",$n_selvariants,$n_selvariants+$n_filtvariants); ##Stats= proportion of selected reads in the reference, number of selected variants
     return (\%common_variants,\%different_variants);
 }
 
