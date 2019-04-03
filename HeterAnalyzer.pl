@@ -327,7 +327,7 @@ foreach my $exe_condition (@exe_conditions) ##Options that require to call varia
 
 ## Output
 #############################################################
-open(my $OFILE,">$output_file");
+open(my $OFILE,">$output_file") or die "ERROR opening the output file $output_file";
 
 ##Making a block here to use the no warnings qw. It complains because of the # but they are valid
 {
@@ -946,7 +946,6 @@ sub parse_vcf_name
 
 }
 
-
 #Compare two variant hashes, return a hash with commonvariants and another one with variants in the problem
 # that aren't present in the reference and generate statistics
 ##############################################
@@ -1055,45 +1054,6 @@ sub vcf_prune_covB
         @{ $ref_statistics }=($n_selvariants/($n_selvariants+$n_filtvariants),$n_selvariants,$n_selvariants+$n_filtvariants); ##Stats= proportion of selected reads in the reference, number of selected variants
     }
     return ($vcf_1,$ref_filtered_private_variants);
-}
-
-#Generates a mapping of tsv keys and vcf keys
-#TSV keys:
-#           - Often do not have alternative (.) since they also have reference reads.
-#           - Sometimes, the reference is different (only for INDELS)
-#Implementation strategy. For each vcf key, we generate
-#           - Copy of the variant
-#           - Variant with undetermined variant (.)
-#           - Variant without REF and ALT position
-#Usage strategy:
-#           - When using tsv keys for filtering, we eliminate all the vcf keys associated with it
-#           - If no tsv key is found, we look for a shortkey version (CHR$OFSPOS)
-####################################################################
-sub make_mapping_relaxed_keys
-{
-    my $ref_variants=$_[0];
-    my %out_mapping;
-    my $shortkey;
-    my $relaxedkey;
-    foreach my $variant (keys %{$ref_variants})
-    {
-        $shortkey=$relaxedkey=$variant;
-        $shortkey=~s/$OFS[^$OFS]+$OFS[^$OFS]+$//;
-        $relaxedkey=~s/$OFS[^$OFS]+$/$OFS\./;
-
-        foreach my $tsvvar ($variant,$shortkey,$relaxedkey)
-        {
-            if(exists $out_mapping{$tsvvar})
-            {
-                push(@{$out_mapping{$tsvvar}},$variant);
-            }
-            else
-            {
-                $out_mapping{$tsvvar}=[$variant];
-            }
-        }
-    }
-    return \%out_mapping;
 }
 
 #Filter out variants in two hashes based on a hash of variables to delete.
@@ -1313,7 +1273,7 @@ sub vcf_unite_parsed
     my $n_selvariants=scalar keys %common_variants;
     my $n_filtvariants=scalar keys %different_variants;
     @{ $ref_statistics }=($n_selvariants+$n_filtvariants>0?$n_selvariants/($n_selvariants+$n_filtvariants):"NaN",$n_selvariants,$n_selvariants+$n_filtvariants); ##Stats= proportion of selected reads in the reference, number of selected variants
-    @{ $ref_statistics }=($n_selvariants/($n_selvariants+$n_filtvariants),$n_selvariants,$n_selvariants+$n_filtvariants); ##Stats= proportion of selected reads in the reference, number of selected variants
+
     return (\%common_variants,\%different_variants);
 }
 
@@ -1392,7 +1352,7 @@ sub variants_to_hash
 sub write_variant_list
 {
     my ($ref_hash,$filename,$filter)=@_;
-    my $FILE=openwrite_list_refname("$filename",$filter);
+    my $FILE=openwrite_list_refname($filename,$filter);
     (! defined $FILE) and return;
     print($FILE "#CHROM,POS\n");
     foreach my $variant (keys %{$ref_hash})
@@ -1408,7 +1368,7 @@ sub write_variant_list
 sub write_variant_vcf
 {
     my ($ref_hash,$filename,$vcf,$comment,$filter)=@_;
-    my $OFILE=openwrite_vcf_refname("$filename",$filter);
+    my $OFILE=openwrite_vcf_refname($filename,$filter);
     (! defined $OFILE) and return;
     open(my $IFILE, "$vcf");
     my @icontent= <$IFILE>;
@@ -1463,7 +1423,7 @@ sub write_variant_vcf
 sub write_variant_2vcf
 {
     my ($ref_hash,$filename,$vcf,$vcf2,$comment,$filter)=@_;
-    my $OFILE=openwrite_vcf_refname("$filename",$filter);
+    my $OFILE=openwrite_vcf_refname($filename,$filter);
     my %outcontent;
     (! defined $OFILE) and return;
     open(my $IFILE, $vcf);
@@ -1780,7 +1740,6 @@ sub parse_const_execond
     foreach my $cond (@NABfiltering_conditions)
     {
         $constExeCondContentRefs{"${exe_condition}_${cond}"}=get_todelete_variants_covfiltering($cond,$constExeCondContentRefs{$covNname},1);
-
     }
 
     $constExeCondContentRefs{$Aexecondname}=parse_vcf($Aexecondname);
@@ -2104,14 +2063,7 @@ sub filter_with_PAF
     	
     my $n_selvariants=scalar keys %out_common;
 	my $n_filtvariants=scalar keys %out_different;
-    if($n_selvariants+$n_filtvariants==0)
-    {
-         @{ $ref_stats }=(0,$n_selvariants,$n_selvariants+$n_filtvariants);
-    }
-    else
-    {   	
-	    @{ $ref_stats }=($n_selvariants/($n_selvariants+$n_filtvariants),$n_selvariants,$n_selvariants+$n_filtvariants); ##Stats= proportion of selected reads in the reference, number of selected variants
-	}
+	@{ $ref_stats }=($n_selvariants+$n_filtvariants>0?$n_selvariants/($n_selvariants+$n_filtvariants):"NaN",$n_selvariants,$n_selvariants+$n_filtvariants); ##Stats= proportion of selected reads in the reference, number of selected variants
 #    print("DEBUG stats:",join(",",@{$ref_stats}),"\n");
     return (\%out_common, \%out_different);
 }

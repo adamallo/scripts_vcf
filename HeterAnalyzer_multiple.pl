@@ -12,9 +12,18 @@ use Sort::Key::Maker nat_i_sorter => qw(nat integer);
 use Bio::DB::HTS::Tabix;
 #use Parallel::Loops;
 
-##Implementation notes:
-#Variants are represented in two styles, genotype-specific: CHROM$OFSPOS$OFSREF$OFSALT and location-specific:CHROM$OFSPOS
-# VCF variants are of the first type, while TSV variants from the second. TSVs are generated after comparing coverage and number of reads of an specific variant, but are not actuall calls. Therefore, a genotype-specific format cannot be used in that context. For the rest, taking into account may be important since we could potentially have a different variant in the same genomic position (real, or due to noisy data).
+##ATTENTION: Implementation notes:
+#---------------------------------
+#Variants are represented in two ways across this program, genotype-specific: CHROM$OFSPOS$OFSREF$OFSALT and location-specific: CHROM$OFSPOS
+#Variants read from a VCF file are parsed in the genotype-specific format, while those parsed from a TSV file in the location-specific one (but all information is retained in the value).
+#
+#The function get_todelete_variants_covfiltering generates (and returns) a hash of variants to eliminate based on filtering options. These are a mixture of genotype-specific and location-specific variants (see below why).
+#Two functions (vcf_prune_tsv_vars and vcf_prune_covB) use this mixture of variants to eliminate VCF variants. This is done as follows:
+#    - For each vcf variant, a location-specific variant is calculated and checked against the list of variants to eliminate. Eliminated if found
+#    - If the location-specific variant does not exist, check for the genotype-specific
+# The variants to delete are a mixture of genotype-specific and location-specific variants because:
+#   - Depth filter is location-specific. In these cases the alternative is often reference, and would not be matched by the genotype-specific variant.
+#   - Filter of alternative variants is variant-specific, we don't want to eliminate variants because there is presence of another alternative in that position (i.e., germline heterozygous)
 
 ##Configuration variables
 ######################################################
@@ -929,54 +938,6 @@ sub parse_vcf_name
 
 }
 
-##TODO: This could be improved in terms on speed following the strategy of the next subroutine. I'm not using this one any more, so I won't update it... at least so far.
-##Compare two vcf files and generate statistics
-###############################################
-#sub vcf_compare2
-#{
-#    my ($vcf1_file,$vcf2_file,$ref_statistics)=@_;
-#
-#    open(my $VCF1,$vcf1_file) or die "The file $vcf1_file is not located in the output folder. Please, check if the variant caller has successfully finished";
-#    open(my $VCF2,$vcf2_file) or die "The file $vcf2_file is not located in the output folder. Please, check if the variant caller has successfully finished";
-#    my @vcf1=<$VCF1>;
-#    my @vcf2=<$VCF2>;
-#    close($VCF1);
-#    close($VCF2);
-#    clean_vcfcontent(\@vcf1);
-#    clean_vcfcontent(\@vcf2);
-#    my %variants1=%{variants_to_hash(\@vcf1)};
-#    my %variants2=%{variants_to_hash(\@vcf2)};
-#    my %commonvariants;
-#    my $n1=scalar(keys %variants1);
-#    my $n2=scalar(keys %variants2);
-#
-#    if ($n1<$n2)
-#    {
-#        foreach my $variant (keys %variants1)
-#        {
-#            if (exists $variants2{$variant})
-#            {
-#                $commonvariants{$variant}=1;
-##print("DEBUG: New common variant $variant");
-#            }
-#        }
-#    }
-#    else
-#    {
-#        foreach my $variant (keys %variants2)
-#        {
-#            if (exists $variants1{$variant})
-#            {
-#                $commonvariants{$variant}=1;
-##print("DEBUG: New common variant $variant");
-#            }
-#        }
-#    }
-#    @{ $ref_statistics }=($n1,$n2,scalar (keys %commonvariants));
-#    return \%commonvariants;
-#
-#}
-
 #Compare two variant hashes, return a hash with commonvariants and another one with variants in the problem
 # that aren't present in the reference and generate statistics
 ##############################################
@@ -1070,104 +1031,12 @@ sub vcf_prune
 sub vcf_prune_covB
 {
     my ($vcf_1,$vcf_2,$tsv_todelete,$ref_statistics,$covBfiltering_options)=@_;
-    my %private_variants=%{$vcf_2};
-    my %private_variant_mapping=%{make_mapping_short_long_key($vcf_2)};
-    my $tag=0;
-    my $totalreads=0;
-    my $totalaltreads=0;
-    my $prop_alts=0;
-    my $vcf_variant;
+    my $refvariants_todelete=get_todelete_variants_covfiltering($covBfiltering_options,$tsv_todelete,0);
+    my $ref_filtered_private_variants=remove_variants($vcf_2,$refvariants_todelete);
 
-
-    #Parser for covBfiltering_options
-    #################################################################################
-
-    my $min_coverage=0;
-    my $max_alternative=9**9**9; ##pseudo +inf
-    my $max_propalt=1;
-
-    #print("DEBUG: covB filtering options $covBfiltering_options\n");    
-
-    my @covBfiltering_params=split($sep_param,$covBfiltering_options);
-    foreach my $covBoption (@covBfiltering_params)
-    {
-        my ($param, $value)= split($sep_value,$covBoption);
-
-        #print("DEBUG: covB option $covBoption, param: $param, value: $value\n");
-        
-        if ($param =~ /--min_coverage/i)
-        {
-           $min_coverage=$value;
-        }
-        elsif ($param =~ /--max_alternative/i)
-        {
-           $max_alternative=$value;
-        }
-        elsif ($param =~ /--max_propalt/i)
-        {
-           $max_propalt=$value;
-        }
-        elsif ($param =~ /--default/i)
-        {
-            next;
-        }
-        else
-        {
-            die "The param $param has not been recognized properly in the covB filtering step\n";
-        }
-    }
-    #print("DEBUG:Final filtering options, minimum coverage in B: $min_coverage, maximum number of reads supporting the alternative allele in B: $max_alternative, maximum proportion of alternative alleles in B: $max_propalt\n");
-    ##Filtering loop
-    ###############
-    my $remove_var=0;
-
-    foreach my $tsv_variant (keys %{$tsv_todelete})
-    {
-
-        $totalreads=0;
-        $totalaltreads=0;
-        $totalaltreads+=$_ for split(",",${${$tsv_todelete}{$tsv_variant}}[3]); ##Oneline for loop
-        $totalreads=$totalaltreads+${${$tsv_todelete}{$tsv_variant}}[2];
-        $prop_alts=$totalreads != 0 ? ($totalaltreads+0.0)/$totalreads : 0 ;
-
-        if($totalreads < $min_coverage || $totalaltreads>$max_alternative || $prop_alts>$max_propalt)
-        {
-            $remove_var=1; 
-        }
-
-#DEBUG        
-#        my $common=exists($common_variants{$tsv_variant})?"yes":"no";
-#        my $private=exists($private_variants{$tsv_variant})?"yes":"no";
-#        if(exists($common_variants{$tsv_variant}) || exists($private_variants{$tsv_variant}))
-#        {
-#            #print("DEBUG: Variant $tsv_variant\n");
-#            #print("DEBUG: removevar $remove_var, remove_private $remove_private, common $common, private $private, tag $tag, totalreads $totalreads, totalalternative $totalaltreads, proportion alternative $prop_alts,var 1 ${${$tsv_todelete}{$tsv_variant}}[2], var 2 ${${$tsv_todelete}{$tsv_variant}}[3]\n");###$tsv_todelete[2] Number of bases in the reference allele $tsv_todelete[3]
-#        }
-#DEBUG
-        if ($tag==0 && $remove_var==1 && exists($private_variant_mapping{$tsv_variant}))
-        {
-            foreach $vcf_variant (@{$private_variant_mapping{$tsv_variant}})
-            {
-                delete($private_variants{$vcf_variant});
-                #print("\tDEBUG: deleted genotype $vcf_variant from private mutation\n");
-            }
-            delete($private_variant_mapping{$tsv_variant});
-        }
-        if($tag==0 && scalar(keys %private_variant_mapping)==0)
-        {
-            $tag=1;
-            #print("\tDEBUG: No more private variants\n");
-        }
-		
-		if($tag==1)
-        {
-            #print("\tDEBUG: No more variants\n");
-            last;
-        }
-
-    }
+    
     my $n_selvariants=scalar keys %{$vcf_1};
-    my $n_filtvariants=scalar keys %private_variants;
+    my $n_filtvariants=scalar keys %$ref_filtered_private_variants;
     if($n_selvariants+$n_filtvariants==0)
     {
          @{ $ref_statistics }=(0,$n_selvariants,$n_selvariants+$n_filtvariants);
@@ -1176,88 +1045,20 @@ sub vcf_prune_covB
     {
         @{ $ref_statistics }=($n_selvariants/($n_selvariants+$n_filtvariants),$n_selvariants,$n_selvariants+$n_filtvariants); ##Stats= proportion of selected reads in the reference, number of selected variants
     }
-    return ($vcf_1,\%private_variants);
+    return ($vcf_1,$ref_filtered_private_variants);
 }
 
-#Generates a mapping of tsv keys (variants) and vcf keys (genotypes)
-####################################################################
-sub make_mapping_short_long_key
-{
-    my $ref_variants=$_[0];
-    my %out_mapping;
-    my $shortkey;
-    foreach my $variant (keys %{$ref_variants})
-    {
-        $shortkey=$variant;
-        $shortkey=~s/$OFS[^$OFS]+$OFS[^$OFS]+$//;
-        if(exists $out_mapping{$shortkey})
-        {
-            push(@{$out_mapping{$shortkey}},$variant);
-        }
-        else
-        {
-            $out_mapping{$shortkey}=[$variant];
-        }
-    }
-    return \%out_mapping;
-}
-
-#Filter out variants in two hashes based on a hash of variables to delete. The variants to eliminate are vcf, but the ones that indicate which to eliminate are tsv
+#Filter out variants in two hashes based on a hash of variables to delete.
 #####################################################################################################
 sub vcf_prune_tsv_vars
 {
     my ($ref_common,$ref_private,$tsv_todelete,$ref_statistics)=@_;
-    my %common=%{$ref_common};
-    my %private=%{$ref_private};
-    my %common_map=%{make_mapping_short_long_key($ref_common)};
-    my %private_map=%{make_mapping_short_long_key($ref_private)};
-    my $tag1=0;
-    my $tag2=0;
-    my $vcf_variant;
 
-    foreach my $tsv_variant (keys %{$tsv_todelete})
-    {
-        #print("DEBUG: Variant $tsv_variant ");
-        if ($tag1==0 and exists($common_map{$tsv_variant}))
-        {
-            foreach $vcf_variant (@{$common_map{$tsv_variant}})
-            {
-                delete($common{$vcf_variant});
-            }
-            delete($common_map{$tsv_variant});
-        #print("deleted in vcf1");
-        }
-        if ($tag2==0 and exists($private_map{$tsv_variant}))
-        {
-            foreach $vcf_variant (@{$private_map{$tsv_variant}})
-            {
-                delete($private{$vcf_variant});
-            }
-            delete($private{$tsv_variant});
-        #print("deleted in vcf2");
-        }
-        #print("\n");
-        if($tag1==0 and scalar(keys %common_map)==0)
-        {
-            $tag1=1;
-        #print("DEBUG: No more variants in vcf1\n");
-        }
-        if($tag2==0 and scalar(keys %private_map)==0)
-        {
-            $tag2=1;
-        #print("DEBUG: No more variants in vcf2\n");
-        }
-        
-        if($tag1==1 and $tag2==1)
-        {
-        #print("DEBUG: No more variants\n");
-            last;
-        }
-
-    }
+    my $ref_filtered_common=remove_variants($ref_common,$tsv_todelete);
+    my $ref_filtered_private=remove_variants($ref_private,$tsv_todelete);
     
-    my $n_selvariants=scalar keys %common;
-    my $n_filtvariants=scalar keys %private;
+    my $n_selvariants=scalar keys %$ref_filtered_common;
+    my $n_filtvariants=scalar keys %$ref_filtered_private;
     
     if($n_selvariants+$n_filtvariants==0)
     {
@@ -1267,39 +1068,30 @@ sub vcf_prune_tsv_vars
     {
         @{ $ref_statistics }=($n_selvariants/($n_selvariants+$n_filtvariants),$n_selvariants,$n_selvariants+$n_filtvariants); ##Stats= proportion of selected reads in the reference, number of selected variants
     }
-    return (\%common,\%private);
+    return ($ref_filtered_common,$ref_filtered_private);
 }
 
-#Filter out variants in the hash of covN variants. The one staying will be removed from the variants considered in this study
-# Not genotype specific
-#####################################################################################################
-sub vcf_covN_filter
+##Generates and returns a dictionary of variants to elimninate, given a list of parsed tsv variants and a string with filtering options. The third argument, and, indicates if the conditions of proportion and number of alternatives should be logical and or or. CovN uses && while covB || (for backwards compatibility). We should probably use the same in both.
+sub get_todelete_variants_covfiltering
 {
-    
-    my ($ref_datacovN,$covNfiltering_options)=@_;
-    my %variants=%{$ref_datacovN};
-    my $totalreads=0;
-    my $totalaltreads=0;
-    my $prop_alts=0;
-    
-    #Parser for covNfiltering_options
-    #################################################################################
-
+    my ($cov_filtering_options,$ref_variants,$and)=@_;
     my $min_coverage=0;
     my $max_alternative=9**9**9; ##pseudo +inf
     my $max_propalt=1;
+    my %outvariants;
 
-    #print("DEBUG: covN filtering options $covNfiltering_options\n");    
+    #print("DEBUG: cov filtering options $cov_filtering_options\n");    
 
-    my @covNfiltering_params=split($sep_param,$covNfiltering_options);
-    foreach my $covNoption (@covNfiltering_params)
+    my @covfiltering_params=split($sep_param,$cov_filtering_options);
+    #Parsing filtering options
+    foreach my $covoption (@covfiltering_params)
     {
-        my ($param, $value)= split($sep_value,$covNoption);
-        $value=~s/0_//; ##They start with 0_ for backwards compatiblity
+        my ($param, $value)= split($sep_value,$covoption);
+        $value=~s/0_//; ##covN values start with 0_ for backwards compatiblity
 
-        #print("DEBUG: covN option $covNoption, param: $param, value: $value\n");
+        #print("DEBUG: cov option $covoption, param: $param, value: $value\n");
         
-        if ($param =~ /--min_coverage/i || $param =~ /--max_coverage/i) ##The second term is included for backwards compatibility and it is misleading
+        if ($param =~ /--min_coverage/i || $param =~ /--max_coverage/i) ##The second term is included for covN backwards compatibility and it is misleading
         {
            $min_coverage=$value;
         }
@@ -1311,39 +1103,122 @@ sub vcf_covN_filter
         {
            $max_propalt=$value;
         }
+        elsif ($param =~ /--default/i)
+        {
+            next;
+        }
         else
         {
-            die "The param $param has not been recognized properly in the covN filtering step\n";
+            die "The param $param has not been recognized properly in a cov(N|B) filtering step\n";
         }
     }
-    #print("DEBUG:Final filtering options, minimum coverage in B: $min_coverage, maximum number of reads supporting the alternative allele in B: $max_alternative, maximum proportion of alternative alleles in B: $max_propalt, variants with data in covN" . scalar (keys %variants) . "\n");
-    
-    ##Filtering loop
-    ###############
 
-    foreach my $variant (keys %variants)
+    #Selecting the comparison function
+    my $comparefunction;
+    if ($and==1)
     {
+        $comparefunction="remove_alts_covN";
+    }
+    else
+    {
+        $comparefunction="remove_alts_covB";
+    }
 
-        $totalreads=0;
-        $totalaltreads=0;
-        $totalaltreads+=$_ for split(",",${$variants{$variant}}[3]); ##Oneline for loop
-        $totalreads=$totalaltreads+${$variants{$variant}}[2];
-        $prop_alts=$totalreads != 0 ? ($totalaltreads+0.0)/$totalreads : 0 ;
+    my $ref;
+    my $alt_string;
+    my $ref_reads;
+    my $alt_reads_string;
+    my $totalreads;
+    my @alts;
+    my @reads;
+    my $shortvariant;
+    
+    foreach my $variant (%{$ref_variants})
+    {
+        #value structure: (REF,"ALT0,ALTN",#REFREADS,"#ALT1READS,#ALTNREADS")
+        ($ref,$alt_string,$ref_reads,$alt_reads_string)=$ref_variants->{$variant};
+        @alts=();
+        @reads=();
 
-       # print("DEBUG: Variant $variant\n");
-       # print("DEBUG: totalreads $totalreads, totalalternative $totalaltreads, proportion alternative $prop_alts\n");
-
-        if($totalreads < $min_coverage || ($totalaltreads>$max_alternative && $prop_alts>$max_propalt))
+        #Prepare lists of alternatives I may not need it for the loop, but I still need to calculate the number of total reads
+        if($alt_string=~/,/) ##Multiple alternatives
         {
-           # print("\tDEBUG: covN variant will be kept, to be removed from A or B if present\n");
+            @alts=split(",",$alt_string);
+            @reads=split(",",$alt_reads_string);
+            $totalreads=$ref_reads;
+            $totalreads+=$_ foreach @reads; #Oneline for loop
         }
         else
-        { 
-            #print("\tDEBUG: good N variant, removed from the list\n");
-            delete($variants{$variant}); 
+        {
+            $totalreads=$alt_reads_string+$ref_reads;
+            $alts[0]=$alt_string;
+            $reads[0]=$alt_reads_string;
+        }
+
+        #If there are coverage problems, we eliminate the position and we are done with this position
+        if($totalreads<$min_coverage)
+        {
+            $shortvariant=$variant;
+            $shortvariant=~s/$OFS[^$OFS]+$OFS[^$OFS]+$//;
+            $outvariants{$shortvariant}=1;
+        }
+        else ##Presence of variant alleles
+        {
+            foreach (my $ialt=0; $ialt<scalar @alts; ++$ialt)
+            {
+                if($comparefunction->($max_alternative,$max_propalt,$reads[$ialt],$totalreads==0?0:$reads[$ialt]/($totalreads+0.0))) #genotype eliminated due to alternative variants
+                {
+                   $outvariants{join($OFS,$shortvariant,$ref,$alts[$ialt])}=1; 
+                }
+            }
         }
     }
-    return(\%variants);
+
+    return \%outvariants;
+}
+
+##Short snippets
+
+#Comparison to determine if a variant should be deleted or not, covN style
+sub remove_alts_covN
+{
+    #my ($max_alternative, $max_propalt, $altreads, $altprop)=@_;
+    #return $altreads>$max_alternative && $altprop>$max_propalt;
+    return $_[2]>$_[0] && $_[3]>$_[1];
+    
+}
+
+#Comparison to determine if a variant should be deleted or not, covB style
+sub remove_alts_covB
+{
+    #my ($max_alternative, $max_propalt, $altreads, $altprop)=@_;
+    #return $altreads>$max_alternative || $altprop>$max_propalt;
+    return $_[2]>$_[0] || $_[3]>$_[1];
+}
+
+#Filters out vcf variants using variants originated in a tsv file after filtering using get_todelete_variants_covBfiltering
+#It returns the resulting variants in a new array ref
+#First checks for the shortvar version of the variant, then for the full version of it
+sub remove_variants
+{
+    my ($ref_problem_vars,$ref_todelete_vars)=@_;
+    my %outvariants=%{$ref_problem_vars}; #Shallow copy
+    my $shortvar;
+
+    foreach my $variant (%outvariants)
+    {
+        $shortvar=$variant;
+        $shortvar=~s/$OFS[^$OFS]+$OFS[^$OFS]+$//;
+        if(exists $ref_todelete_vars->{$shortvar})
+        {
+            delete($outvariants{$shortvar});
+        }
+        elsif(exists $ref_todelete_vars->{$variant})
+        {
+            delete($outvariants{$variant});
+        }
+    }
+    return \%outvariants;
 }
 
 #Filter out variants in one hash from another
@@ -1854,10 +1729,10 @@ sub parse_const_execond
     $constExeCondContentRefs{$covNname}=parse_tsv("$wd/$covNname");
     
     #TODO: I am not parallelizing this, but I am getting a lot of benefits from reusing it. I think that parallalelizing it would spend more extra time spliting the fork than the actual benefit due to the several processes
-    ##
+    ##NAB constants
     foreach my $cond (@NABfiltering_conditions)
     {
-        $constExeCondContentRefs{"${exe_condition}_${cond}"}=vcf_covN_filter($constExeCondContentRefs{$covNname},$cond);
+        $constExeCondContentRefs{"${exe_condition}_${cond}"}=get_todelete_variants_covfiltering($cond,$constExeCondContentRefs{$covNname},1);
     }
 
     $constExeCondContentRefs{$Aexecondname}=parse_vcf("$wd/$Aexecondname");
