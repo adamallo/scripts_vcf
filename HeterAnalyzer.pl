@@ -64,7 +64,7 @@ my $GNOMAD=$ENV{'GNOMAD'};
 
 #Flags
 my $help;
-my $usage="Usage: $0 [options] -o output_file \n\nWARNING: This is a secondary script that is not inteded to be executed directly.\n\n\nOptions:\n--------\n\t-e/--exec_cond_inputfile : input file for execution parameters and options\n\t-f/--filt_cond_inputfile : input file for execution parameters and options\n\t--NABfilt_cond_inputfile : input file for the filtering options of the NAB sample\n\t--NABfilt_cond_inputfile2 : secondary input file for a secondary filter (OR filter implemented in a dirty way) of the NAB sample\n\t--covaltB_cond_inputfile : input file for the filtering taking into account characteristics of the unfiltered in the comparison\n\t--popAF_cond_inputfile: input file for the filter of population allele frequencies using gnomAD\n\t--output_dir : output directory for vcf files\n\t--n_cores : number of cores to execute some steps in parallel (requires the perl package Parallel::Loops)\n\t--output_vcf: (bool) generate resulting vcf files or not\n\t--output_list: (bool) generate resulting list of variants or not\n\t--comp: (int) indicating the comprehensiveness of the output, 0=no files, 1=only needed files to call variants, 2= all intermediate variants\n\n";
+my $usage="Usage: $0 [options] -o output_file \n\nWARNING: This is a secondary script that is not inteded to be executed directly.\n\n\nOptions:\n--------\n\t-e/--exec_cond_inputfile : input file for execution parameters and options\n\t-f/--filt_cond_inputfile : input file for execution parameters and options\n\t--NABfilt_cond_inputfile : input file for the filtering options of the NAB sample\n\t--NABfilt_cond_inputfile2 : secondary input file for a secondary filter (OR filter implemented in a dirty way) of the NAB sample\n\t--covaltB_cond_inputfile : input file for the filtering taking into account characteristics of the unfiltered in the comparison\n\t--popAF_cond_inputfile: input file for the filter of population allele frequencies using gnomAD\n\t--n_cores : number of cores to execute some steps in parallel (requires the perl package Parallel::Loops)\n\t--output_vcf: (bool) generate resulting vcf files or not\n\t--output_list: (bool) generate resulting list of variants or not\n\t--comp: (int) indicating the comprehensiveness of the output, 0=no files, 1=only needed files to call variants, 2= all intermediate variants\n\n";
 ######################################################
 
 ######################################################
@@ -490,7 +490,7 @@ sub filter
 
         $covBfiltering_condition=$covBfiltering_conditions[$ncovB];
     	$NcovBcondition="$exe_condition$sep_param$filtering_condition${sep_param}covB$sep_param$covBfiltering_condition";        	
-    
+     
         #AfiltNcovB
         ($ref_common_variantsAfiltNcovB,$ref_different_variantsAfiltNcovB)=vcf_prune_covB($ref_common_variantsAfiltN,$ref_different_variantsAfiltN,$refdataBfiltcovB,\@statsAfiltNcovB,$covBfiltering_condition);
     
@@ -1125,11 +1125,11 @@ sub get_todelete_variants_covfiltering
     my $comparefunction;
     if ($and==1)
     {
-        $comparefunction="remove_alts_covN";
+        $comparefunction=\&remove_alts_covN;
     }
     else
     {
-        $comparefunction="remove_alts_covB";
+        $comparefunction=\&remove_alts_covB;
     }
 
     my $ref;
@@ -1141,12 +1141,14 @@ sub get_todelete_variants_covfiltering
     my @reads;
     my $shortvariant;
     
-    foreach my $variant (%{$ref_variants})
+    foreach my $variant (keys %{$ref_variants})
     {
         #value structure: (REF,"ALT0,ALTN",#REFREADS,"#ALT1READS,#ALTNREADS")
-        ($ref,$alt_string,$ref_reads,$alt_reads_string)=$ref_variants->{$variant};
+        ($ref,$alt_string,$ref_reads,$alt_reads_string)=@{$ref_variants->{$variant}};
         @alts=();
         @reads=();
+        $shortvariant=$variant;
+        $shortvariant=~s/$OFS[^$OFS]+$OFS[^$OFS]+$//;
 
         #Prepare lists of alternatives I may not need it for the loop, but I still need to calculate the number of total reads
         if($alt_string=~/,/) ##Multiple alternatives
@@ -1166,8 +1168,6 @@ sub get_todelete_variants_covfiltering
         #If there are coverage problems, we eliminate the position and we are done with this position
         if($totalreads<$min_coverage)
         {
-            $shortvariant=$variant;
-            $shortvariant=~s/$OFS[^$OFS]+$OFS[^$OFS]+$//;
             $outvariants{$shortvariant}=1;
         }
         else ##Presence of variant alleles
@@ -1213,19 +1213,23 @@ sub remove_variants
     my %outvariants=%{$ref_problem_vars}; #Shallow copy
     my $shortvar;
 
-    foreach my $variant (%outvariants)
+#    print("\nDEBUG: execution of remove_variants\n\tDEBUG: variants to consider\n");
+    foreach my $variant (keys %outvariants)
     {
         $shortvar=$variant;
         $shortvar=~s/$OFS[^$OFS]+$OFS[^$OFS]+$//;
-        if(exists $ref_todelete_vars->{$shortvar})
-        {
-            delete($outvariants{$shortvar});
-        }
-        elsif(exists $ref_todelete_vars->{$variant})
+        if(exists $ref_todelete_vars->{$shortvar} or exists $ref_todelete_vars->{$variant})
         {
             delete($outvariants{$variant});
         }
+#        print("\tDEBUG: $variant, $shortvar\n");
     }
+#        print("DEBUG: variants to delete\n");
+#    foreach my $variant (keys %{$ref_todelete_vars})
+#    {
+#        print("\tDEBUG: $variant\n");
+#    }
+#    print("DEBUG: Done\n\n");
     return \%outvariants;
 }
 
