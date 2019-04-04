@@ -59,11 +59,12 @@ my $SCRIPTSVCF_DIR=$ENV{'SCRIPTSVCF_DIR'};
 my $output_vcf=0;
 my $output_list=0;
 my $comp=0;
+my $filterINDELS=0;
 my @sample_bams;
 
 #Flags
 my $help;
-my $usage="Usage: $0 [options] -o output_file --normal_bamfile bamfile_normal_sample --output_vcf --output_list --comp [--queue] file1 file2 ... filen\n--output_vcf: (bool) generate resulting vcf files or not\n--output_list: (bool) generate resulting list of variants or not\n--comp: (int) indicating the comprehensiveness of the output, 0=no files, 1=only needed files to call variants, 2= all intermediate variants\nOptions:\n--------\n\t-e/--exec_cond_inputfile : input file for execution parameters and options\n\t-f/--filt_cond_inputfile : input file for execution parameters and options\n\t--NABfilt_cond_inputfile : input file for the filtering options of the NAB sample\n\t--NABfilt_cond_inputfile2 : input file for the secondary filtering options of the NAB sample (OR filter implemented in a dirty way)\n\t--covaltB_cond_inputfile : input file for the filtering taking into account characteristics of the unfiltered in the comparison\n\t--popAF_cond_inputfile: input file for the filter of population allele frequencies using gnomAD\n\t--output_dir: output directory for vcf files\n\t--n_cores: number of cores to execute some steps in parallel\n\t--queue: optional, name of the queue jobs should be submitted\n\n";
+my $usage="Usage: $0 [options] -o output_file --normal_bamfile bamfile_normal_sample --output_vcf --output_list --comp [--queue] file1 file2 ... filen\n--output_vcf: (bool) generate resulting vcf files or not\n--output_list: (bool) generate resulting list of variants or not\n--comp: (int) indicating the comprehensiveness of the output, 0=no files, 1=only needed files to call variants, 2= all intermediate variants\nOptions:\n--------\n\t-e/--exec_cond_inputfile : input file for execution parameters and options\n\t-f/--filt_cond_inputfile : input file for execution parameters and options\n\t--NABfilt_cond_inputfile : input file for the filtering options of the NAB sample\n\t--NABfilt_cond_inputfile2 : input file for the secondary filtering options of the NAB sample (OR filter implemented in a dirty way)\n\t--covaltB_cond_inputfile : input file for the filtering taking into account characteristics of the unfiltered in the comparison\n\t--popAF_cond_inputfile: input file for the filter of population allele frequencies using gnomAD\n\t--output_dir: output directory for vcf files\n\t--n_cores: number of cores to execute some steps in parallel\n\t--queue: optional, name of the queue jobs should be submitted\n\t--filterINDELS: if activated, INDELS are discarded from the whole process\n\n";
 ######################################################
 
 ######################################################
@@ -87,6 +88,7 @@ my $usage="Usage: $0 [options] -o output_file --normal_bamfile bamfile_normal_sa
     'output_list=i' => \$output_list,
     'comp=i' => \$comp,
     'queue=s' => \$queue,
+    'filterINDELS=i' => \$filterINDELS,
     'help|h' => \$help,
                 )) or (($output_file eq "") || ($normal_bam eq "") || $help) and die $usage;
 
@@ -245,7 +247,7 @@ if(! -f "N.vcf")
 {
 	$bamfiles=$normal_bam;
 	$exe_condition="";
-    my $job_id=submit_job("$qsub $variant_calling_sh $bamfiles N.vcf N_platypus.log $exe_condition");
+    my $job_id=submit_job("$qsub $variant_calling_sh $bamfiles N.vcf N_platypus.log $filterINDELS $exe_condition");
     print("\tNormal tissue variant calling submited with job_id $job_id\n");
 }
 else
@@ -264,7 +266,7 @@ for (my $i=0; $i< scalar @sample_bams; ++$i)
     {
     	$bamfiles=$sample_bams[$i];
     	$exe_condition="";
-        my $job_id=submit_job("$qsub $variant_calling_sh $bamfiles ${samplename}.vcf ${samplename}_platypus.log $exe_condition"); 
+        my $job_id=submit_job("$qsub $variant_calling_sh $bamfiles ${samplename}.vcf ${samplename}_platypus.log $filterINDELS $exe_condition"); 
     	print("\tSample $samplename variant calling submited with job_id $job_id\n");
     }
     else
@@ -334,7 +336,7 @@ foreach my $exe_condition (@exe_conditions)
            		#print("DEBUG: A: Real exe_conditions\n");
        		}
     		
-            $job_id=submit_job("$qsub $variant_calling_sh $bamfiles $file_exe_cond_name $samplename$sep_param${exe_condition}_platypus.log $actual_exe_conditions",\%exe_deps);
+            $job_id=submit_job("$qsub $variant_calling_sh $bamfiles $file_exe_cond_name $samplename$sep_param${exe_condition}_platypus.log $filterINDELS $actual_exe_conditions",\%exe_deps);
             push(@rep_deps,$job_id);
             $deps=$dep_prefix.$sep_dep.$job_id;
     		print("\tSample $samplename variant calling for conditions $exe_condition submited with job_id $job_id\n");

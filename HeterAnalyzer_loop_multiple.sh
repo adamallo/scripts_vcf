@@ -1,6 +1,6 @@
 #!/bin/bash
 
-usage="\n$0 directory torun_file exe_params filtering_params NAB_params NAB2_params covB_params popAF_params n_cores output_vcf output_list comprehensiveness [queue] \n\ntorun_file structure: 1st line outputname, 2nd line Normal_file, N lines Problem_Sample_files\n-------------------------------------------------\n
+usage="\n$0 directory torun_file exe_params filtering_params NAB_params NAB2_params covB_params popAF_params n_cores output_vcf output_list comprehensiveness filterINDELS [queue] \n\ntorun_file structure: 1st line outputname, 2nd line Normal_file, N lines Problem_Sample_files\n-------------------------------------------------\n
 \n
 This script executes HeterAnalyzer_control_multiple.pl in a directory with its name. Then it integrates all the information in a file named results.csv and results_basictstv.csv\n"
 
@@ -24,7 +24,8 @@ else
     output_vcf=${10}
     output_list=${11}
     comp=${12}
-    queue=${13}
+    filterINDELS=${13}
+    queue=${14}
 fi
 
 EXE_DIR=$SCRIPTSVCF_DIR
@@ -38,9 +39,9 @@ dependency=""
 
 if [[ $queue == "" ]]
 then
-    id=$($EXE_DIR/HeterAnalyzer_control_multiple.pl -e $exe_params -f $filtering_params --NABfilt_cond_inputfile $NAB_params --NABfilt_cond_inputfile2 $NAB2_params --covaltB_cond_inputfile $covB_params --popAF_cond_inputfile $popAF_params -o $dir/${output}.csv --normal_bamfile $normal --output_dir $dir/$output --n_cores $n_cores --output_vcf $output_vcf --output_list $output_list --comp $comp $files | tee $dir/${output}.out | tail -n 1)
+    id=$($EXE_DIR/HeterAnalyzer_control_multiple.pl -e $exe_params -f $filtering_params --NABfilt_cond_inputfile $NAB_params --NABfilt_cond_inputfile2 $NAB2_params --covaltB_cond_inputfile $covB_params --popAF_cond_inputfile $popAF_params -o $dir/${output}.csv --normal_bamfile $normal --output_dir $dir/$output --n_cores $n_cores --output_vcf $output_vcf --output_list $output_list --comp $comp --filterINDELS $filterINDELS $files | tee $dir/${output}.out | tail -n 1)
 else
-    id=$($EXE_DIR/HeterAnalyzer_control_multiple.pl -e $exe_params -f $filtering_params --NABfilt_cond_inputfile $NAB_params --NABfilt_cond_inputfile2 $NAB2_params --covaltB_cond_inputfile $covB_params --popAF_cond_inputfile $popAF_params -o $dir/${output}.csv --normal_bamfile $normal --output_dir $dir/$output --n_cores $n_cores --output_vcf $output_vcf --output_list $output_list --comp $comp --queue $queue $files | tee $dir/${output}.out | tail -n 1) 
+    id=$($EXE_DIR/HeterAnalyzer_control_multiple.pl -e $exe_params -f $filtering_params --NABfilt_cond_inputfile $NAB_params --NABfilt_cond_inputfile2 $NAB2_params --covaltB_cond_inputfile $covB_params --popAF_cond_inputfile $popAF_params -o $dir/${output}.csv --normal_bamfile $normal --output_dir $dir/$output --n_cores $n_cores --output_vcf $output_vcf --output_list $output_list --comp $comp --filterINDELS $filterINDELS --queue $queue $files | tee $dir/${output}.out | tail -n 1) 
 fi
 dependency="${dependency}:${id}"
 
