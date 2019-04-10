@@ -25,7 +25,7 @@ my $help;
 (! GetOptions(
     'input_file|i=s' => \$input_file,
     'output_file|o=s' => \$output_file,
-    'filterINDELS|f' => \$delete_indels,
+    'filterINDELS|i' => \$delete_indels,
     'help|h' => \$help,
                 )) or (($output_file eq "") || ($input_file eq "") || $help) and die $usage;
 
