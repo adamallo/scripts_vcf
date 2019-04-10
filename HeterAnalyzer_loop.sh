@@ -6,7 +6,7 @@ This script executes HeterAnalyzer_control.pl for each sample in a directory wit
 
 queue=""
 
-if (! ([[ $# -eq 12 ]] || [[ $# -eq 13 ]])) || [[ ! -d $1 ]] || [[ ! -f $2 ]]  || [[ ! -f $3 ]]  || [[ ! -f $4 ]]  || [[ ! -f $5 ]]  || [[ ! -f $6 ]] || [[ ! -f $7 ]] || [[ ! -f $8 ]]
+if (! ([[ $# -eq 13 ]] || [[ $# -eq 14 ]])) || [[ ! -d $1 ]] || [[ ! -f $2 ]]  || [[ ! -f $3 ]]  || [[ ! -f $4 ]]  || [[ ! -f $5 ]]  || [[ ! -f $6 ]] || [[ ! -f $7 ]] || [[ ! -f $8 ]]
 
 then
     echo -e $usage
