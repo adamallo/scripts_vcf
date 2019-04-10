@@ -1142,6 +1142,10 @@ sub vcf_prune_covB
         {
             $remove_var=1; 
         }
+        else
+        {
+            $remove_var=0;
+        }
 
 #DEBUG        
 #        my $common=exists($common_variants{$tsv_variant})?"yes":"no";
