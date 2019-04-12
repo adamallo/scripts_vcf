@@ -7,8 +7,9 @@ use Sort::Key::Natural;
 use Sort::Key::Maker nat_i_sorter => qw(nat integer);
 
 #Config
-my $usage="Usage: $0 -i input_file -o output_file\nThis script reads a vcf file generated with platypus, splits multi-SNV lines in independent single-SNV lines and small haplotype variants in independent SNVs\nATTENTION: GL and PL are kept as in the original VCF file for the different multi-SNV lines. All parameters are kept as original for the separation of haplotype variants in SNVs";
+my $usage="Usage: $0 -i input_file -o output_file [options]\nOptions:\n-------------\n--filterINDELS: discards INDEL variants.\nThis script reads a vcf file generated with platypus, splits multi-SNV lines in independent single-SNV lines and small haplotype variants in independent SNVs\nATTENTION: GL and PL are kept as in the original VCF file for the different multi-SNV lines. All parameters are kept as original for the separation of haplotype variants in SNVs";
 my $description_VCF="##Multi-SNV variants separated in different entries using separateMultipleSNVPlatypus.pl\n##Small haplotype variants separated in different SNV entries using separateMultipleSNVPlatypus.pl";
+my $description_VCF_INDEL="##Multi-SNV variants separated in different entries using separateMultipleSNVPlatypus.pl\n##Small haplotype variants separated in different SNV entries using separateMultipleSNVPlatypus.pl\n##INDELS eliminated using separateMultipleSNVPlatypus.pl";
 my $info_header_line='##INFO=<ID=MultiSNV,Number=4,Type=String,Description="pos, reference, |-separated alternative alleles of the original multi-SNV VCF line, |-separated original genotypes">'."\n".'##INFO=<ID=Haplotype,Number=3,Type=String,Description="pos, ref, alt">';
 my $info_message_multisnv="MultiSNV=";
 my $info_message_haplotype="Haplotype=";
@@ -18,11 +19,13 @@ my %genotype_infos=map {$_=>1} qw(GT);
 
 #GETOPT
 my ($input_file,$output_file)=("","");
+my $delete_indels=0;
 my $help;
 
 (! GetOptions(
     'input_file|i=s' => \$input_file,
     'output_file|o=s' => \$output_file,
+    'filterINDELS|f=i' => \$delete_indels,
     'help|h' => \$help,
                 )) or (($output_file eq "") || ($input_file eq "") || $help) and die $usage;
 
@@ -84,6 +87,10 @@ foreach my $line (@content)
 				@out=();
                 $ref_out_genotypes=[];
                 ($mref,$malt,$mpos)=simplify_RApair($iref,$ialts[$i],$columns[1]);
+                if($delete_indels==1 && length $mref != length $malt)
+                {
+                    next;
+                }
 				push(@out,$columns[0],$mpos,$columns[2],$mref,$malt,@columns[5..6]);
                 ##Not adding INFO yet, I cannot use push anymore
 				##Add format
@@ -118,11 +125,12 @@ foreach my $line (@content)
 		}
 		else ##Single variant
 		{
-            unless(length $iref == length $ialt && length $iref >1)
+            
+            if($delete_indels==1 && length $iref != length $ialt)
             {
-                push(@outcontent,$line);
+                    next;
             }
-            else
+            elsif(length $iref == length $ialt && length $iref >1)
             {
 				@out=();
                 ($refrefs,$refalts,$refposs)=split_haplotypes($ipos,$iref,$ialt);
@@ -140,11 +148,15 @@ foreach my $line (@content)
                     push(@outcontent,join("\t",@out));
                 }
             }
+            else
+            {
+                push(@outcontent,$line);
+            }
 		}
 	}
 	elsif($is_content==0 && $line =~m/^#[^#]/) ##Last VCF header line, add a comment and print
 	{
-		print($OUTPUT join("\n",$description_VCF,$line));
+		print($OUTPUT join("\n",$delete_indels==1?$description_VCF_INDEL:$description_VCF,$line));
 		$is_content=1;
 	}
 	elsif($isinfo==1 && !($line=~m/^##INFO=/))
