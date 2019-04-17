@@ -875,9 +875,8 @@ sub parse_vcf
 }
 
 #Parse tsv
-# WARNING: genotype information in TSV-related structures is different than in vcf-related ones. Here I used an array ref, with a different set of information. The format here is REF ALT1,ALTN READS READSALT1,READSALTN.
-# WARNING2: UnifiedGenotyper always writes first the info for SNVs, then for INDELS (if it detects and INDEL too). I benefit from this here since the second will overwrite the first. This may not be safe if something is changed.
-###########################################
+# WARNING: genotype information in TSV-related structures is different than in vcf-related ones. Here I used an array of array refs, with a different set of information. The format for each arry is REF ALT1,ALTN READS READSALT1,READSALTN.
+################################################################################################################################
 sub parse_tsv
 {
     my ($tsv1_file)=@_;
@@ -895,7 +894,11 @@ sub parse_tsv
         my @values=split("\t",$tsv1[$i]);
         $key="$values[0]$OFS$values[1]";
         splice(@values,0,2);
-        $hash{$key}=\@values;
+        if(!defined $hash{$key})
+        {
+            $hash{$key}=();
+        }
+        push(@{$hash{$key}},\@values);
         #print("DEBUG: New tsv variant data being hashed $key\n");
     }
     return \%hash;
@@ -1135,44 +1138,47 @@ sub get_todelete_variants_covfiltering
     
     foreach my $variant (keys %{$ref_variants})
     {
-        #value structure: (REF,"ALT0,ALTN",#REFREADS,"#ALT1READS,#ALTNREADS")
-        ($ref,$alt_string,$ref_reads,$alt_reads_string)=@{$ref_variants->{$variant}};
-        @alts=();
-        @reads=();
-        $shortvariant=$variant;
-        $shortvariant=~s/$OFS[^$OFS]+$OFS[^$OFS]+$//;
-
-        #Prepare lists of alternatives I may not need it for the loop, but I still need to calculate the number of total reads
-        if($alt_string=~/,/) ##Multiple alternatives
+        foreach my $genotype (@{$ref_variants->{$variant}})
         {
-            @alts=split(",",$alt_string);
-            @reads=split(",",$alt_reads_string);
-            $totalreads=$ref_reads;
-            $totalreads+=$_ foreach @reads; #Oneline for loop
-        }
-        else
-        {
-            $totalreads=$alt_reads_string+$ref_reads;
-            $alts[0]=$alt_string;
-            $reads[0]=$alt_reads_string;
-        }
-
-        #If there are coverage problems, we eliminate the position and we are done with this position
-        if($totalreads<$min_coverage)
-        {
-            $outvariants{$shortvariant}=1;
-        }
-        else ##Presence of variant alleles
-        {
-            foreach (my $ialt=0; $ialt<scalar @alts; ++$ialt)
+            #value structure: (REF,"ALT0,ALTN",#REFREADS,"#ALT1READS,#ALTNREADS")
+            ($ref,$alt_string,$ref_reads,$alt_reads_string)=@{$genotype};
+            @alts=();
+            @reads=();
+            $shortvariant=$variant;
+            $shortvariant=~s/$OFS[^$OFS]+$OFS[^$OFS]+$//;
+    
+            #Prepare lists of alternatives I may not need it for the loop, but I still need to calculate the number of total reads
+            if($alt_string=~/,/) ##Multiple alternatives
             {
-                if($comparefunction->($max_alternative,$max_propalt,$reads[$ialt],$totalreads==0?0:$reads[$ialt]/($totalreads+0.0))) #genotype eliminated due to alternative variants
+                @alts=split(",",$alt_string);
+                @reads=split(",",$alt_reads_string);
+                $totalreads=$ref_reads;
+                $totalreads+=$_ foreach @reads; #Oneline for loop
+            }
+            else
+            {
+                $totalreads=$alt_reads_string+$ref_reads;
+                $alts[0]=$alt_string;
+                $reads[0]=$alt_reads_string;
+            }
+    
+            #If there are coverage problems, we eliminate the position and we are done with this position
+            if($totalreads<$min_coverage)
+            {
+                $outvariants{$shortvariant}=1;
+            }
+            else ##Presence of variant alleles
+            {
+                foreach (my $ialt=0; $ialt<scalar @alts; ++$ialt)
                 {
-                   $outvariants{join($OFS,$shortvariant,$ref,$alts[$ialt])}=1; 
+                    if($comparefunction->($max_alternative,$max_propalt,$reads[$ialt],$totalreads==0?0:$reads[$ialt]/($totalreads+0.0))) #genotype eliminated due to alternative variants
+                    {
+                       $outvariants{join($OFS,$shortvariant,$ref,$alts[$ialt])}=1; 
+                    }
                 }
             }
-        }
-    }
+        }#genotype
+    }#variant
 
     return \%outvariants;
 }
