@@ -198,14 +198,15 @@ for (my $isample=0; $isample<$nsamples; ++$isample)
     foreach my $var (keys %vars)
     {
         my $realvar=$var;
-        #Existing variant, just copy it
+        #Existing variant, just copy it (deep copy)
         if(exists $dicts[$isample]->{$var})
         {
-            $refdictr->{$var}=$refdicts->{$var}=$dicts[$isample]->{$var};
+            $refdictr->{$var}=[@{$dicts[$isample]->{$var}}];
+            $refdicts->{$var}=[@{$dicts[$isample]->{$var}}];
         }
         else ##Variant in others but not in this sample
         {
-            $refdictr->{$var}=$refdicts->{$var}="?/?"; #By default, we don't know what this is
+            $refdictr->{$var}=$refdicts->{$var}=["?/?",undef,undef,undef]; #By default, we don't know what this is
             while (defined $var) ##Variant modification (see below)
             {
                 if(exists $covBdata[$isample]->{$var}) ##Read count information found
@@ -214,11 +215,12 @@ for (my $isample=0; $isample<$nsamples; ++$isample)
                     {
                         if($covBdata[$isample]->{$var}->[2]>=$max_alternate_reads) ##Alternative for the recall version, ?/? for the other (we don't do anything)
                         {
-                            $refdictr->{$realvar}=$covBdata[$isample]->{$var}->[2]>$covBdata[$isample]->{$var}->[1]?"1/0":"0/1";
+                            
+                            $refdictr->{$realvar}=[$covBdata[$isample]->{$var}->[2]>$covBdata[$isample]->{$var}->[1]?"1/0":"0/1",@{$covBdata[$isample]->{$var}}];
                         }
                         else ##Reference
                         {
-                            $refdictr->{$realvar}=$refdicts->{$realvar}="0/0";
+                            $refdictr->{$realvar}=$refdicts->{$realvar}=["0/0",@{$covBdata[$isample]->{$var}}];
                         }
                     }
                     last;
@@ -236,7 +238,7 @@ for (my $isample=0; $isample<$nsamples; ++$isample)
 {
     foreach my $var (keys %{$rdicts[$isample]})
     {
-        if($rdicts[$isample]->{$var} ne "0/0" && $rdicts[$isample]->{$var} ne "?/?")
+        if($rdicts[$isample]->{$var}->[0] ne "0/0" && $rdicts[$isample]->{$var}->[0] ne "?/?")
         {
             $rvars{$var}+=1;
         }
@@ -251,7 +253,7 @@ for (my $isample=0; $isample<$nsamples; ++$isample)
     $rsamples{$Asample}=[0,0,0];
     foreach my $var (keys %{$rdicts[$isample]})
     {
-        if(exists $rvars{$var} && $rdicts[$isample]->{$var} ne "0/0" && $rdicts[$isample]->{$var} ne "?/?")
+        if(exists $rvars{$var} && $rdicts[$isample]->{$var}->[0] ne "0/0" && $rdicts[$isample]->{$var}->[0] ne "?/?")
         {
             if($rvars{$var}>1)
             {
@@ -307,11 +309,60 @@ write_genotype_file("$outdir/stats/genotypes_recalled.csv",\@rdicts,\%rvars);
 write_FASTA_file("$outdir/alignments/alignment.fas",\@sdicts,\%vars);
 write_FASTA_file("$outdir/alignments/alignment_recalled.fas",\@rdicts,\%rvars);
 
+#CloneFinder files TODO:WARNING:WORKING HERE this is a quick and dirty solution. I am considerint all variants independently, and liminating INDELS.
+write_CloneFinder_file("$outdir/stats/cloneFinder.tsv",\@rdicts,\%rvars,\@samplename); ##In this case, we only want the recalled one, since it has gathered more information. We are outputing all the info on reference, alternate reads, even if the variant has not been called for our purpose. We can use the same filters (minimum number of reads and number of alternate reads) in cloneFinder.
+
 print(" Done\n");
 
 exit;
 
 ##FUNCTIONS
+
+sub write_CloneFinder_file
+{
+    my ($filename,$refdata,$refvars,$refnames)=@_;
+
+    mopen(my $OUT_CloneFinder, ">$filename");
+    my @int_v;
+    my @sortedvars=nat_i_sorter{@int_v=split($OFS,$_);$int_v[0],$int_v[1]} keys %$refvars;
+    my (@finalvars,@refs,@alts);
+    my @splitvar;
+    foreach my $var (@sortedvars)
+    {
+        @splitvar=split($OFS,$var);
+        if(length $splitvar[2] == length $splitvar[3]) #INDEL filter
+        {
+            push(@finalvars,$var);
+            push(@refs,$splitvar[2]);
+            push(@alts,$splitvar[3]);
+        }
+    }
+    
+    #Building the header
+    my @header=("SNVID","Wild","Mut");
+    push(@header,map{("$_:ref","$_:alt")} @$refnames);
+    print($OUT_CloneFinder join($OFS,@header),"\n");
+    my @outcontent;
+    my $var;
+    for (my $ivar=0; $ivar<scalar @finalvars; $ivar++)
+    {
+        $var=$finalvars[$ivar];
+        @outcontent=("S$ivar",$refs[$ivar],$alts[$ivar]);
+        for (my $iname=0; $iname<scalar @$refnames; ++$iname)
+        {
+            if(defined $refdata->[$iname]->{$var}->[2])
+            {
+                push(@outcontent,@{$refdata->[$iname]->{$var}}[2,3]);
+            }
+            else
+            {
+                push(@outcontent,0,0);
+            }
+        }
+        print($OUT_CloneFinder join($OFS,@outcontent),"\n");
+    }
+}
+
 sub write_genotype_file
 {
     my ($filename,$refdata,$refvars)=@_; 
@@ -337,7 +388,7 @@ sub write_genotype_file
         $outcontent[$isample+$nheaders]=$samplename[$isample];
         for (my $ivar=0; $ivar<scalar @sortedvars; ++$ivar)
         {
-            $outcontent[$isample+$nheaders].=$OFS.$refdata->[$isample]->{$sortedvars[$ivar]};
+            $outcontent[$isample+$nheaders].=$OFS.$refdata->[$isample]->{$sortedvars[$ivar]}->[0];
         }
     }
     
@@ -386,11 +437,11 @@ sub write_FASTA_file
         print($OUT_MSA "\n>$samplename[$isample]\n");
         for (my $ivar=0; $ivar<scalar @finalvars; ++$ivar)
         {
-            if($refdata->[$isample]->{$finalvars[$ivar]}=~/1/)
+            if($refdata->[$isample]->{$finalvars[$ivar]}->[0]=~/1/)
             {
                 print($OUT_MSA $alts[$ivar]);
             }
-            elsif($refdata->[$isample]->{$finalvars[$ivar]}=~/\?/)
+            elsif($refdata->[$isample]->{$finalvars[$ivar]}->[0]=~/\?/)
             {
                 print($OUT_MSA "?");
             }
@@ -517,7 +568,7 @@ sub get_vcf_samplename
 
 ##THESE SUBRUTINES SHOULD PROBABLY BE PART OF MY OWN MODULE/LIBRARY
 
-# Parse vcf returning a hash reference with keys in the form CHROM$OFSPOS$OFSREF$OFSALT and value = genotype (coded as 0/0, 0/1, 1/0, or 1/1)
+# Parse vcf returning a hash reference with keys in the form CHROM$OFSPOS$OFSREF$OFSALT and value = array_ref [genotype (coded as 0/0, 0/1, 1/0, or 1/1),$nref+$nalt, $nref, $nalt]
 ##########################################################################
 sub parse_vcf
 {
@@ -539,11 +590,12 @@ sub parse_vcf
             {
                 $flag=1;
             }
+            chomp($vcf1[$i]);
             $key=$value=$vcf1[$i];
             $key=~s/^([^\t]+)\t([^\t]+)\t[^\t]\t([^\t]+)\t([^\t]+)\t.*/$1$OFS$2$OFS$3$OFS$4/;
-            $value=(split(":",(split($IFS,$value))[9]))[0];
-            chomp($key);
-            chomp($value);
+            $value=[(split(":",(split($IFS,$value))[9]))[0,4,5]];
+            $value->[3]=$value->[2];
+            $value->[2]=$value->[1]-$value->[3];
             $hash{$key}=$value;
         }
     }
