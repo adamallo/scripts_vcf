@@ -65,6 +65,9 @@ foreach my $line (@clonedata)
 	}
 }
 
+$outcontent{">Normal"}=[@ref];
+push(@clones,">Normal");
+
 my @mask;
 
 if ($filterInvariants == 1)
