@@ -17,7 +17,7 @@ my $usage="Usage: $0 inputfile.meg inputfile.tsv > outputfile\n The first input 
 ######################################################
 
 ##Getopt
-if (scalar @ARGV != 2 || ! -f $ARGV[0] || ! -f $ARGV[1])
+if (scalar @ARGV < 2 || scalar @ARGV > 3 ||! -f $ARGV[0] || ! -f $ARGV[1])
 {
 	die "ERROR: problem parsing input files.\n$usage";
 }
@@ -29,6 +29,12 @@ close($FH_INFILE);
 mopen($FH_INFILE,$ARGV[1]);
 my @inputdata=<$FH_INFILE>;
 close($FH_INFILE);
+
+my $filterInvariants=0;
+if (scalar @ARGV >2)
+{
+	$filterInvariants=$ARGV[2];
+}
 
 shift @inputdata;
 my @vardata;
@@ -42,6 +48,8 @@ foreach my $line (@inputdata)
 	push(@alt,$vardata[1]);
 }
 my $iclone=0;
+my %outcontent;
+my @clones;
 foreach my $line (@clonedata)
 {
 	chomp($line);
@@ -51,24 +59,62 @@ foreach my $line (@clonedata)
 	}
 	else
 	{
-		print(">Clone$iclone\n".translateVariants($line,\@ref,\@alt)."\n");
+		$outcontent{">Clone$iclone"}=translateVariants($line,\@ref,\@alt);
+		push(@clones,">Clone$iclone");
 		$iclone++;
 	}
 }
+
+my @mask;
+
+if ($filterInvariants == 1)
+{
+	foreach my $clone (@clones)
+	{
+		for (my $pos=0; $pos< scalar @ref; ++$pos)
+		{
+			if( defined $mask[$pos] && $mask[$pos] ne $outcontent{$clone}->[$pos])
+			{
+				$mask[$pos]="0";
+			}
+			else
+			{
+				$mask[$pos]=$outcontent{$clone}->[$pos]
+			}
+		}
+	}
+}
+else
+{
+	@mask=(0) x scalar @ref;
+}
+for (my $iclone=0; $iclone< scalar@clones; ++$iclone)
+{
+	print($clones[$iclone]."\n");
+	for (my $pos=0; $pos< scalar @ref; ++$pos)
+	{
+		if($mask[$pos] eq "0")
+		{
+			print($outcontent{$clones[$iclone]}->[$pos]);
+		}
+	}
+	print("\n");
+}
+
 exit;
 
 sub translateVariants
 {
-	my $outline="";
+	my @outline;
 	my ($inline,$refs,$alts)=@_;
 	my @snvs=split("",$inline);
 
 	for (my $pos=0; $pos< scalar @$refs; ++$pos)
 	{
-		$outline.=$snvs[$pos] eq "A"?$refs->[$pos]:$alts->[$pos];
+		push(@outline,$snvs[$pos] eq "A"?$refs->[$pos]:$alts->[$pos]);
 	}
 
-	return $outline;
+	return \@outline;
 }
 
 
