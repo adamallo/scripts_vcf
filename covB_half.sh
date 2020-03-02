@@ -13,6 +13,7 @@ out=$2
 bam=$3
 
 module load gatk/3.5.0
+module load bedops/2.4.35
 
 GENOME=/home/dmalload/my_storage/GRCh37-lite.fa
 

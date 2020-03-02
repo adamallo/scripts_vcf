@@ -8,6 +8,8 @@ then
     exit 1
 fi
 
+module load bedops/2.4.35
+
 out=$1
 
 shift

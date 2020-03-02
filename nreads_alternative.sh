@@ -1,5 +1,6 @@
 #!/bin/bash
 module load gatk/3.5.0
+module load bedops/2.4.35
 
 DATA=/home/dmalload/dcis/problem_data/new_data
 GENOME=/home/dmalload/my_storage/GRCh37-lite.fa
