@@ -5,7 +5,7 @@
 #SBATCH -c 16
 #SBATCH -t 4-00:00
 
-module load vcftools/0.1.12b
+module load vcftools/0.1.12a
 module load parallel/20140822
 
 if [[ $# -ne 1 ]] || [[ ! -d $1 ]]
