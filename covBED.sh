@@ -14,9 +14,6 @@ out=$1
 
 shift
 
-DATA=/home/dmalload/dcis/problem_data/new_data
-GENOME=/home/dmalload/my_storage/GRCh37-lite.fa
-
 beds=""
 
 if [[ ! -f $out ]]
