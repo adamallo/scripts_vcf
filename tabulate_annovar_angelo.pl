@@ -4,6 +4,7 @@ use warnings;
 use File::Basename;
 use Getopt::Long qw(GetOptions);
 Getopt::Long::Configure qw(gnu_getopt);
+use Cwd qw(cwd);
 
 #Configuration variables
 my $OFS="\t";
@@ -50,7 +51,16 @@ foreach my $dir (@dirs)
     #print("DEBUG: $dir\n");
     my $name=basename($dir);
 
-    open(my $IFILE,"$dir/vcfdict.csv");
+    my $filename="$dir/vcfdict.csv";
+#    if (-f $filename)
+#    {
+#        print("DEBUG: opening ".cwd."/$filename\n");
+#    }
+#    else
+#    { 
+#        print("DEBUG: opening unexisting file ".cwd."/$filename\n");
+#    }
+    open(my $IFILE,$filename) or die "Error opening $filename\n";
     my @listfiles=<$IFILE>;
     close($IFILE);
 

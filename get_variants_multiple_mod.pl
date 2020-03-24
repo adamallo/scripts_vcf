@@ -12,6 +12,7 @@ my $indir="";
 my $outdir="";
 my $covB="";
 my $PAF="";
+my $filt_file="";
 
 #Configuration variables
 my $OFS="\t";
@@ -22,7 +23,7 @@ my $max_alternate_reads=5;
 
 #Flags
 my $help;
-my $usage="Usage: $0 -f file_list -d input_dir -o output_dir [options]\n-f file list with same format as for HeterAnalyzer_loop_multiple.sh\n-d output dir indicated to HeterAnalyzer_loop_multiple.sh\n-o directory in which this script will generate a vcf file per sample and an additional statistics file\n\nOptions:\n--------\n\t--covB: suffix to select the covB results\n\t--PAF: suffix to select the PAF results\n\t--min_coverage: minimum number of reads to recall a variant. Below that threshold everything will be ?/?\n\t--min_alternative_reads: minimum number of reads to call a non-called variant present in another sample.\n\nRecall process: if a variant has not been called in the sample is considered ?/? if it does not have enough coverage (min_coverage). If it does have it, it will be considered 0/0 if the number of alternative reads is <min_alternative_reads, otherwise the variant will be recalled. In the non-recalling output, the latter would be ?/? (never call something that has not been called, unless it is a reference 0/0)\n\n";
+my $usage="Usage: $0 -f file_list -d input_dir -o output_dir [options]\n-f file list with same format as for HeterAnalyzer_loop_multiple.sh\n-d output dir indicated to HeterAnalyzer_loop_multiple.sh\n-o directory in which this script will generate a vcf file per sample and an additional statistics file\n\nOptions:\n--------\n\t--covB: suffix to select the covB results\n\t--PAF: suffix to select the PAF results\n\t--min_coverage: minimum number of reads to recall a variant. Below that threshold everything will be ?/?\n\t--min_alternative_reads: minimum number of reads to call a non-called variant present in another sample.\n\t--filt_file: file with a list of variants to keep, the rest are not taken into consideration\n\nRecall process: if a variant has not been called in the sample is considered ?/? if it does not have enough coverage (min_coverage). If it does have it, it will be considered 0/0 if the number of alternative reads is <min_alternative_reads, otherwise the variant will be recalled. In the non-recalling output, the latter would be ?/? (never call something that has not been called, unless it is a reference 0/0)\n\n";
 ######################################################
 
 ######################################################
@@ -39,6 +40,7 @@ my $usage="Usage: $0 -f file_list -d input_dir -o output_dir [options]\n-f file 
     'PAF|p=s' =>\$PAF,
     'min_coverage|c=i' =>\$min_coverage,
     'min_alternative_reads|a=i' =>\$max_alternate_reads,
+    'filt_file=s' => \$filt_file,
     'help|h' => \$help,
                 )) or (($outdir eq "") || ($indir eq "") || ($infile eq "") || $help) and die $usage;
 
@@ -67,6 +69,15 @@ chomp($name);
 chomp($normal);
 $nsamples=scalar @content;
 $ndigits=length $nsamples;
+my %varsToKeep;
+
+##Parsing filterfile
+if ($filt_file ne "")
+{
+    mopen(my $FH_FILTER, $filt_file);
+    %varsToKeep=map{s/\n$//r=>1} <$FH_FILTER>;
+    close($FH_FILTER);
+}
 
 print("Parsing vcf input files from all comparisons of $nsamples samples in the folder $indir\n");
 
@@ -582,6 +593,7 @@ sub parse_vcf
     my %hash;
     my $key;
     my $value;
+    my $filterkey;
 
     for ($i=0;$i<scalar @vcf1;$i++)
     {
@@ -592,12 +604,16 @@ sub parse_vcf
                 $flag=1;
             }
             chomp($vcf1[$i]);
-            $key=$value=$vcf1[$i];
+            $filterkey=$key=$value=$vcf1[$i];
             $key=~s/^([^\t]+)\t([^\t]+)\t[^\t]\t([^\t]+)\t([^\t]+)\t.*/$1$OFS$2$OFS$3$OFS$4/;
-            $value=[(split(":",(split($IFS,$value))[9]))[0,4,5]];
-            $value->[3]=$value->[2];
-            $value->[2]=$value->[1]-$value->[3];
-            $hash{$key}=$value;
+            $filterkey=~s/^([^\t]+)\t([^\t]+)\t[^\t]\t([^\t]+)\t([^\t]+)\t.*/$1$OFS$2/;
+            if (exists $varsToKeep{$filterkey})
+            {
+                $value=[(split(":",(split($IFS,$value))[9]))[0,4,5]];
+                $value->[3]=$value->[2];
+                $value->[2]=$value->[1]-$value->[3];
+                $hash{$key}=$value;
+            }
         }
     }
     return \%hash;
