@@ -14,13 +14,23 @@ if (length(args)!=2) {
 
 load(file="sensitivityData.RData")
 
+##Wrapper for ciMean so that it returns a real NA instead of a logical one. Needed for data.table
+myCiMean=function(x,...){
+    val=ciMean(x,...)[1]
+    if(is.na(val)) {
+        return(NA_real_)
+    }else{
+        return(val)
+    }
+}
+
 ##Done previously to prepare the data
 #####################################
 #samples=data[,unique(Sample)]
 #nsamples=length(samples)
 #sampleIs=seq(1,length(samples))
-#dataSens=data[conditionPAF==0.25,.(Sample,condition,scorefiltNABcovB_PAFFPAF0.05)]
-#toCompareWith=data[conditionPAF==0.25,.(score=first(scorefiltNABcovB_PAFFPAF0.05_ciMean_bycond)),by=condition][order(-score)]
+#dataSens=data[conditionPAF>0.05,.(Sample,condition,scorefiltNABcovB_PAFFPAF0.05)]
+#toCompareWith=data[conditionPAF>0.05,.(score=first(scorefiltNABcovB_PAFFPAF0.05_ciMean_bycond)),by=condition][order(-score)]
 
 groups=combn(sampleIs,k,simplify=FALSE)
 

@@ -20,17 +20,18 @@ my $variant_caller="platypus";
 my $variant_calling_sh;
 my $helper_sh="perl.sh";
 my $helper_pl="HeterAnalyzer.pl";
+my $helper_cluster_params="-t 4-00:00";
 my $tstv_sh="tstv.sbatch";
 my $annotation_sh="annovar_loop.sh";
 my $covB_sh="covB_half.sh";
 my $covN_sh="covN.sh";
 my $reduce_sh="reduceHeterAnalyzer_control.sh";
 my $n_cores=1;
-my $scheduler="submit";
+my $scheduler=$ENV{'SUBMITCMD'};
 my $qsub="-N 1 -n 1 -c ";
 my $qsub_noparallel="-N 1 -n 1 -c 1"; 
 my $qstat="qstat";
-my $sed='sed "s/Queued job \(.*\)/\1/"';
+my $sed=$ENV{'SUBMITSED'};
 my $sep_dep=":";
 my $dep_prefix="--dependency=afterok";
 my $sleep=60;
@@ -398,11 +399,11 @@ foreach my $exe_condition (@exe_conditions)
     
     if(-f $onfile2)
     { 
-        $job_id=submit_job("$qsub $deps -J HeterAnalyzer.$samplename.$tag $helper_sh $helper_pl -e exeparams.$tag -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile2 $onfile2 --covaltB_cond_inputfile $ocfile --popAF_cond_inputfile $opfile -o $tempofile --output_vcf $output_vcf --output_list $output_list --comp $comp --n_cores $n_cores");
+        $job_id=submit_job("$qsub $deps $helper_cluster_params -J HeterAnalyzer.$samplename.$tag $helper_sh $helper_pl -e exeparams.$tag -f $offile --NABfilt_cond_inputfile $onfile --NABfilt_cond_inputfile2 $onfile2 --covaltB_cond_inputfile $ocfile --popAF_cond_inputfile $opfile -o $tempofile --output_vcf $output_vcf --output_list $output_list --comp $comp --n_cores $n_cores");
     }
     else
     {
-        $job_id=submit_job("$qsub $deps -J HeterAnalyzer.$samplename.$tag $helper_sh $helper_pl -e exeparams.$tag -f $offile --NABfilt_cond_inputfile $onfile --covaltB_cond_inputfile $ocfile --popAF_cond_inputfile $opfile -o $tempofile --output_vcf $output_vcf --output_list $output_list --comp $comp --n_cores $n_cores");
+        $job_id=submit_job("$qsub $deps $helper_cluster_params -J HeterAnalyzer.$samplename.$tag $helper_sh $helper_pl -e exeparams.$tag -f $offile --NABfilt_cond_inputfile $onfile --covaltB_cond_inputfile $ocfile --popAF_cond_inputfile $opfile -o $tempofile --output_vcf $output_vcf --output_list $output_list --comp $comp --n_cores $n_cores");
     }
     print("\tThe filtering and analysis of the vcf files is being conducted with the job_id $job_id\n");
 

@@ -48,7 +48,6 @@ my @listnames;
 my %dictrealnamevcf;
 my @vcfnames;
 my @namedvcffiles;
-my @outfiles;
 
 ##IO Variables
 ######################################################
@@ -212,16 +211,11 @@ my @NABfiltering_conditions;
 my @covBfiltering_conditions;
 my @popAFfiltering_conditions;
 my @exe_conditions;
-#my %results;
+my %results;
 my $bamfiles;
 my $parallel;
 my %constExeCondContentRefs;
 my %nofiltResultsRef;
-
-##Generate output information
-my $sample=$output_file;
-$sample=basename($sample);
-$sample=~s/([^.]*)\..*/$1/;
 
 ##Generate all combinations of proposed values for execution and filtering parameters
 print("Generating all combinations of filtering values to be explored by this run...");
@@ -271,7 +265,7 @@ print(" Done\n");
 if ($n_cores>1)
 {
     $parallel = Parallel::Loops->new($n_cores);
-    $parallel->share(\%dictrealnamelist, @listnames, \%dictrealnamevcf, @vcfnames, \@namedvcffiles, \%constExeCondContentRefs, \%nofiltResultsRef, \@outfiles);
+    $parallel->share(\%results, \%dictrealnamelist, @listnames, \%dictrealnamevcf, @vcfnames, \@namedvcffiles, \%constExeCondContentRefs, \%nofiltResultsRef);
 }
 
 #Parsing covX files and population allele frequency data for variants of each exe_condition
@@ -343,26 +337,14 @@ open(my $OFILE,">$output_file") or die "ERROR opening the output file $output_fi
 }
     #Condition,#A_#,B_#,N_#,AN_#,BN_#,Afilt_prop,Afilt_N,Afilt_#,Bfilt_prop,Bfilt_N,Bfilt_#,filt_propU,filt_NU,filt_#U,filt_propI,filt_NI,filt_#I,filt_prop_mean,filt_N_mean,filt_#_mean,AfiltN_prop,AfiltN_N,AfiltN_#,BfiltN_prop,BfiltN_N,BfiltN_#,filtN_propU,filtN_NU,filtN_#U,filtN_propI,filtN_NI,filtN_#I,filtN_prop_mean,filtN_N_mean,filtN_#_mean,(nPAFfreqs) x (AfiltN_Priv_PAF_XX,BfiltN_Priv_PAF_XX,filtN_U_PAF_XX),AfiltNcovB_prop,AfiltNcovB_N,AfiltNcovB_#,BfiltNcovB_prop,BfiltNcovB_N,BfiltNcovB_#,filtNcovB_propU,filtNcovB_NU,filtNcovB_#U,filtNcovB_propI,filtNcovB_NI,filtNcovB_#I,filtNcovB_prop_mean,filtNcovB_N_mean,filtNcovB_#_mean,(nPAFfreqs) x (AfiltNcovB_Priv_PAF_XX,BfiltNcovB_Priv_PAF_XX,filtNcovB_U_PAF_XX),AfiltNAB_prop,AfiltNAB_N,AfiltNAB_#,BfiltNAB_prop,BfiltNAB_N,BfiltNAB_#,filtNAB_propU,filtNAB_NU,filtNAB_#U,filtNAB_propI,filtNAB_NI,filtNAB_#I,filtNAB_prop_mean,filtNAB_N_mean,filtNAB_#_mean,(nPAFfreqs) x (AfiltNAB_Priv_PAF_XX,BfiltNAB_Priv_PAF_XX,filtNAB_U_PAF_XX),AfiltNABcovB_prop,AfiltNABcovB_N,AfiltNABcovB_#,BfiltNABcovB_prop,BfiltNABcovB_N,BfiltNABcovB_#,filtNABcovB_propU,filtNABcovB_NU,filtNABcovB_#U,filtNABcovB_propI,filtNABcovB_NI,filtNABcovB_#I,filtNABcovB_prop_mean,filtNABcovB_N_mean,filtNABcovB_#_mean,(nPAFfreqs) x (AfiltNABcovB_Priv_PAF_XX,BfiltNABcovB_Priv_PAF_XX,filtNABcovB_U_PAF_XX),AfiltNABcovBPAF_prop,AfiltNABcovBPAF_N,AfiltNABcovBPAF_#,BfiltNABcovBPAF_prop,BfiltNABcovBPAF_N,BfiltNABcovBPAF_#,filtNABcovBPAF_propU,filtNABcovBPAF_NU,filtNABcovBPAF_#U,filtNABcovBPAF_propI,filtNABcovBPAF_NI,filtNABcovBPAF_#I,filtNABcovBPAF_prop_mean,filtNABcovBPAF_N_mean,filtNABcovBPAF_#_mean,(nPAFfreqs) x (AfiltNABcovBPAF_Priv_PAF_XX,BfiltNABcovBPAF_Priv_PAF_XX,filtNABcovBPAF_U_PAF_XX)
 
-close($OFILE);
-
-## Concatenate and eliminate temporary output files
-my $OFH;
-myopen(\$OFH,">>$output_file") or die "Error concatenating the temporary output files to $output_file\n";
-
-foreach my $tempOfilename (@outfiles)
+my $sample=$output_file;
+$sample=basename($sample);
+$sample=~s/([^.]*)\..*/$1/;
+foreach my $condition (keys %results)
 {
-    my $FH;
-    myopen(\$FH,$tempOfilename) or die "Error opening the temporary output file $tempOfilename\n";
-    local $/=\65536; # read 64kb chunks
-    while ( my $chunk = <$FH>) #Avoids to slurp the whole content to save memory
-    {
-        print $OFH $chunk;
-    }
-    close($FH);
-    unlink($tempOfilename) or die "Error deleting the temporary file $tempOfilename\n";    
+    print($OFILE "$sample$OFS$condition$OFS",array_to_string(@{$results{$condition}}),"\n");
 }
-close($OFH);
-
+close($OFILE);
 my $tag=$exe_conditions[0];
 $tag=~s/[^0-9]+//g;
 write_vcfrefname_dict("vcfdict.$tag.csv");
@@ -401,11 +383,6 @@ sub filter
 
     my $thisAname=vcf_refname("A$sep_param$condition.vcf",$condition);
     my $thisBname=vcf_refname("B$sep_param$condition.vcf",$condition);
-
-    ##Output for this subset of paremeter conditions
-    my $thisOname=$thisAname;
-    $thisOname=~s/.vcf/_temp.out/;
-    my %results;
     
     if (!-f $thisAname)
     {
@@ -803,15 +780,6 @@ sub filter
             }#foreach PAF condition
         }#foreach NAB condition
     }#foreach covB condition
-    
-    my $thisOFILE;
-    myopen(\$thisOFILE,">$thisOname") or die "ERROR opening the output file $thisOname";
-    foreach my $condition (keys %results)
-    {
-        print($thisOFILE "$sample$OFS$condition$OFS",array_to_string(@{$results{$condition}}),"\n");
-    }
-    close($thisOFILE);
-    push(@outfiles,$thisOname);
 }#filter
 
 ###################################################################################

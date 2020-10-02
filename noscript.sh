@@ -1,7 +1,9 @@
 #!/bin/bash
-#module load bcftools/1.4.0
+module load bcftools/1.4.0
 
-#echo "sample;#AN;#BN;#comun;sim" > results.noscript.csv
+tpaf=0.05
+
+#echo "sample,#AN,#BN,#comun,sim,fpaf_$tpaf" > results.noscript.csv
 #for i in *
 #do 
     i=$1
@@ -25,14 +27,15 @@
         #Intersection of N and PB
         bgzip $i/bcfcomp/0001.vcf; tabix $i/bcfcomp/0001.vcf.gz;bcftools isec $i/bcfcomp/0001.vcf.gz $i/N.vcf.gz -p $i/bcfcomp/PB
 
-        #Calculation of %prop and Nvariants
+        #Calculation of %prop, Nvariants and fpaf
         na=$(cat $i/bcfcomp/PA/0000.vcf | grep -v "#" | wc -l)
         nb=$(cat $i/bcfcomp/PB/0000.vcf | grep -v "#" | wc -l)
         ncom=$(cat $i/bcfcomp/CAP/0000.vcf | grep -v "#" | wc -l)
         tot=$(($na+$nb+$ncom))
         prop=$(echo "scale=3;$ncom/$tot" | bc)
+        fpaf=$($SCRIPTSVCF_DIR/perl.sh $SCRIPTSVCF_DIR/PAF.pl $i/bcfcomp/CAP/0000.vcf $tpaf)
 
-        echo "$i;$na;$nb;$ncom;$prop"   
+        echo "$i,$na,$nb,$ncom,$prop,$fpaf" > $i/results.noscript.csv
     fi
 #done >> results.noscript.csv
 #done

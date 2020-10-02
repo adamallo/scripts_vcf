@@ -49,6 +49,7 @@ my $j;
 my @out;
 my @in_info;
 my $code;
+my $skip=0;
 my $ref_forbidden_formats;
 my $ref_withref_formats;
 my $ref_genotype_formats;
@@ -83,6 +84,8 @@ foreach my $line (@content)
 
 			for ($i=0; $i<$nout; ++$i)
 			{
+                $skip=0;
+
 				#Push constants and alt
 				@out=();
                 $ref_out_genotypes=[];
@@ -99,7 +102,30 @@ foreach my $line (@content)
 				for ($j=9; $j< scalar @columns; ++$j)
 				{
 					$out[$j]=get_processed_sample_fields([split(":",$columns[$j],$j)],$i,":",$ref_forbidden_formats,$ref_withref_formats,$ref_genotype_formats,$ref_out_genotypes);
+                    ##If this variant is not in the genotype of this sample
+                    if ($out[$j] =~ m/0\/0/)
+                    {
+                        if ($j==9) #If this is the first sample
+                        {
+                            $skip=1;
+                        }
+                        else
+                        {
+                            $skip=(1 & $skip);
+                        }
+                    }
+                    else
+                    {
+                        $skip=0;
+                    }
+                    #If this variant was not in the genotype of any samples, it will not be in the output
 				}
+
+                if ($skip == 1)
+                {
+                    next;
+                }
+
 				##Add INFO, now with the original genotypes
                 $out[7]=get_field_alt_addMultiSNVinfo(\@in_info,$i,";",$ipos, $iref, \@ialts,$ref_out_genotypes);
                 

@@ -16,4 +16,9 @@ tumor=$2
 normal=$1
 
 tumorname=$(samtools view -H $tumor | sed -n '/@RG/p' | sed "s/.*SM:\([^ \t]*\).*/\1/g");
+if [[ $tumorname -eq "" ]]
+then
+    echo "Error, the tumor bam file $tumor does not have a readgroup"
+    exit
+fi
 gatk Mutect2 -R $HUMAN_GENOME -I $normal -I $tumor --tumor-sample $tumorname --output $output.vcf

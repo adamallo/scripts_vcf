@@ -11,7 +11,7 @@ done
 
 runthething()
 {
-    perl $SCRIPTSVCF_DIR/getPopFreqs.pl -p /home/dmalload/my_storage/gnomAD/gnomad.genomes.r2.1.sites.vcf.bgz -i $(echo $1 | sed 's/^.*,//') -o $(echo $1| sed 's/^\(.\),\(.*\)\/[^\/]\+$/\2\/\1_withPAF.tsv/')
+    $SCRIPTSVCF_DIR/perl.sh $SCRIPTSVCF_DIR/getPopFreqs.pl -p /home/dmalload/my_storage/gnomAD/gnomad.genomes.r2.1.sites.vcf.bgz -i $(echo $1 | sed 's/^.*,//') -o $(echo $1| sed 's/^\(.\),\(.*\)\/[^\/]\+$/\2\/\1_withPAF.tsv/')
 }
 
 export -f runthething

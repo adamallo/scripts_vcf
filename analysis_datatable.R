@@ -1,17 +1,19 @@
 library(lsr)
-library(methods)
-library(plotly)
+#library(methods)
+#library(plotly)
+library(ggplot2)
 library(cowplot)
-library(xtable)
-library(dunn.test)
-library(boot)
+#library(xtable)
+#library(dunn.test)
+#library(boot)
 library(dplyr)
 library(doParallel)
-library(Hmisc)
-library(tidyr)
+#library(Hmisc)
+#library(tidyr)
 library(data.table)
 
-n_cores=4 ##WARNING:Only use more than one if the sytem has a lot of RAM!
+n_cores=2 ##WARNING:Only use more than one if the sytem has a lot of RAM!
+#n_cores=5 ##WARNING:Only use more than one if the sytem has a lot of RAM!
 
 # Data parsing #HARDCODED
 ############################################
@@ -98,6 +100,12 @@ if (file.exists("analysis.RData")) {
   names(dnacons)=as.vector(dnacon[,1])
   datanofilt=read.csv("results.noscript.csv")
   datanofilt$dnacon=dnacons[as.character(datanofilt$sample)]
+
+  ##Calculating score for datanofilt
+  #Max Euclidean distance
+  maxE=sqrt(2)
+  setDT(datanofilt)
+  datanofilt[,`:=`(score=1-sqrt((1-sim)**2+(1-fpafi_0.05)**2)/maxE)]
   
   data=fread(input='gunzip -c summary_results.csv.gz',header=TRUE,sep=",")
 
@@ -138,10 +146,7 @@ if (file.exists("analysis.RData")) {
   ###########################################################################################################
   data[,`:=`(filtNABcovB_U_PAF_0.05_ciMean_bycond=myCiMean(filtNABcovB_U_PAF_0.05,conf=.9,na.rm=TRUE)[1]),keyby=condition]
   lowciMean_FPAF0.05_cond_uniq=data[,.(condition=paste(lapply(.SD,collapsecondst),collapse=","),repcond=paste(lapply(.SD,first),collapse=",")),by=filtNABcovB_U_PAF_0.05_ciMean_bycond,.SDcols=toworkwith]
-  
-  #Max Euclidean distance
-  maxE=sqrt(2)
-  
+   
   #Selection of filtering options attending to the euclidean distance to the best score 1 1 attending to similarity without taking into consideration PAF and the FPAF at 0.05 (two dimensions)
   ###########################################################################################################
   data[,`:=`(scorefiltNABcovB_FPAF0.05=1-sqrt((1-filtNABcovB_U_PAF_0.05)**2+(1-filtNABcovB_propU)**2)/maxE)]
@@ -152,20 +157,20 @@ if (file.exists("analysis.RData")) {
   #stquantile_FPAF0.05_cond_uniq=data[,.(condition=paste(lapply(.SD,collapsecondst),collapse=","),repcond=paste(lapply(.SD,first),collapse=",")),by=filtNABcovB_U_PAF_0.05_stquantile_bycond,.SDcols=toworkwith]
   
   
-  #Selection of filtering options attending to the euclidean distance to the best score 1 1 attending to similarity eliminating variants at the PAF 0.25 level and co-opimizing the FPAF at 0.05 (two dimensions)
+  #Selection of filtering options attending to the euclidean distance to the best score 1 1 attending to similarity eliminating variants at higher than PAF 0.05 level and co-opimizing the FPAF at 0.05 (two dimensions)
   ###########################################################################################################
   data[,`:=`(scorefiltNABcovB_PAFFPAF0.05=1-sqrt((1-filtNABcovBPAF_U_PAF_0.05)**2+(1-filtNABcovBPAF_propU)**2)/maxE)]
   data[,`:=`(scorefiltNABcovB_PAFFPAF0.05_ciMean_bycond=myCiMean(scorefiltNABcovB_PAFFPAF0.05,conf=.9,na.rm=TRUE)[1]),keyby=condition]
   #data[,`:=`(scorefiltNABcovB_FPAF0.05=myCiMean(sqrt((1-filtNABcovB_U_PAF_0.05)**2+(1-filtNABcovB_propU)**2),conf=.9,na.rm=TRUE)[1]),keyby=condition]
-  lowciMean_EuclideanPAF_cond_uniq=data[conditionPAF==0.25,.(condition=paste(lapply(.SD,collapsecondst),collapse=","),repcond=paste(lapply(.SD,first),collapse=",")),by=scorefiltNABcovB_PAFFPAF0.05_ciMean_bycond,.SDcols=toworkwith]
+  lowciMean_EuclideanPAF_cond_uniq=data[conditionPAF>0.05,.(condition=paste(lapply(.SD,collapsecondst),collapse=","),repcond=paste(lapply(.SD,first),collapse=",")),by=scorefiltNABcovB_PAFFPAF0.05_ciMean_bycond,.SDcols=toworkwith]
   #data[,`:=`(filtNABcovB_U_PAF_0.05_stquantile_bycond=quantile(filtNABcovB_U_PAF_0.05,p=.25)),by=condition]
   #stquantile_FPAF0.05_cond_uniq=data[,.(condition=paste(lapply(.SD,collapsecondst),collapse=","),repcond=paste(lapply(.SD,first),collapse=",")),by=filtNABcovB_U_PAF_0.05_stquantile_bycond,.SDcols=toworkwith]
   
-  #Selection of filtering options attending to the euclidean distance to the best score 1 1 attending to similarity eliminating variants at the PAF 0.25 level and co-opimizing the MeanPAF (two dimensions)
+  #Selection of filtering options attending to the euclidean distance to the best score 1 1 attending to similarity eliminating variants at higher than PAF 0.05 level and co-opimizing the MeanPAF (two dimensions)
   ###########################################################################################################
   data[,`:=`(scorefiltNABcovBPAF_MPAF=1-sqrt((filtNABcovBPAF_U_PAF_Mean)**2+(1-filtNABcovBPAF_propU)**2)/maxE)]
   data[,`:=`(scorefiltNABcovBPAF_MPAF_ciMean_bycond=myCiMean(scorefiltNABcovBPAF_MPAF,conf=.9,na.rm=TRUE)[1]),keyby=condition]
-  lowciMean_EuclideanMPAF_cond_uniq=data[conditionPAF==0.25,.(condition=paste(lapply(.SD,collapsecondst),collapse=","),repcond=paste(lapply(.SD,first),collapse=",")),by=scorefiltNABcovBPAF_MPAF_ciMean_bycond,.SDcols=toworkwith]
+  lowciMean_EuclideanMPAF_cond_uniq=data[conditionPAF>0.05,.(condition=paste(lapply(.SD,collapsecondst),collapse=","),repcond=paste(lapply(.SD,first),collapse=",")),by=scorefiltNABcovBPAF_MPAF_ciMean_bycond,.SDcols=toworkwith]
   #data[,`:=`(filtNABcovB_U_PAF_0.05_stquantile_bycond=quantile(filtNABcovB_U_PAF_0.05,p=.25)),by=condition]
   #stquantile_FPAF0.05_cond_uniq=data[,.(condition=paste(lapply(.SD,collapsecondst),collapse=","),repcond=paste(lapply(.SD,first),collapse=",")),by=filtNABcovB_U_PAF_0.05_stquantile_bycond,.SDcols=toworkwith]
 
@@ -188,14 +193,14 @@ if (file.exists("analysis.RData")) {
   #####################################################################################################################################
   lowciMeanPAF0.05_cond_uniq=data[conditionPAF==0.05,.(condition=paste(lapply(.SD,collapsecondst),collapse=","),repcond=paste(lapply(.SD,first),collapse=",")),by=filtNABcovBPAF_propU_ciMean_bycond,.SDcols=toworkwith]
 
-#  #k-fold cross-validation
-#  ########################
-#  datakgroups=as.data.frame(dnacon)
-#  colnames(datakgroups)=c("Sample","DNAcon")
-#  datakgroups$DNAcon=as.factor(sapply(datakgroups$DNAcon,function(x){if(x>=100) ">=100" else x}))
-#  listks=makekgroups(datakgroups)
-#  setindex(data,Sample) 
-#
+  #k-fold cross-validation
+  ########################
+  datakgroups=as.data.frame(dnacon)
+  colnames(datakgroups)=c("Sample","DNAcon")
+  datakgroups$DNAcon=as.factor(sapply(datakgroups$DNAcon,function(x){if(x>=100) ">=100" else x}))
+  listks=makekgroups(datakgroups)
+  setindex(data,Sample) 
+
 #  #NoPAF
 #  resultscrossvalidation=mclapply(listks,function (mydataks){
 #	resultski=data[(mydataks),.(lowciMean_test=ciMean(filtNABcovB_propU,conf=.9)[1]),keyby=condition,on="Sample"]
@@ -218,28 +223,29 @@ if (file.exists("analysis.RData")) {
 #  setnames(resultscrossvalidation,6,"sd_stquantile")
 #  resultscrossvalidation=merge(resultscrossvalidation,data[,lapply(.SD,first),keyby=condition,.SDcols=toworkwith])
 #
-#  #PAF
-#  resultscrossvalidationPAF=mclapply(listks,function (mydataks){
-#	resultski=data[(mydataks),.(lowciMeanPAF_test=ciMean(filtNABcovBPAF_propU,conf=.9)[1]),keyby=condition,on="Sample"]
-#	resultski[,lowciMeanPAF_test:=data[mydataks,ciMean(filtNABcovBPAF_propU,conf=.9)[1],by=condition,on="Sample"][[2]]]
-#	resultski[,lowciMeanPAF_training:=data[!(mydataks),ciMean(filtNABcovBPAF_propU,conf=.9)[1],by=condition,on="Sample"][[2]]]
-#	resultski[,stquantilePAF_test:=data[(mydataks),quantile(filtNABcovBPAF_propU,p=.25)[1],by=condition,on="Sample"][[2]]]
-#	resultski[,stquantilePAF_training:=data[!(mydataks),quantile(filtNABcovBPAF_propU,p=.25)[1],by=condition,on="Sample"][[2]]]
-#	
-#    return(resultski)
-#  }, mc.cores = n_cores)
-#  
-#  resultscrossvalidationPAF=bind_rows(resultscrossvalidationPAF,.id="k")
-#  setDT(resultscrossvalidationPAF)
-#  resultscrossvalidationPAF=melt(resultscrossvalidationPAF,measure=patterns("^lowciMean","^stquantile"),value.name=c("lowciMeanPAF","stquantilePAF"),variable.name=c("type"))  
-#  levels(resultscrossvalidationPAF$type)=list(test="1",training="2")
-#
-#  resultscrossvalidationPAF=resultscrossvalidationPAF[,c(lapply(.SD,mean),lapply(.SD,sd)),keyby=c("condition","type"),.SDcols=c("lowciMeanPAF","stquantilePAF")]
-#  setnames(resultscrossvalidationPAF,3,"mean_lowciMeanPAF")
-#  setnames(resultscrossvalidationPAF,4,"mean_stquantilePAF")
-#  setnames(resultscrossvalidationPAF,5,"sd_lowciMeanPAF")
-#  setnames(resultscrossvalidationPAF,6,"sd_stquantilePAF")
-#  resultscrossvalidationPAF=merge(resultscrossvalidationPAF,data[,lapply(.SD,first),keyby=condition,.SDcols=toworkwith])
+  #EPAF
+  resultsCrossvalidationEPAF=mclapply(listks,function (mydataks){
+# data[,`:=`(scorefiltNABcovB_PAFFPAF0.05_ciMean_bycond=myCiMean(scorefiltNABcovB_PAFFPAF0.05,conf=.9,na.rm=TRUE)[1]),keyby=condition]
+	resultski=data[(mydataks),.(lowciMeanPAF_test=myCiMean(scorefiltNABcovB_PAFFPAF0.05,conf=.9,na.rm=TRUE)[1]),keyby=condition,on="Sample"]
+	resultski[,lowciMeanPAF_training:=data[!(mydataks),myCiMean(scorefiltNABcovB_PAFFPAF0.05,conf=.9,na.rm=TRUE)[1],by=condition,on="Sample"][[2]]]	
+    return(resultski)
+  }, mc.cores = n_cores)
+  
+  resultsCrossvalidationEPAF=bind_rows(resultsCrossvalidationEPAF,.id="k")
+  setDT(resultsCrossvalidationEPAF)
+  setkey(resultsCrossvalidationEPAF,condition)
+  resultsCrossvalidationEPAF=merge(resultsCrossvalidationEPAF,data[,lapply(.SD,first),keyby=condition,.SDcols=toworkwith])
+  #resultscrossvalidationEPAF=melt(resultscrossvalidationEPAF,measure=patterns("^lowciMean","^stquantile"),value.name=c("lowciMeanPAF","stquantilePAF"),variable.name=c("type"))  
+  summaryResultsCrossvalidationEPAF=melt(resultsCrossvalidationEPAF,measure=patterns("^lowciMean"),value.name=c("lowciMeanPAF"),variable.name=c("type"))
+  summaryResultsCrossvalidationEPAF[,type:=recode(summaryResultsCrossvalidationEPAF$type, lowciMeanPAF_test="test", lowciMeanPAF_training="training")]
+
+  summaryResultsCrossvalidationEPAF=summaryResultsCrossvalidationEPAF[,c(lapply(.SD,mean),lapply(.SD,sd)),keyby=c("condition","type"),.SDcols=c("lowciMeanPAF")]
+  setnames(summaryResultsCrossvalidationEPAF,3,"mean_lowciMeanPAF")
+  setnames(summaryResultsCrossvalidationEPAF,4,"sd_lowciMeanPAF")
+  summaryResultsCrossvalidationEPAF=merge(summaryResultsCrossvalidationEPAF,data[,lapply(.SD,first),keyby=condition,.SDcols=toworkwith])
+
+  ##Just added this, it may not be present in some saved images
+  bestCrossValidation=resultsCrossvalidationEPAF[PAFmax_pAF>=0.25][,.(meanLowciMeanPAF_test=mean(lowciMeanPAF_test),meanLowciMeanPAF_training=mean(lowciMeanPAF_training),ciMeanLowciMeanPAF_test=myCiMean(lowciMeanPAF_test,conf=.9,na.rm=TRUE)[1],ciMeanLowciMeanPAF_training=myCiMean(lowciMeanPAF_training,conf=.9,na.rm=TRUE)[1]),by=.(condition)]
  
   save.image("analysis.RData")
   
@@ -250,6 +256,7 @@ ordered_samples=data[,.(median_filtNABcovB_propU=median(filtNABcovB_propU)),by=S
 ordered_dnas=c("20","40","60","80",">=100")
 data[,`:=`(dnagroupF=factor(dnagroup,ordered=TRUE,levels=ordered_dnas))]
 names(data)[which(names(data)=="filtNABcovBPAF_#U")]="filtNABcovBPAF_TU"
+
 
 ##Best condition PAF<0.05
 #########################
@@ -276,125 +283,171 @@ write.table(file="PAF0.05_summary.csv",data[best_cond_PAF0.05,.(Sample,filtNABco
 ##Plots
 ##########################################
 
+##CrossValidation
+#bestbyk=resultsCrossvalidationEPAF[type=="training" & PAFmax_pAF>=0.25][order(-lowciMeanPAF),.(condition=first(condition),lowciMeanPAF_Training=first(lowciMeanPAF)),by=.(k)]
+bestbyk=resultsCrossvalidationEPAF[PAFmax_pAF>=0.25][order(-lowciMeanPAF_training),.(condition=first(condition),lowciMeanPAF_training=first(lowciMeanPAF_training)),by=.(k)]
+
+#setkey(bestbyk,condition)
+setkey(bestbyk,condition,k)
+setkey(resultsCrossvalidationEPAF,condition,k)
+
+#bestbyk=merge(resultsCrossvalidationEPAF,bestbyk,by=c("condition","k"))[type=="test",.(condition,k,lowciMeanPAF_Test=lowciMeanPAF,lowciMeanPAF_Training)]
+bestbyk=resultsCrossvalidationEPAF[bestbyk,][,.(condition,k,lowciMeanPAF_test,lowciMeanPAF_training)]
+
+#rescrossvalbest_cond_euclideanPAF=resultsCrossvalidationEPAF[condition==best_cond_euclideanPAF,][type=="test",.(condition,k,lowciMeanPAF_Test=lowciMeanPAF)]
+rescrossvalbest_cond_euclideanPAF=resultsCrossvalidationEPAF[condition==best_cond_euclideanPAF,.(condition,k,lowciMeanPAF_test)]
+theme_set(theme_cowplot())
+
+bestbyk[,`:=`(type="best")]
+rescrossvalbest_cond_euclideanPAF[,`:=`(type="opt")]
+finalDataCrossValPlotEPAF=rbind(rescrossvalbest_cond_euclideanPAF[,.(condition,k,lowciMeanPAF_test,type)],bestbyk[,.(condition,k,lowciMeanPAF_test,type)])
+
+myEcdfLookup=function(thek,thescore)
+{
+    return(ecdf(resultsCrossvalidationEPAF[PAFmax_pAF>=0.25][k==thek,][["lowciMeanPAF_test"]])(thescore))
+}
+
+finalDataCrossValPlotEPAF[,`:=`(empCum=myEcdfLookup(thek=k,thescore=lowciMeanPAF_test)),by=seq_len(nrow(finalDataCrossValPlotEPAF))]
+finalDataCrossValPlotEPAF[,`:=`(empCum=as.numeric(empCum))]
+finalDataCrossValPlotEPAF[type=="best",mean(empCum)]
+finalDataCrossValPlotEPAF[type=="best",min(empCum)]
+finalDataCrossValPlotEPAF[type=="best",max(empCum)]
+
+#finalDataCrossValPlotEPAF[,`:=`(type=factor(type,ordered=TRUE,levels=c("opt","best")))]
+
+typecolors=c("#e41a1c","#377eb8")
+names(typecolors)=c("best","opt")
+
+typeshapes=c(16,4)
+names(typeshapes)=c("best","opt")
+
+typelabels=c("Best k training","Optimal overall")
+names(typelabels)=c("best","opt")
+
+crossvalidationPlot=ggplot(data=resultsCrossvalidationEPAF[PAFmax_pAF>=0.25,], aes(x=k,y=lowciMeanPAF_test))+geom_violin()+geom_point(data=finalDataCrossValPlotEPAF,aes(y=lowciMeanPAF_test,color=type,shape=type),size=3,stroke=2)+scale_y_continuous(name="Test score",limits=c(0,1))+scale_x_discrete(name="Validation fold (k)")+scale_color_manual(name="",values=typecolors,labels=typelabels)+scale_shape_manual(name="",values=typeshapes,labels=typelabels)
+save_plot(plot=crossvalidationPlot,filename="crossValidation1.png",base_height = 6)
+save_plot(plot=crossvalidationPlot,filename="crossValidation1.pdf",base_height = 6)
+
+
+###
 
 ##Best condition PAF<0.05
 #########################
-data[,`:=`(SampleF=factor(Sample,ordered=TRUE,levels=ordered_samples))]
-
-
-plot_sim_bestPAF0.05_text=ggplot(data=data,aes(y=filtNABcovBPAF_propU*100,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_PAF0.05],aes(ymin=filtNABcovBPAF_propU*100,ymax=filtNABcovBPAF_propU*100,linetype="solid"),color="#c51b7d",size=0.35)+geom_point(data=datanofilt,aes(x=sample,y=sim*100,shape=""),size=2.5,stroke=1)+scale_y_continuous(name="Similarity (%)")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="Default\npipeline",drop=FALSE,name="")+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
-
-if (!file.exists("plot_sim_bestPAF0.05_text.pdf"))
-{
-  save_plot("plot_sim_bestPAF0.05_text.pdf",plot_sim_bestPAF0.05_text,base_height=6,base_aspect_ratio=1.6)
-}
-
-
-plot_vars_bestPAF0.05_text=ggplot(data=data,aes(y=filtNABcovBPAF_TU,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_PAF0.05],aes(ymin=filtNABcovBPAF_TU,ymax=filtNABcovBPAF_TU,linetype="solid"),color="#c51b7d",size=0.35)+geom_point(data=datanofilt,aes(x=sample,y=X.AN+X.BN+X.comun,shape=""),size=2.5,stroke=1)+scale_y_continuous(name="Number of variants")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="Default\npipeline",drop=FALSE,name="")+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
-
-
-if (!file.exists("plot_vars_bestPAF0.05_text.pdf"))
-{
-  save_plot("plot_vars_bestPAF0.05_text.pdf",plot_vars_bestPAF0.05_text,base_height=6,base_aspect_ratio=1.6)
-}
-
-plot_vars_log_bestPAF0.05_text=ggplot(data=data,aes(y=filtNABcovBPAF_TU,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_PAF0.05],aes(ymin=filtNABcovBPAF_TU,ymax=filtNABcovBPAF_TU,linetype="solid"),color="#c51b7d",size=0.35)+geom_point(data=datanofilt,aes(x=sample,y=X.AN+X.BN+X.comun,shape=""),size=2.5,stroke=1)+scale_y_log10(name="Log10 number of variants")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="Default\npipeline",drop=FALSE,name="")+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
-
-
-if (!file.exists("plot_vars_log_bestPAF0.05_text.pdf"))
-{
-  save_plot("plot_vars_log_bestPAF0.05_text.pdf",plot_vars_log_bestPAF0.05_text,base_height=6,base_aspect_ratio=1.6)
-}
-
-#plot_fpaf_bestPAF0.05_text=ggplot(data=data,aes(y=filtNABcovB_U_PAF_0.05*100,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_PAF0.05],aes(ymin=filtNABcovB_U_PAF_0.05*100,ymax=filtNABcovB_U_PAF_0.05*100,linetype="solid"),color="#c51b7d",size=0.35)+geom_point(data=datanofilt,aes(x=sample,y=fpaf*100,shape=""),size=2.5,stroke=1)+scale_y_continuous(name="Common samples with PAF<=0.05 (%)")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="Default\npipeline",drop=FALSE,name="")+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
-
-##I do not have the default yet
-plot_fpaf_bestPAF0.05_text=ggplot(data=data,aes(y=filtNABcovB_U_PAF_0.05*100,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_PAF0.05],aes(ymin=filtNABcovB_U_PAF_0.05*100,ymax=filtNABcovB_U_PAF_0.05*100,linetype="solid"),color="#c51b7d",size=0.35)+scale_y_continuous(name="Common samples with PAF<=0.05 (%)")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
-
-if (!file.exists("plot_fpaf_bestPAF0.05_text.pdf"))
-{
-  save_plot("plot_fpaf_bestPAF0.05_text.pdf",plot_fpaf_bestPAF0.05_text,base_height=6,base_aspect_ratio=1.6)
-}
-
-#MeanPAF
-plot_mpaf_bestPAF0.05_text=ggplot(data=data,aes(y=filtNABcovBPAF_U_PAF_Mean,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_PAF0.05],aes(ymin=filtNABcovBPAF_U_PAF_Mean,ymax=filtNABcovBPAF_U_PAF_Mean,linetype="solid"),color="#c51b7d",size=0.35)+scale_y_continuous(name="Mean PAF")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
-
-if (!file.exists("plot_mpaf_bestPAF0.05_text.pdf"))
-{
-  save_plot("plot_mpaf_bestPAF0.05_text.pdf",plot_mpaf_bestPAF0.05_text,base_height=6,base_aspect_ratio=1.6)
-}
-
-
-##Best co-optimization
-######################
-
-ordered_samples=data[,.(median_scorefiltNABcovB_FPAF0.05=median(scorefiltNABcovB_FPAF0.05)),by=Sample][order(median_scorefiltNABcovB_FPAF0.05),Sample]
-data[,`:=`(SampleF=factor(Sample,ordered=TRUE,levels=ordered_samples))]
-names(data)[which(names(data)=="filtNABcovB_#U")]="filtNABcovB_TU"
-
-##I do not have the default for the score yet
-plot_score_bestEuclidean_text=ggplot(data=data,aes(y=scorefiltNABcovB_FPAF0.05,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_euclidean],aes(ymin=scorefiltNABcovB_FPAF0.05,ymax=scorefiltNABcovB_FPAF0.05,linetype="solid"),color="#c51b7d",size=0.35)+scale_y_continuous(name="Score (complement of prop. max. theoretical distance)")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
-
-
-##plot_score_bestEuclidean_text=ggplot(data=data,aes(y=scorefiltNABcovB_FPAF0.05,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_euclidean],aes(ymin=scorefiltNABcovB_FPAF0.05,ymax=scorefiltNABcovB_FPAF0.05,linetype="solid"),color="#c51b7d",size=0.35)+geom_point(data=datanofilt,aes(x=sample,y=score*100,shape=""),size=2.5,stroke=1)+scale_y_continuous(name="Similarity (%)")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="Default\npipeline",drop=FALSE,name="")+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
-
-if (!file.exists("plot_score_bestEuclidean_text.pdf"))
-{
-  save_plot("plot_score_bestEuclidean_text.pdf",plot_score_bestEuclidean_text,base_height=6,base_aspect_ratio=1.6)
-}
-
-plot_sim_bestEuclidean_text=ggplot(data=data,aes(y=filtNABcovB_propU*100,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_euclidean],aes(ymin=filtNABcovB_propU*100,ymax=filtNABcovB_propU*100,linetype="solid"),color="#c51b7d",size=0.35)+geom_point(data=datanofilt,aes(x=sample,y=sim*100,shape=""),size=2.5,stroke=1)+scale_y_continuous(name="Similarity (%)")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="Default\npipeline",drop=FALSE,name="")+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
-
-if (!file.exists("plot_sim_bestEuclidean_text.pdf"))
-{
-  save_plot("plot_sim_bestEuclidean_text.pdf",plot_sim_bestEuclidean_text,base_height=6,base_aspect_ratio=1.6)
-}
-
-
-plot_vars_bestEuclidean_text=ggplot(data=data,aes(y=filtNABcovB_TU,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_euclidean],aes(ymin=filtNABcovB_TU,ymax=filtNABcovB_TU,linetype="solid"),color="#c51b7d",size=0.35)+geom_point(data=datanofilt,aes(x=sample,y=X.AN+X.BN+X.comun,shape=""),size=2.5,stroke=1)+scale_y_continuous(name="Number of variants")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="Default\npipeline",drop=FALSE,name="")+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
-
-
-if (!file.exists("plot_vars_bestEuclidean_text.pdf"))
-{
-  save_plot("plot_vars_bestEuclidean_text.pdf",plot_vars_bestEuclidean_text,base_height=6,base_aspect_ratio=1.6)
-}
-
-plot_vars_log_bestEuclidean_text=ggplot(data=data,aes(y=filtNABcovB_TU,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_euclidean],aes(ymin=filtNABcovB_TU,ymax=filtNABcovB_TU,linetype="solid"),color="#c51b7d",size=0.35)+geom_point(data=datanofilt,aes(x=sample,y=X.AN+X.BN+X.comun,shape=""),size=2.5,stroke=1)+scale_y_log10(name="Log10 number of variants")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="Default\npipeline",drop=FALSE,name="")+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
-
-
-if (!file.exists("plot_vars_log_bestEuclidean_text.pdf"))
-{
-  save_plot("plot_vars_log_bestEuclidean_text.pdf",plot_vars_log_bestEuclidean_text,base_height=6,base_aspect_ratio=1.6)
-}
-
-#plot_fpaf_bestEuclidean_text=ggplot(data=data,aes(y=filtNABcovB_U_PAF_0.05*100,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_euclidean],aes(ymin=filtNABcovB_U_PAF_0.05*100,ymax=filtNABcovB_U_PAF_0.05*100,linetype="solid"),color="#c51b7d",size=0.35)+geom_point(data=datanofilt,aes(x=sample,y=fpaf*100,shape=""),size=2.5,stroke=1)+scale_y_continuous(name="Common samples with PAF<=0.05 (%)")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="Default\npipeline",drop=FALSE,name="")+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
-
-##I do not have the default yet
-plot_fpaf_bestEuclidean_text=ggplot(data=data,aes(y=filtNABcovB_U_PAF_0.05*100,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_euclidean],aes(ymin=filtNABcovB_U_PAF_0.05*100,ymax=filtNABcovB_U_PAF_0.05*100,linetype="solid"),color="#c51b7d",size=0.35)+scale_y_continuous(name="Common samples with PAF<=0.05 (%)")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
-
-if (!file.exists("plot_fpaf_bestEuclidean_text.pdf"))
-{
-  save_plot("plot_fpaf_bestEuclidean_text.pdf",plot_fpaf_bestEuclidean_text,base_height=6,base_aspect_ratio=1.6)
-}
-
-#MeanPAF
-plot_mpaf_bestEuclidean_text=ggplot(data=data,aes(y=filtNABcovB_U_PAF_Mean,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_euclidean],aes(ymin=filtNABcovB_U_PAF_Mean,ymax=filtNABcovB_U_PAF_Mean,linetype="solid"),color="#c51b7d",size=0.35)+scale_y_continuous(name="Mean PAF")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
-
-if (!file.exists("plot_mpaf_bestEuclidean_text.pdf"))
-{
-  save_plot("plot_mpaf_bestEuclidean_text.pdf",plot_mpaf_bestEuclidean_text,base_height=6,base_aspect_ratio=1.6)
-}
+#data[,`:=`(SampleF=factor(Sample,ordered=TRUE,levels=ordered_samples))]
+#
+#
+#plot_sim_bestPAF0.05_text=ggplot(data=data,aes(y=filtNABcovBPAF_propU*100,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_PAF0.05],aes(ymin=filtNABcovBPAF_propU*100,ymax=filtNABcovBPAF_propU*100,linetype="solid"),color="#c51b7d",size=0.35)+geom_point(data=datanofilt,aes(x=sample,y=sim*100,shape=""),size=2.5,stroke=1)+scale_y_continuous(name="Similarity (%)")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="Default\npipeline",drop=FALSE,name="")+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
+#
+#if (!file.exists("plot_sim_bestPAF0.05_text.pdf"))
+#{
+#  save_plot("plot_sim_bestPAF0.05_text.pdf",plot_sim_bestPAF0.05_text,base_height=6,base_aspect_ratio=1.6)
+#}
+#
+#
+#plot_vars_bestPAF0.05_text=ggplot(data=data,aes(y=filtNABcovBPAF_TU,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_PAF0.05],aes(ymin=filtNABcovBPAF_TU,ymax=filtNABcovBPAF_TU,linetype="solid"),color="#c51b7d",size=0.35)+geom_point(data=datanofilt,aes(x=sample,y=X.AN+X.BN+X.Shared,shape=""),size=2.5,stroke=1)+scale_y_continuous(name="Number of variants")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="Default\npipeline",drop=FALSE,name="")+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
+#
+#
+#if (!file.exists("plot_vars_bestPAF0.05_text.pdf"))
+#{
+#  save_plot("plot_vars_bestPAF0.05_text.pdf",plot_vars_bestPAF0.05_text,base_height=6,base_aspect_ratio=1.6)
+#}
+#
+#plot_vars_log_bestPAF0.05_text=ggplot(data=data,aes(y=filtNABcovBPAF_TU,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_PAF0.05],aes(ymin=filtNABcovBPAF_TU,ymax=filtNABcovBPAF_TU,linetype="solid"),color="#c51b7d",size=0.35)+geom_point(data=datanofilt,aes(x=sample,y=X.AN+X.BN+X.Shared,shape=""),size=2.5,stroke=1)+scale_y_log10(name="Log10 number of variants")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="Default\npipeline",drop=FALSE,name="")+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
+#
+#
+#if (!file.exists("plot_vars_log_bestPAF0.05_text.pdf"))
+#{
+#  save_plot("plot_vars_log_bestPAF0.05_text.pdf",plot_vars_log_bestPAF0.05_text,base_height=6,base_aspect_ratio=1.6)
+#}
+#
+##plot_fpaf_bestPAF0.05_text=ggplot(data=data,aes(y=filtNABcovB_U_PAF_0.05*100,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_PAF0.05],aes(ymin=filtNABcovB_U_PAF_0.05*100,ymax=filtNABcovB_U_PAF_0.05*100,linetype="solid"),color="#c51b7d",size=0.35)+geom_point(data=datanofilt,aes(x=sample,y=fpaf*100,shape=""),size=2.5,stroke=1)+scale_y_continuous(name="Common samples with PAF<=0.05 (%)")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="Default\npipeline",drop=FALSE,name="")+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
+#
+###I do not have the default yet
+#plot_fpaf_bestPAF0.05_text=ggplot(data=data,aes(y=filtNABcovB_U_PAF_0.05*100,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_PAF0.05],aes(ymin=filtNABcovB_U_PAF_0.05*100,ymax=filtNABcovB_U_PAF_0.05*100,linetype="solid"),color="#c51b7d",size=0.35)+scale_y_continuous(name="Common samples with PAF<=0.05 (%)")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
+#
+#if (!file.exists("plot_fpaf_bestPAF0.05_text.pdf"))
+#{
+#  save_plot("plot_fpaf_bestPAF0.05_text.pdf",plot_fpaf_bestPAF0.05_text,base_height=6,base_aspect_ratio=1.6)
+#}
+#
+##MeanPAF
+#plot_mpaf_bestPAF0.05_text=ggplot(data=data,aes(y=filtNABcovBPAF_U_PAF_Mean,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_PAF0.05],aes(ymin=filtNABcovBPAF_U_PAF_Mean,ymax=filtNABcovBPAF_U_PAF_Mean,linetype="solid"),color="#c51b7d",size=0.35)+scale_y_continuous(name="Mean PAF")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
+#
+#if (!file.exists("plot_mpaf_bestPAF0.05_text.pdf"))
+#{
+#  save_plot("plot_mpaf_bestPAF0.05_text.pdf",plot_mpaf_bestPAF0.05_text,base_height=6,base_aspect_ratio=1.6)
+#}
+#
+#
+###Best co-optimization
+#######################
+#
+#ordered_samples=data[,.(median_scorefiltNABcovB_FPAF0.05=median(scorefiltNABcovB_FPAF0.05)),by=Sample][order(median_scorefiltNABcovB_FPAF0.05),Sample]
+#data[,`:=`(SampleF=factor(Sample,ordered=TRUE,levels=ordered_samples))]
+#names(data)[which(names(data)=="filtNABcovB_#U")]="filtNABcovB_TU"
+#
+###I do not have the default for the score yet
+#plot_score_bestEuclidean_text=ggplot(data=data,aes(y=scorefiltNABcovB_FPAF0.05,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_euclidean],aes(ymin=scorefiltNABcovB_FPAF0.05,ymax=scorefiltNABcovB_FPAF0.05,linetype="solid"),color="#c51b7d",size=0.35)+scale_y_continuous(name="Score (complement of prop. max. theoretical distance)")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
+#
+#
+###plot_score_bestEuclidean_text=ggplot(data=data,aes(y=scorefiltNABcovB_FPAF0.05,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_euclidean],aes(ymin=scorefiltNABcovB_FPAF0.05,ymax=scorefiltNABcovB_FPAF0.05,linetype="solid"),color="#c51b7d",size=0.35)+geom_point(data=datanofilt,aes(x=sample,y=score*100,shape=""),size=2.5,stroke=1)+scale_y_continuous(name="Similarity (%)")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="Default\npipeline",drop=FALSE,name="")+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
+#
+#if (!file.exists("plot_score_bestEuclidean_text.pdf"))
+#{
+#  save_plot("plot_score_bestEuclidean_text.pdf",plot_score_bestEuclidean_text,base_height=6,base_aspect_ratio=1.6)
+#}
+#
+#plot_sim_bestEuclidean_text=ggplot(data=data,aes(y=filtNABcovB_propU*100,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_euclidean],aes(ymin=filtNABcovB_propU*100,ymax=filtNABcovB_propU*100,linetype="solid"),color="#c51b7d",size=0.35)+geom_point(data=datanofilt,aes(x=sample,y=sim*100,shape=""),size=2.5,stroke=1)+scale_y_continuous(name="Similarity (%)")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="Default\npipeline",drop=FALSE,name="")+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
+#
+#if (!file.exists("plot_sim_bestEuclidean_text.pdf"))
+#{
+#  save_plot("plot_sim_bestEuclidean_text.pdf",plot_sim_bestEuclidean_text,base_height=6,base_aspect_ratio=1.6)
+#}
+#
+#
+#plot_vars_bestEuclidean_text=ggplot(data=data,aes(y=filtNABcovB_TU,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_euclidean],aes(ymin=filtNABcovB_TU,ymax=filtNABcovB_TU,linetype="solid"),color="#c51b7d",size=0.35)+geom_point(data=datanofilt,aes(x=sample,y=X.AN+X.BN+X.Shared,shape=""),size=2.5,stroke=1)+scale_y_continuous(name="Number of variants")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="Default\npipeline",drop=FALSE,name="")+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
+#
+#
+#if (!file.exists("plot_vars_bestEuclidean_text.pdf"))
+#{
+#  save_plot("plot_vars_bestEuclidean_text.pdf",plot_vars_bestEuclidean_text,base_height=6,base_aspect_ratio=1.6)
+#}
+#
+#plot_vars_log_bestEuclidean_text=ggplot(data=data,aes(y=filtNABcovB_TU,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_euclidean],aes(ymin=filtNABcovB_TU,ymax=filtNABcovB_TU,linetype="solid"),color="#c51b7d",size=0.35)+geom_point(data=datanofilt,aes(x=sample,y=X.AN+X.BN+X.Shared,shape=""),size=2.5,stroke=1)+scale_y_log10(name="Log10 number of variants")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="Default\npipeline",drop=FALSE,name="")+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
+#
+#
+#if (!file.exists("plot_vars_log_bestEuclidean_text.pdf"))
+#{
+#  save_plot("plot_vars_log_bestEuclidean_text.pdf",plot_vars_log_bestEuclidean_text,base_height=6,base_aspect_ratio=1.6)
+#}
+#
+##plot_fpaf_bestEuclidean_text=ggplot(data=data,aes(y=filtNABcovB_U_PAF_0.05*100,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_euclidean],aes(ymin=filtNABcovB_U_PAF_0.05*100,ymax=filtNABcovB_U_PAF_0.05*100,linetype="solid"),color="#c51b7d",size=0.35)+geom_point(data=datanofilt,aes(x=sample,y=fpaf*100,shape=""),size=2.5,stroke=1)+scale_y_continuous(name="Common samples with PAF<=0.05 (%)")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="Default\npipeline",drop=FALSE,name="")+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
+#
+###I do not have the default yet
+#plot_fpaf_bestEuclidean_text=ggplot(data=data,aes(y=filtNABcovB_U_PAF_0.05*100,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_euclidean],aes(ymin=filtNABcovB_U_PAF_0.05*100,ymax=filtNABcovB_U_PAF_0.05*100,linetype="solid"),color="#c51b7d",size=0.35)+scale_y_continuous(name="Common samples with PAF<=0.05 (%)")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
+#
+#if (!file.exists("plot_fpaf_bestEuclidean_text.pdf"))
+#{
+#  save_plot("plot_fpaf_bestEuclidean_text.pdf",plot_fpaf_bestEuclidean_text,base_height=6,base_aspect_ratio=1.6)
+#}
+#
+##MeanPAF
+#plot_mpaf_bestEuclidean_text=ggplot(data=data,aes(y=filtNABcovB_U_PAF_Mean,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_euclidean],aes(ymin=filtNABcovB_U_PAF_Mean,ymax=filtNABcovB_U_PAF_Mean,linetype="solid"),color="#c51b7d",size=0.35)+scale_y_continuous(name="Mean PAF")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
+#
+#if (!file.exists("plot_mpaf_bestEuclidean_text.pdf"))
+#{
+#  save_plot("plot_mpaf_bestEuclidean_text.pdf",plot_mpaf_bestEuclidean_text,base_height=6,base_aspect_ratio=1.6)
+#}
 
 ##Best co-optimizationPAF
 ######################
 
-ordered_samples=data[,.(median_scorefiltNABcovB_PAFFPAF0.05=median(scorefiltNABcovB_PAFFPAF0.05)),by=Sample][order(median_scorefiltNABcovB_PAFFPAF0.05),Sample]
+##Score plots
+#ordered_samples=data[,.(median_scorefiltNABcovB_PAFFPAF0.05=median(scorefiltNABcovB_PAFFPAF0.05)),by=Sample][order(median_scorefiltNABcovB_PAFFPAF0.05),Sample]
+ordered_samples=data[condition==best_cond_euclideanPAF,.(Sample,scorefiltNABcovB_PAFFPAF0.05)][order(scorefiltNABcovB_PAFFPAF0.05),Sample]
 data[,`:=`(SampleF=factor(Sample,ordered=TRUE,levels=ordered_samples))]
-names(data)[which(names(data)=="filtNABcovBPAF_#U")]="filtNABcovBPAF_TU"
 
-##I do not have the default for the score yet
-plot_score_bestEuclideanPAF_text=ggplot(data=data,aes(y=scorefiltNABcovB_PAFFPAF0.05,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_euclideanPAF],aes(ymin=scorefiltNABcovB_PAFFPAF0.05,ymax=scorefiltNABcovB_PAFFPAF0.05,linetype="solid"),color="#c51b7d",size=0.35)+scale_y_continuous(name="Score (complement of prop. max. theoretical distance)")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
-
+plot_score_bestEuclideanPAF_text=ggplot(data=data,aes(y=scorefiltNABcovB_PAFFPAF0.05,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_euclideanPAF],aes(ymin=scorefiltNABcovB_PAFFPAF0.05,ymax=scorefiltNABcovB_PAFFPAF0.05,linetype="solid"),color="#c51b7d",size=0.35)+geom_point(data=datanofilt,aes(x=sample,y=score,shape=""),size=2.5,stroke=1)+scale_y_continuous(name="Score (complement of prop. max. theoretical distance)")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="Default\npipeline",drop=FALSE,name="")+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
 
 ##plot_score_bestEuclidean_text=ggplot(data=data,aes(y=scorefiltNABcovB_FPAF0.05,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_euclidean],aes(ymin=scorefiltNABcovB_FPAF0.05,ymax=scorefiltNABcovB_FPAF0.05,linetype="solid"),color="#c51b7d",size=0.35)+geom_point(data=datanofilt,aes(x=sample,y=score*100,shape=""),size=2.5,stroke=1)+scale_y_continuous(name="Similarity (%)")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="Default\npipeline",drop=FALSE,name="")+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
 
@@ -403,6 +456,19 @@ if (!file.exists("plot_score_bestEuclideanPAF_text.pdf"))
   save_plot("plot_score_bestEuclideanPAF_text.pdf",plot_score_bestEuclideanPAF_text,base_height=6,base_aspect_ratio=1.6)
 }
 
+plot_score_bestEuclideanPAF_text_noPAF0.05=ggplot(data=data[PAFmax_pAF>0.05],aes(y=scorefiltNABcovB_PAFFPAF0.05,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_euclideanPAF],aes(ymin=scorefiltNABcovB_PAFFPAF0.05,ymax=scorefiltNABcovB_PAFFPAF0.05,linetype="solid"),color="#c51b7d",size=0.35)+geom_point(data=datanofilt,aes(x=sample,y=score,shape=""),size=2.5,stroke=1)+scale_y_continuous(name="Score (complement of prop. max. theoretical distance)")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="Default\npipeline",drop=FALSE,name="")+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
+
+##plot_score_bestEuclidean_text=ggplot(data=data,aes(y=scorefiltNABcovB_FPAF0.05,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_euclidean],aes(ymin=scorefiltNABcovB_FPAF0.05,ymax=scorefiltNABcovB_FPAF0.05,linetype="solid"),color="#c51b7d",size=0.35)+geom_point(data=datanofilt,aes(x=sample,y=score*100,shape=""),size=2.5,stroke=1)+scale_y_continuous(name="Similarity (%)")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="Default\npipeline",drop=FALSE,name="")+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
+
+if (!file.exists("plot_score_bestEuclideanPAF_text_noPAF0.05.pdf"))
+{
+  save_plot("plot_score_bestEuclideanPAF_text_noPAF0.05.pdf",plot_score_bestEuclideanPAF_text_noPAF0.05,base_height=6,base_aspect_ratio=1.6)
+}
+
+#similarity plots
+ordered_samples=data[condition==best_cond_euclideanPAF,.(Sample,filtNABcovBPAF_propU)][order(filtNABcovBPAF_propU),Sample]
+data[,`:=`(SampleF=factor(Sample,ordered=TRUE,levels=ordered_samples))]
+
 plot_sim_bestEuclideanPAF_text=ggplot(data=data,aes(y=filtNABcovBPAF_propU*100,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_euclideanPAF],aes(ymin=filtNABcovBPAF_propU*100,ymax=filtNABcovBPAF_propU*100,linetype="solid"),color="#c51b7d",size=0.35)+geom_point(data=datanofilt,aes(x=sample,y=sim*100,shape=""),size=2.5,stroke=1)+scale_y_continuous(name="Similarity (%)")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="Default\npipeline",drop=FALSE,name="")+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
 
 if (!file.exists("plot_sim_bestEuclideanPAF_text.pdf"))
@@ -410,8 +476,15 @@ if (!file.exists("plot_sim_bestEuclideanPAF_text.pdf"))
   save_plot("plot_sim_bestEuclideanPAF_text.pdf",plot_sim_bestEuclideanPAF_text,base_height=6,base_aspect_ratio=1.6)
 }
 
+plot_sim_bestEuclideanPAF_text_noPAF0.05=ggplot(data=data[PAFmax_pAF>0.05],aes(y=filtNABcovBPAF_propU*100,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_euclideanPAF],aes(ymin=filtNABcovBPAF_propU*100,ymax=filtNABcovBPAF_propU*100,linetype="solid"),color="#c51b7d",size=0.35)+geom_point(data=datanofilt,aes(x=sample,y=sim*100,shape=""),size=2.5,stroke=1)+scale_y_continuous(name="Similarity (%)")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="Default\npipeline",drop=FALSE,name="")+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
 
-plot_vars_bestEuclideanPAF_text=ggplot(data=data,aes(y=filtNABcovBPAF_TU,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_euclideanPAF],aes(ymin=filtNABcovBPAF_TU,ymax=filtNABcovBPAF_TU,linetype="solid"),color="#c51b7d",size=0.35)+geom_point(data=datanofilt,aes(x=sample,y=X.AN+X.BN+X.comun,shape=""),size=2.5,stroke=1)+scale_y_continuous(name="Number of variants")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="Default\npipeline",drop=FALSE,name="")+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
+if (!file.exists("plot_sim_bestEuclideanPAF_text_noPAF0.05.pdf"))
+{
+  save_plot("plot_sim_bestEuclideanPAF_text_noPAF0.05.pdf",plot_sim_bestEuclideanPAF_text_noPAF0.05,base_height=6,base_aspect_ratio=1.6)
+}
+
+#Variant plots
+plot_vars_bestEuclideanPAF_text=ggplot(data=data,aes(y=filtNABcovBPAF_TU,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_euclideanPAF],aes(ymin=filtNABcovBPAF_TU,ymax=filtNABcovBPAF_TU,linetype="solid"),color="#c51b7d",size=0.35)+geom_point(data=datanofilt,aes(x=sample,y=X.AN+X.BN+X.Shared,shape=""),size=2.5,stroke=1)+scale_y_continuous(name="Number of variants")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="Default\npipeline",drop=FALSE,name="")+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
 
 
 if (!file.exists("plot_vars_bestEuclideanPAF_text.pdf"))
@@ -419,7 +492,7 @@ if (!file.exists("plot_vars_bestEuclideanPAF_text.pdf"))
   save_plot("plot_vars_bestEuclideanPAF_text.pdf",plot_vars_bestEuclideanPAF_text,base_height=6,base_aspect_ratio=1.6)
 }
 
-plot_vars_log_bestEuclideanPAF_text=ggplot(data=data,aes(y=filtNABcovBPAF_TU,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_euclideanPAF],aes(ymin=filtNABcovBPAF_TU,ymax=filtNABcovBPAF_TU,linetype="solid"),color="#c51b7d",size=0.35)+geom_point(data=datanofilt,aes(x=sample,y=X.AN+X.BN+X.comun,shape=""),size=2.5,stroke=1)+scale_y_log10(name="Log10 number of variants")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="Default\npipeline",drop=FALSE,name="")+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
+plot_vars_log_bestEuclideanPAF_text=ggplot(data=data,aes(y=filtNABcovBPAF_TU,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_euclideanPAF],aes(ymin=filtNABcovBPAF_TU,ymax=filtNABcovBPAF_TU,linetype="solid"),color="#c51b7d",size=0.35)+geom_point(data=datanofilt,aes(x=sample,y=X.AN+X.BN+X.Shared,shape=""),size=2.5,stroke=1)+scale_y_log10(name="Log10 number of variants")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="Default\npipeline",drop=FALSE,name="")+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
 
 
 if (!file.exists("plot_vars_log_bestEuclideanPAF_text.pdf"))
@@ -429,6 +502,8 @@ if (!file.exists("plot_vars_log_bestEuclideanPAF_text.pdf"))
 
 #plot_fpaf_bestEuclidean_text=ggplot(data=data,aes(y=filtNABcovB_U_PAF_0.05*100,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_euclidean],aes(ymin=filtNABcovB_U_PAF_0.05*100,ymax=filtNABcovB_U_PAF_0.05*100,linetype="solid"),color="#c51b7d",size=0.35)+geom_point(data=datanofilt,aes(x=sample,y=fpaf*100,shape=""),size=2.5,stroke=1)+scale_y_continuous(name="Common samples with PAF<=0.05 (%)")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="Default\npipeline",drop=FALSE,name="")+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
 
+#PAF plots
+
 ##I do not have the default yet
 plot_fpaf_bestEuclideanPAF_text=ggplot(data=data,aes(y=filtNABcovB_U_PAF_0.05*100,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_euclideanPAF],aes(ymin=filtNABcovB_U_PAF_0.05*100,ymax=filtNABcovB_U_PAF_0.05*100,linetype="solid"),color="#c51b7d",size=0.35)+scale_y_continuous(name="Common samples with PAF<=0.05 (%)")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
 
@@ -437,7 +512,7 @@ if (!file.exists("plot_fpaf_bestEuclideanPAF_text.pdf"))
   save_plot("plot_fpaf_bestEuclideanPAF_text.pdf",plot_fpaf_bestEuclideanPAF_text,base_height=6,base_aspect_ratio=1.6)
 }
 
-#MeanPAF
+#MeanPAF plots
 plot_mpaf_bestEuclideanPAF_text=ggplot(data=data,aes(y=filtNABcovBPAF_U_PAF_Mean,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_euclideanPAF],aes(ymin=filtNABcovBPAF_U_PAF_Mean,ymax=filtNABcovBPAF_U_PAF_Mean,linetype="solid"),color="#c51b7d",size=0.35)+scale_y_continuous(name="Mean PAF")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
 
 if (!file.exists("plot_mpaf_bestEuclideanPAF_text.pdf"))
@@ -471,7 +546,7 @@ if (!file.exists("plot_sim_bestEuclideanMPAF_text.pdf"))
 }
 
 
-plot_vars_bestEuclideanMPAF_text=ggplot(data=data,aes(y=filtNABcovBPAF_TU,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_euclideanMPAF],aes(ymin=filtNABcovBPAF_TU,ymax=filtNABcovBPAF_TU,linetype="solid"),color="#c51b7d",size=0.35)+geom_point(data=datanofilt,aes(x=sample,y=X.AN+X.BN+X.comun,shape=""),size=2.5,stroke=1)+scale_y_continuous(name="Number of variants")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="Default\npipeline",drop=FALSE,name="")+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
+plot_vars_bestEuclideanMPAF_text=ggplot(data=data,aes(y=filtNABcovBPAF_TU,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_euclideanMPAF],aes(ymin=filtNABcovBPAF_TU,ymax=filtNABcovBPAF_TU,linetype="solid"),color="#c51b7d",size=0.35)+geom_point(data=datanofilt,aes(x=sample,y=X.AN+X.BN+X.Shared,shape=""),size=2.5,stroke=1)+scale_y_continuous(name="Number of variants")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="Default\npipeline",drop=FALSE,name="")+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
 
 
 if (!file.exists("plot_vars_bestEuclideanMPAF_text.pdf"))
@@ -479,7 +554,7 @@ if (!file.exists("plot_vars_bestEuclideanMPAF_text.pdf"))
   save_plot("plot_vars_bestEuclideanMPAF_text.pdf",plot_vars_bestEuclideanMPAF_text,base_height=6,base_aspect_ratio=1.6)
 }
 
-plot_vars_log_bestEuclideanMPAF_text=ggplot(data=data,aes(y=filtNABcovBPAF_TU,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_euclideanMPAF],aes(ymin=filtNABcovBPAF_TU,ymax=filtNABcovBPAF_TU,linetype="solid"),color="#c51b7d",size=0.35)+geom_point(data=datanofilt,aes(x=sample,y=X.AN+X.BN+X.comun,shape=""),size=2.5,stroke=1)+scale_y_log10(name="Log10 number of variants")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="Default\npipeline",drop=FALSE,name="")+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
+plot_vars_log_bestEuclideanMPAF_text=ggplot(data=data,aes(y=filtNABcovBPAF_TU,x=SampleF))+geom_violin(aes(fill=dnagroupF,color=dnagroupF))+geom_crossbar(data=data[best_cond_euclideanMPAF],aes(ymin=filtNABcovBPAF_TU,ymax=filtNABcovBPAF_TU,linetype="solid"),color="#c51b7d",size=0.35)+geom_point(data=datanofilt,aes(x=sample,y=X.AN+X.BN+X.Shared,shape=""),size=2.5,stroke=1)+scale_y_log10(name="Log10 number of variants")+scale_x_discrete(name="Technical replicate")+labs(title="Pipeline optimization across 28 technical replicates")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+scale_color_brewer(guide=FALSE, type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="Default\npipeline",drop=FALSE,name="")+scale_linetype_manual(values="solid",label="Optimized\npipeline",name="")+guides(linetype=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
 
 
 if (!file.exists("plot_vars_log_bestEuclideanMPAF_text.pdf"))
@@ -546,8 +621,8 @@ if (!file.exists("plot_mpaf_bestEuclideanMPAF_text.pdf"))
 #
 ###Should I reorder here or not? I do not think so
 ##data$Sample=with(data,reorder(Sample,filtNABcovB_.U,FUN = function(x){return(median(x))}))
-#plot_var_ciMean=ggplot(data=data,aes(y=filtNABcovB_.U,x=Sample))+geom_violin(aes(fill=dnagroup))+geom_point(data=data[data$condition %in% conditions_ciMean,],aes(color=factor(condition,levels=conditions_ciMean)),size=2,stat="summary",fun.y="mean")+geom_point(data=datanofilt,aes(x=sample,y=X.AN+X.BN+X.comun,shape=""),size=2.5,stroke=1.5)+scale_y_continuous(name="Number of variants")+scale_x_discrete(name="Sample")+scale_color_brewer(name="Filter",type="qual",palette=3,labels=names(conditions_ciMean))+labs(title="Number of variants. CI90 Mean selection")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="No optimization",drop=FALSE,name="")+guides(colour=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
-#plot_var_ciMean_log=ggplot(data=data,aes(y=filtNABcovB_.U,x=Sample))+geom_violin(aes(fill=dnagroup))+geom_point(data=data[data$condition %in% conditions_ciMean,],aes(color=factor(condition,levels=conditions_ciMean)),size=2,stat="summary",fun.y="mean")+geom_point(data=datanofilt,aes(x=sample,y=X.AN+X.BN+X.comun,shape=""),size=2.5,stroke=1.5)+scale_y_log10(name="Number of variants")+scale_x_discrete(name="Sample")+scale_color_brewer(name="Filter",type="qual",palette=3,labels=names(conditions_ciMean))+labs(title="Number of variants. CI90 Mean selection")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="No optimization",drop=FALSE,name="")+guides(colour=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
+#plot_var_ciMean=ggplot(data=data,aes(y=filtNABcovB_.U,x=Sample))+geom_violin(aes(fill=dnagroup))+geom_point(data=data[data$condition %in% conditions_ciMean,],aes(color=factor(condition,levels=conditions_ciMean)),size=2,stat="summary",fun.y="mean")+geom_point(data=datanofilt,aes(x=sample,y=X.AN+X.BN+X.Shared,shape=""),size=2.5,stroke=1.5)+scale_y_continuous(name="Number of variants")+scale_x_discrete(name="Sample")+scale_color_brewer(name="Filter",type="qual",palette=3,labels=names(conditions_ciMean))+labs(title="Number of variants. CI90 Mean selection")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="No optimization",drop=FALSE,name="")+guides(colour=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
+#plot_var_ciMean_log=ggplot(data=data,aes(y=filtNABcovB_.U,x=Sample))+geom_violin(aes(fill=dnagroup))+geom_point(data=data[data$condition %in% conditions_ciMean,],aes(color=factor(condition,levels=conditions_ciMean)),size=2,stat="summary",fun.y="mean")+geom_point(data=datanofilt,aes(x=sample,y=X.AN+X.BN+X.Shared,shape=""),size=2.5,stroke=1.5)+scale_y_log10(name="Number of variants")+scale_x_discrete(name="Sample")+scale_color_brewer(name="Filter",type="qual",palette=3,labels=names(conditions_ciMean))+labs(title="Number of variants. CI90 Mean selection")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="No optimization",drop=FALSE,name="")+guides(colour=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
 #
 #if(!file.exists("var_ciMean.png"))
 #{
@@ -559,7 +634,7 @@ if (!file.exists("plot_mpaf_bestEuclideanMPAF_text.pdf"))
 #  save_plot("var_ciMean_log.png",plot_var_ciMean_log,base_height=15,base_aspect_ratio=1.5)
 #}
 #
-#plot_var_stquant=ggplot(data=data,aes(y=filtNABcovB_.U,x=Sample))+geom_violin(aes(fill=dnagroup))+geom_point(data=data[data$condition %in% conditions_stquant,],aes(color=factor(condition,levels=conditions_stquant)),size=2,stat="summary",fun.y="mean")+geom_point(data=datanofilt,aes(x=sample,y=X.AN+X.BN+X.comun,shape=""),size=2.5,stroke=1.5)+scale_y_continuous(name="Number of variants")+scale_x_discrete(name="Sample")+scale_color_brewer(name="Filter",type="qual",palette=3,labels=names(conditions_stquant))+labs(title="Number of variants. Q25 selection")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="No optimization",drop=FALSE,name="")+guides(colour=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
+#plot_var_stquant=ggplot(data=data,aes(y=filtNABcovB_.U,x=Sample))+geom_violin(aes(fill=dnagroup))+geom_point(data=data[data$condition %in% conditions_stquant,],aes(color=factor(condition,levels=conditions_stquant)),size=2,stat="summary",fun.y="mean")+geom_point(data=datanofilt,aes(x=sample,y=X.AN+X.BN+X.Shared,shape=""),size=2.5,stroke=1.5)+scale_y_continuous(name="Number of variants")+scale_x_discrete(name="Sample")+scale_color_brewer(name="Filter",type="qual",palette=3,labels=names(conditions_stquant))+labs(title="Number of variants. Q25 selection")+scale_fill_brewer(type = "seq",palette=8, name="DNA (ng)")+theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())+scale_shape_manual(values=c(4),labels="No optimization",drop=FALSE,name="")+guides(colour=guide_legend(order=1),shape=guide_legend(order=2),fill=guide_legend(order=3))
 #
 #if(!file.exists("var_stquant.png"))
 #{

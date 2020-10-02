@@ -25,7 +25,7 @@ dothething ()
     if [[ ! -f $out ]]
     then
         name_out=$(echo $out | sed "s/.tsv//g")
-        java -Xms512m -Xmx6G -jar $GATKJAR -T UnifiedGenotyper -R $GENOME -I $bam1 -o "$name_out.vcf" --intervals $bed --output_mode EMIT_ALL_SITES -glm BOTH > "$name_out.log" 2>&1
+        java -Xms512m -Xmx6G -jar $GATKJAR -T UnifiedGenotyper -R $GENOME -I $bam1 -o "$name_out.vcf" --intervals $bed --output_mode EMIT_ALL_SITES -glm BOTH -dcov 10000 > "$name_out.log" 2>&1
         cat "$name_out.vcf" | sed "/^#/d" | perl -lane '$F[9]=~s/^[^:]*:([^:]*).*/$1/;@reads=split(",",$F[9]);$reads[1]=="" and $reads[1]=0;if($reads[0] eq "./."){$readsref=0;$readsout=0}else{$readsref=splice(@reads,0,1);$readsout=join(",",@reads)};print join("\t",@F[0,1,3,4],$readsref,$readsout)' > $out
     else
         echo "The file $out is already present and will be reused"

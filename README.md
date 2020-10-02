@@ -1,6 +1,10 @@
 # scripts_vcf
 Scripts to handle and filter VCF files (intended for personal use)
 
+#ENVIRONMENT VARIABLES
+
+$SUBMITCMD: contains the command to submit jobs to the cluster. Default="sbatch"
+
 #Dependencies
 
 - Platypus callable as *
