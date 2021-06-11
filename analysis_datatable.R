@@ -302,6 +302,8 @@ bestbyk[,`:=`(type="best")]
 rescrossvalbest_cond_euclideanPAF[,`:=`(type="opt")]
 finalDataCrossValPlotEPAF=rbind(rescrossvalbest_cond_euclideanPAF[,.(condition,k,lowciMeanPAF_test,type)],bestbyk[,.(condition,k,lowciMeanPAF_test,type)])
 
+##Used for the text only, but not the plots
+###########################################
 myEcdfLookup=function(thek,thescore)
 {
     return(ecdf(resultsCrossvalidationEPAF[PAFmax_pAF>=0.25][k==thek,][["lowciMeanPAF_test"]])(thescore))
@@ -312,6 +314,7 @@ finalDataCrossValPlotEPAF[,`:=`(empCum=as.numeric(empCum))]
 finalDataCrossValPlotEPAF[type=="best",mean(empCum)]
 finalDataCrossValPlotEPAF[type=="best",min(empCum)]
 finalDataCrossValPlotEPAF[type=="best",max(empCum)]
+##################################################
 
 #finalDataCrossValPlotEPAF[,`:=`(type=factor(type,ordered=TRUE,levels=c("opt","best")))]
 
@@ -327,6 +330,23 @@ names(typelabels)=c("best","opt")
 crossvalidationPlot=ggplot(data=resultsCrossvalidationEPAF[PAFmax_pAF>=0.25,], aes(x=k,y=lowciMeanPAF_test))+geom_violin()+geom_point(data=finalDataCrossValPlotEPAF,aes(y=lowciMeanPAF_test,color=type,shape=type),size=3,stroke=2)+scale_y_continuous(name="Test score",limits=c(0,1))+scale_x_discrete(name="Validation fold (k)")+scale_color_manual(name="",values=typecolors,labels=typelabels)+scale_shape_manual(name="",values=typeshapes,labels=typelabels)
 save_plot(plot=crossvalidationPlot,filename="crossValidation1.png",base_height = 6)
 save_plot(plot=crossvalidationPlot,filename="crossValidation1.pdf",base_height = 6)
+
+##HARDCODED. DATA FOR CISCALL OBTAINED USING A DIFFERENT SCRIPT 
+ciscalldata=data.table(condition=NA,k=seq(1,5,1),lowciMeanPAF_test=c(0.4333556,0.4914883,0.4391589,0.5983815,0.3564994),type="cisCall")
+finalDataCrossValPlotEPAFcisCall=rbind(finalDataCrossValPlotEPAF,ciscalldata)
+
+typecolors=c("#e41a1c","#377eb8","#4daf4a")
+names(typecolors)=c("best","opt","cisCall")
+
+typeshapes=c(16,4,5)
+names(typeshapes)=c("best","opt","cisCall")
+
+typelabels=c("Best k training","Optimal overall","cisCall")
+names(typelabels)=c("best","opt","cisCall")
+
+crossvalidationPlotCisCall=ggplot(data=resultsCrossvalidationEPAF[PAFmax_pAF>=0.25,], aes(x=k,y=lowciMeanPAF_test))+geom_violin()+geom_point(data=finalDataCrossValPlotEPAFcisCall,aes(y=lowciMeanPAF_test,color=type,shape=type),size=3,stroke=2)+scale_y_continuous(name="Test score",limits=c(0,1))+scale_x_discrete(name="Validation fold (k)")+scale_color_manual(name="",values=typecolors,labels=typelabels)+scale_shape_manual(name="",values=typeshapes,labels=typelabels)
+save_plot(plot=crossvalidationPlotCisCall,filename="crossValidationCisCall.png",base_height = 6)
+save_plot(plot=crossvalidationPlotCisCall,filename="crossValidationCisCall.pdf",base_height = 6)
 
 
 ###

@@ -185,6 +185,9 @@ sub isindel
     my ($key)=@_;
     my ($chr,$pos,$ref,$alt)=split($OFS,$key);
 
+    $ref =~ s/-//g;
+    $alt =~ s/-//g;
+
     if(length $ref != length $alt)
     {
         return 1;
