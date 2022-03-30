@@ -1,5 +1,6 @@
 #!/bin/bash
 module load bedtools2/2.24.0
+module load bcftools/1.12.0
 
 mainDir="/scratch/dmalload/dcis/aim4Genes/data"
 bedFile="/scratch/dmalload/dcis/aim4Genes/finalGenes.bed"
@@ -39,6 +40,27 @@ function getCounts {
     #To count the variants for each gene keeping all of them, I am concatenating the output of the bedtools intersect with the list of genes, sorting and counting the number of each of them, and then substracting one
     echo $(echo -e "$(bedtools intersect -a $bedFile -b ${vcfFiles[@]} -wb | perl -lane '{print $F[3]}')""\n""$(perl -lane '{print $F[3]}' $bedFile)" | sort | uniq -c | perl -lane '$F[1] =~ /^\s*$/ or {print($F[0]-1)}')
 }
+
+# Uses a string of 2 space-separated vcf files and a bedfile, and returns a string of space-separated values with the number of vcf elements in each of the interval (genes) in the bed file
+# In this case, the VCF files need to be filtered for PASS || alleleBias and may contain overlapping entries
+function getCountsUnprocessed {
+    bedFile=$1
+    vcfFiles=( $2 )
+
+    #To count the variants for each gene keeping all of them, I am concatenating the output of the bedtools intersect with the list of genes, sorting and counting the number of each of them, and then substracting one
+    echo $(echo -e "$(echo "$(bcftools view -i 'FILTER="PASS" || FILTER="alleleBias"' ${vcfFiles[0]} 2>/dev/null)""\n""$(bcftools view -i 'FILTER="PASS" || FILTER="alleleBias"' ${vcfFiles[1]} 2>/dev/null)" | perl -lane 'BEGIN{$,="\t"}{/^#/ or print($F[0],$F[1]-1,$F[1])}' | sort -k1,1 -k2,2n | bedtools merge -i stdin | bedtools intersect -a $bedFile -b stdin -wb | perl -lane '{print $F[3]}')""\n""$(perl -lane '{print $F[3]}' $bedFile)" | sort | uniq -c | perl -lane '$F[1] =~ /^\s*$/ or {print($F[0]-1)}')
+}
+
+# Uses a string of 2 space-separated vcf files a bedfile, and a VCF file with variants to discard, and returns a string of space-separated values with the number of vcf elements in each of the interval (genes) in the bed file
+# In this case, the VCF files (not the ones to discard) need to be filtered for PASS || alleleBias and may contain overlapping entries
+function getCountsUnprocessedDiscardVars {
+    bedFile=$1
+    vcfFiles=( $2 )
+    vcfN=$3
+
+    #To count the variants for each gene keeping all of them, I am concatenating the output of the bedtools intersect with the list of genes, sorting and counting the number of each of them, and then substracting one
+    echo $(echo -e "$(echo "$(bcftools view -i 'FILTER="PASS" || FILTER="alleleBias"' ${vcfFiles[0]} 2>/dev/null)""\n""$(bcftools view -i 'FILTER="PASS" || FILTER="alleleBias"' ${vcfFiles[1]} 2>/dev/null)" | perl -lane 'BEGIN{$,="\t"}{/^#/ or print($F[0],$F[1]-1,$F[1])}' | sort -k1,1 -k2,2n | bedtools merge -i stdin | bedtools intersect -v -wa -a stdin -b $vcfN | bedtools intersect -a $bedFile -b stdin -wb | perl -lane '{print $F[3]}')""\n""$(perl -lane '{print $F[3]}' $bedFile)" | sort | uniq -c | perl -lane '$F[1] =~ /^\s*$/ or {print($F[0]-1)}')
+}
     
 # Gets space-separated strings with gene names,and result, and names of the patient and filtering-stage and prints the data in long format
 function printFun {
@@ -68,8 +90,34 @@ do
     nGenes=${#nGenes[@]}
 
 
+    ##Initial ones use unprocessed VCF files and thus are different than the rest
+
     #Initial
-        #This will require calculating the union of two vcf files
+    ########
+    pattern="^[A-B]#[^#]*#[^#]*.vcf,"
+    vcfFiles=$(getVCFs $pattern $dataFileList $workDir)
+
+    if [[ "$vcfFiles" == -1 ]]
+    then
+        echo "Skipping the directory/patient $workDir"
+        continue
+    fi
+
+    resultI=$(getCountsUnprocessed $bedFile "$vcfFiles")
+    ########
+    
+    #Initial without somatic
+    ########################
+    vcfN="$workDir/N.vcf"
+
+    if [[ "$vcfFiles" == -1 ]] || [[ ! -f $vcfN ]]
+    then
+        echo "Skipping the directory/patient $workDir"
+        continue
+    fi
+
+    resultIS=$(getCountsUnprocessedDiscardVars $bedFile "$vcfFiles" "$vcfN")
+    ########################
     
     #Filtered Variants
     ##################
@@ -149,6 +197,8 @@ do
     #echo -e "$sortedListOfGenes\n$resultF\n$resultFS\n$resultFSB\n$resultFSBN\n$resultFSBNP" | awk '{for(i=1;i<=NF;i++)a[i][NR]=$i}END{ii=1;for(i in a){jj=1;for(j in a[ii]){printf"%s"(jj==NR?"\n":FS),a[ii][jj];jj++};ii++}}' FS=" "
     #Long version
 
+    printFun "$sortedListOfGenes" "$resultI" $patient "I"
+    printFun "$sortedListOfGenes" "$resultIS" $patient "IS"
     printFun "$sortedListOfGenes" "$resultF" $patient "F"
     printFun "$sortedListOfGenes" "$resultFS" $patient "FS"
     printFun "$sortedListOfGenes" "$resultFSB" $patient "FSB"
