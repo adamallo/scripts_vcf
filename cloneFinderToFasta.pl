@@ -50,10 +50,19 @@ foreach my $line (@inputdata)
 my $iclone=0;
 my %outcontent;
 my @clones;
+my $skip=0;
 foreach my $line (@clonedata)
 {
 	chomp($line);
-	if ($line =~ /^[\#\! ]/)
+    if($skip==1)
+    {
+        $skip=0;
+    }
+    elsif($line =~ /hg19/)
+    {
+        $skip=1;
+    }
+    elsif($line =~ /^[\#\! ]/)
 	{
 		next;
 	}
